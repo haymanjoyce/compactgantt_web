@@ -32,10 +32,11 @@
     // ── Column definitions ─────────────────────────────────────────────────────
     // Each entry: Excel header (title case) → { key: camelCase, default: value }
     const SWIMLANE_COLS = {
-      'Swimlane ID': { key: 'swimlaneId', def: null },
-      'Name':        { key: 'name',       def: ''   },
-      'Row Count':   { key: 'rowCount',   def: 1    },
-      'Order':       { key: 'order',      def: 0    },
+      'ID':               { key: 'swimlaneId',      def: null },
+      'Title':            { key: 'title',            def: ''   },
+      'Row Count':        { key: 'rowCount',         def: 1    },
+      'Label Position':   { key: 'labelPosition',    def: ''   },
+      'Background Color': { key: 'backgroundColor',  def: ''   },
     };
 
     const TASK_COLS = {
