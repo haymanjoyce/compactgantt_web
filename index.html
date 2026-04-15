@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>CompactGantt</title>
   <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+  <script src="parser.js"></script>
   <style>
     body { font-family: sans-serif; padding: 1rem; }
     #status { margin: 0.5rem 0 1.5rem; color: #555; }
@@ -19,112 +20,60 @@
   <input type="file" id="fileInput" accept=".xlsx">
   <p id="status">No file loaded</p>
 
-  <h2>Swimlanes</h2>
-  <div id="swimlanesContainer"></div>
-
-  <h2>Tasks</h2>
-  <div id="tasksContainer"></div>
+  <div id="dataPanel">
+    <h2>Tasks</h2>               <div id="tasksContainer"></div>
+    <h2>Swimlanes</h2>           <div id="swimlanesContainer"></div>
+    <h2>Links</h2>               <div id="linksContainer"></div>
+    <h2>Pipes</h2>               <div id="pipesContainer"></div>
+    <h2>Curtains</h2>            <div id="curtainsContainer"></div>
+    <h2>Notes</h2>               <div id="notesContainer"></div>
+    <h2>Config: Layout</h2>      <div id="configLayoutContainer"></div>
+    <h2>Config: Timeline</h2>    <div id="configTimelineContainer"></div>
+    <h2>Config: Titles</h2>      <div id="configTitlesContainer"></div>
+    <h2>Config: Style</h2>       <div id="configStyleContainer"></div>
+    <h2>Config: Typography</h2>  <div id="configTypographyContainer"></div>
+    <h2>Config: Preferences</h2> <div id="configPreferencesContainer"></div>
+  </div>
 
   <script>
-    // ── Top-level state ────────────────────────────────────────────────────────
-    const projectData = { tasks: [], swimlanes: [] };
-
-    // ── Column definitions ─────────────────────────────────────────────────────
-    // Each entry: Excel header (title case) → { key: camelCase, default: value }
-    const SWIMLANE_COLS = {
-      'ID':               { key: 'swimlaneId',      def: null },
-      'Title':            { key: 'title',            def: ''   },
-      'Row Count':        { key: 'rowCount',         def: 1    },
-      'Label Position':   { key: 'labelPosition',    def: ''   },
-      'Background Color': { key: 'backgroundColor',  def: ''   },
-    };
-
-    const TASK_COLS = {
-      'ID':              { key: 'taskId',         def: null        },
-      'Swimlane ID':     { key: 'swimlaneId',      def: null        },
-      'Swimlane Row':    { key: 'swimlaneRow',     def: 1           },
-      'Name':            { key: 'name',            def: ''          },
-      'Start Date':      { key: 'startDate',       def: null        },
-      'Finish Date':     { key: 'finishDate',       def: null        },
-      'Is Milestone':    { key: 'isMilestone',     def: false       },
-      'Label Content':   { key: 'labelContent',    def: 'name only' },
-      'Label Placement': { key: 'labelPlacement',  def: 'inside'    },
-      'Label Offset':    { key: 'labelOffset',     def: 0           },
-      'Fill Color':      { key: 'fillColor',       def: 'blue'      },
-      'Fill Pattern':    { key: 'fillPattern',     def: 'solid'     },
-      'Pattern Color':   { key: 'patternColor',    def: 'white'     },
-      'Date Format':     { key: 'dateFormat',      def: 'use global'},
-    };
-
-    // ── Helpers ────────────────────────────────────────────────────────────────
-
-    /**
-     * Convert a value from a date cell to a YYYY-MM-DD string.
-     * With cellDates:true, SheetJS returns Date objects for date cells.
-     * Falls back gracefully if the value is already a string or is absent.
-     */
-    function toISODate(val) {
-      if (!val) return null;
-      if (val instanceof Date) {
-        const y = val.getFullYear();
-        const m = String(val.getMonth() + 1).padStart(2, '0');
-        const d = String(val.getDate()).padStart(2, '0');
-        return `${y}-${m}-${d}`;
-      }
-      if (typeof val === 'string') return val;
-      return null;
-    }
-
-    /**
-     * Parse a worksheet into an array of plain objects using the given column
-     * definition map.  Missing columns are silently skipped; their default
-     * values are applied.
-     */
-    function parseSheet(worksheet, colDefs) {
-      const rows = XLSX.utils.sheet_to_json(worksheet, {
-        defval: undefined,
-        cellDates: true,
-      });
-      return rows.map(row => {
-        const obj = {};
-        for (const [header, { key, def }] of Object.entries(colDefs)) {
-          const raw = row[header];
-          obj[key] = (raw !== undefined && raw !== null && raw !== '') ? raw : def;
-        }
-        return obj;
-      });
-    }
-
-    /**
-     * Render an array of objects as an HTML table inside `container`.
-     * Column order and header labels follow `colDefs`.
-     */
-    function renderTable(container, data, colDefs) {
-      if (!data.length) {
+    // Render an entity array as a table; column headers are JS property names
+    function renderEntityTable(container, data) {
+      if (!data || !data.length) {
         container.innerHTML = '<p><em>No data</em></p>';
         return;
       }
-      const headers = Object.keys(colDefs);
-      const keys    = headers.map(h => colDefs[h].key);
-
+      const keys = Object.keys(data[0]);
       let html = '<table><thead><tr>';
-      headers.forEach(h => { html += `<th>${h}</th>`; });
+      keys.forEach(k => { html += `<th>${k}</th>`; });
       html += '</tr></thead><tbody>';
-
       data.forEach(row => {
         html += '<tr>';
         keys.forEach(k => {
           const v = row[k];
-          html += `<td>${(v !== null && v !== undefined) ? v : ''}</td>`;
+          html += `<td>${v != null ? v : ''}</td>`;
         });
         html += '</tr>';
       });
-
       html += '</tbody></table>';
       container.innerHTML = html;
     }
 
-    // ── File loading ───────────────────────────────────────────────────────────
+    // Render a config object as a two-column property / value table
+    function renderConfigTable(container, config) {
+      const entries = Object.entries(config);
+      if (!entries.length) {
+        container.innerHTML = '<p><em>No data</em></p>';
+        return;
+      }
+      let html = '<table><thead><tr><th>Property</th><th>Value</th></tr></thead><tbody>';
+      entries.forEach(([k, v]) => {
+        html += `<tr><td>${k}</td><td>${v != null ? v : ''}</td></tr>`;
+      });
+      html += '</tbody></table>';
+      container.innerHTML = html;
+    }
+
+    // ── Event wiring ───────────────────────────────────────────────────────────
     document.getElementById('fileInput').addEventListener('change', function (e) {
       const file = e.target.files[0];
       if (!file) return;
@@ -132,29 +81,32 @@
       const reader = new FileReader();
       reader.onload = function (ev) {
         const workbook = XLSX.read(new Uint8Array(ev.target.result), { type: 'array', cellDates: true });
+        parseWorkbook(workbook);
 
-        // Swimlanes
-        const swimlanesSheet = workbook.Sheets['Swimlanes'];
-        projectData.swimlanes = swimlanesSheet
-          ? parseSheet(swimlanesSheet, SWIMLANE_COLS)
-          : [];
-
-        // Tasks — convert date fields to YYYY-MM-DD after parsing
-        const tasksSheet = workbook.Sheets['Tasks'];
-        const rawTasks   = tasksSheet ? parseSheet(tasksSheet, TASK_COLS) : [];
-        projectData.tasks = rawTasks.map(t => ({
-          ...t,
-          startDate:  toISODate(t.startDate),
-          finishDate: toISODate(t.finishDate),
-        }));
-
-        // Status
+        const d   = projectData;
+        const cnt = (n, s) => `${n} ${n === 1 ? s : s + 's'}`;
         document.getElementById('status').textContent =
-          `Loaded: ${file.name} — ${projectData.tasks.length} tasks, ${projectData.swimlanes.length} swimlanes`;
+          `Loaded: ${file.name} — ` +
+          `${cnt(d.tasks.length,    'task')}, `     +
+          `${cnt(d.swimlanes.length,'swimlane')}, ` +
+          `${cnt(d.links.length,    'link')}, `     +
+          `${cnt(d.pipes.length,    'pipe')}, `     +
+          `${cnt(d.curtains.length, 'curtain')}, `  +
+          `${cnt(d.notes.length,    'note')}`;
 
-        // Render
-        renderTable(document.getElementById('swimlanesContainer'), projectData.swimlanes, SWIMLANE_COLS);
-        renderTable(document.getElementById('tasksContainer'),     projectData.tasks,     TASK_COLS);
+        renderEntityTable(document.getElementById('tasksContainer'),    d.tasks);
+        renderEntityTable(document.getElementById('swimlanesContainer'), d.swimlanes);
+        renderEntityTable(document.getElementById('linksContainer'),    d.links);
+        renderEntityTable(document.getElementById('pipesContainer'),    d.pipes);
+        renderEntityTable(document.getElementById('curtainsContainer'), d.curtains);
+        renderEntityTable(document.getElementById('notesContainer'),    d.notes);
+
+        renderConfigTable(document.getElementById('configLayoutContainer'),      d.config.layout);
+        renderConfigTable(document.getElementById('configTimelineContainer'),    d.config.timeline);
+        renderConfigTable(document.getElementById('configTitlesContainer'),      d.config.titles);
+        renderConfigTable(document.getElementById('configStyleContainer'),       d.config.style);
+        renderConfigTable(document.getElementById('configTypographyContainer'),  d.config.typography);
+        renderConfigTable(document.getElementById('configPreferencesContainer'), d.config.preferences);
       };
       reader.readAsArrayBuffer(file);
     });
