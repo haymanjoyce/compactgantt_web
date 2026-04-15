@@ -9,8 +9,8 @@ const VALID_CSS_COLORS = new Set([
   // Domain spec named colors
   'blue','red','green','yellow','orange','purple','black','white','grey','gray',
   'cyan','magenta',
-  // Config default colors
-  'lightgrey','lightgray','steelblue',
+  // Config default colors and confirmed app colors
+  'lightgrey','lightgray','steelblue','lavender','lightcyan',
   // Common CSS named colors likely to appear in project files
   'navy','teal','aqua','fuchsia','maroon','olive','lime','silver',
   'darkblue','darkgreen','darkred','darkorange','darkgrey','darkgray',
