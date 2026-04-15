@@ -35,10 +35,6 @@ Ignores:
 
 `index.html` is the sole entry point — open directly in a browser, no server needed.
 
-## Domain reference
-
-`temp/DOMAIN_SPEC.md` is the authoritative reference for all domain logic, data model, and business rules. Read it in full before writing any domain-related code.
-
 ## Conventions
 
 - **American spelling** throughout: "color" not "colour" in all property names, comments, and UI text
@@ -49,11 +45,11 @@ Ignores:
 
 | File | Role |
 |---|---|
-| `index.html` | Script tags, `renderEntityTable`/`renderConfigTable` helpers, event wiring only |
+| `index.html` | Script tags, `renderEntityTable`/`renderConfigTable` helpers, tab switcher, event wiring |
 | `parser.js` | Owns `projectData`; exports `parseWorkbook(workbook)` |
-| `renderer.js` | (future) SVG generation |
+| `renderer.js` | Exports `renderChart(projectData)` → SVG string; no DOM dependency, no side effects |
 
-Script loading order: SheetJS CDN → `parser.js` → `renderer.js` (when it exists) → inline script.
+Script loading order: SheetJS CDN → `parser.js` → `renderer.js` → inline script.
 
 ## Top-level state
 
@@ -96,6 +92,7 @@ const projectData = {
 
 Config sheet key names are confirmed. The `kv*` helpers (`kvStr/kvInt/kvFloat/kvBool/kvDate`) each accept an optional `fallback` key — same try-new-first pattern as entity column fallbacks. Known config key renames (new → old fallback):
 
+- **Layout** — padding keys: `"Padding Top/Right/Bottom/Left"` → `"Margin Top/Right/Bottom/Left"`
 - **Style** — all 12 keys: `"… Color"` → `"… Colour"`
 - **Timeline** — gridline keys: `"Gridline X"` → `"Vertical Gridline X"`
 - **Typography** — alignment factors: `"X Alignment Factor"` → `"X Vertical Alignment Factor"`; also `"Header Footer Font Size"` → `"Header & Footer Font Size"`
@@ -106,6 +103,21 @@ Config sheet key names are confirmed. The `kv*` helpers (`kvStr/kvInt/kvFloat/kv
 - `swimlane.order` = 1-based sheet-row position (not stored in Excel)
 - `config.timeline.chartStartDate/chartEndDate` derived from `min(task.startDate)` / `max(task.finishDate)` if absent from the Timeline sheet
 
-## Current UI (Slice 2 in progress — debug tables)
+## Renderer (renderer.js)
 
-File input → `parseWorkbook()` → Data panel shows one table per entity type (Tasks, Swimlanes, Links, Pipes, Curtains, Notes) followed by six config key/value tables. Status line: `"Loaded: file.xlsx — N tasks, M swimlanes, …"`. Chart tab not yet implemented.
+`renderChart(projectData)` returns a raw SVG string. Key design rules:
+
+- **Coordinate areas:** `innerX1 = paddingLeft`; `innerX2 = outerWidth - paddingRight`; `taskRowY1 = paddingTop + headerHeight + scaleTotalHeight`; `taskRowY2 = outerHeight - paddingBottom - footerHeight`
+- **Scale band height:** `max(20, scaleFontSize * 2.5)` per visible scale; total = count × bandHeight
+- **Render order (painter's algorithm):** background → swimlane bands → vertical gridlines → scale bands → header → footer → task bars/milestones → swimlane labels
+- **Swimlane bands:** use `s.backgroundColor` directly (not through `sanitizeColor`) — value comes pre-validated from the parser
+- **Task/milestone colors:** go through `sanitizeColor`; invalid names fall back to `'steelblue'`
+- **`sanitizeColor`:** accepts the domain spec named-color set, common CSS named colors (including `lavender`, `lightcyan`), hex `#xxx`/`#xxxxxx`, and `rgb`/`rgba`
+- **Swimlane labels:** `swimlaneTopAlignmentFactor` for top variants, `swimlaneBottomAlignmentFactor` for bottom variants
+- **`daysBetween(a, b)`:** uses `Date.UTC()` — timezone-safe, no `toISOString()`
+- **Milestones:** SVG `<polygon>` diamond centred on `startDate`; bars: `<rect rx="2">`
+- **Skip rules:** orphaned tasks, `finishDate < startDate`, tasks outside chart date range all silently skipped; out-of-range `row` clamped to 1
+
+## Current UI
+
+Two-tab layout: **Data** tab shows debug tables (one per entity type + six config KV tables); **Chart** tab calls `renderChart(projectData)` on every activation and injects the SVG into a horizontally-scrollable container. "No project loaded" shown if tasks array is empty when Chart tab is opened.

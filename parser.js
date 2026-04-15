@@ -315,10 +315,10 @@ function parseWorkbook(workbook) {
   projectData.config.layout = {
     outerWidth:      kvInt(layoutKV,  'Outer Width',    1200),
     outerHeight:     kvInt(layoutKV,  'Outer Height',   700),
-    marginTop:       kvInt(layoutKV,  'Margin Top',     20),
-    marginRight:     kvInt(layoutKV,  'Margin Right',   20),
-    marginBottom:    kvInt(layoutKV,  'Margin Bottom',  20),
-    marginLeft:      kvInt(layoutKV,  'Margin Left',    20),
+    paddingTop:      kvInt(layoutKV,  'Padding Top',    20, 'Margin Top'),
+    paddingRight:    kvInt(layoutKV,  'Padding Right',  20, 'Margin Right'),
+    paddingBottom:   kvInt(layoutKV,  'Padding Bottom', 20, 'Margin Bottom'),
+    paddingLeft:     kvInt(layoutKV,  'Padding Left',   20, 'Margin Left'),
     showRowNumbers:  kvBool(layoutKV, 'Row Numbers',    false),
     showRowDividers: kvBool(layoutKV, 'Row Dividers',   true),
   };

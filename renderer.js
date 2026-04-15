@@ -61,7 +61,7 @@ function renderChart(projectData) {
   const { tasks, swimlanes, config } = projectData;
   const { layout, timeline, titles, style, typography } = config;
 
-  const { outerWidth, outerHeight, marginLeft, marginRight, marginTop, marginBottom } = layout;
+  const { outerWidth, outerHeight, paddingLeft, paddingRight, paddingTop, paddingBottom } = layout;
   const { chartStartDate, chartEndDate } = timeline;
 
   // Guard: need valid date range to render anything
@@ -85,13 +85,13 @@ function renderChart(projectData) {
   const scaleTotalH  = visibleScales.length * bandH;
 
   // ── Coordinate areas ─────────────────────────────────────────────────────────
-  const innerX1      = marginLeft;
-  const innerX2      = outerWidth - marginRight;
+  const innerX1      = paddingLeft;
+  const innerX2      = outerWidth - paddingRight;
   const innerWidth   = innerX2 - innerX1;
 
-  const scaleY       = marginTop + titles.headerHeight;          // top of scale bands
-  const taskRowY1    = marginTop + titles.headerHeight + scaleTotalH;
-  const taskRowY2    = outerHeight - titles.footerHeight - marginBottom;
+  const scaleY       = paddingTop + titles.headerHeight;         // top of scale bands
+  const taskRowY1    = paddingTop + titles.headerHeight + scaleTotalH;
+  const taskRowY2    = outerHeight - paddingBottom - titles.footerHeight;
   const taskRowH     = taskRowY2 - taskRowY1;
 
   // ── Time scale ───────────────────────────────────────────────────────────────
@@ -217,20 +217,23 @@ function renderChart(projectData) {
 
   // ── 5. Header band ───────────────────────────────────────────────────────────
   if (titles.headerHeight > 0) {
-    headerSvg += `<rect x="0" y="0" width="${outerWidth}" height="${titles.headerHeight}" fill="${sanitizeColor(style.headerFooterBackgroundColor)}"/>`;
+    const hY = paddingTop;
+    const hW = outerWidth - paddingLeft - paddingRight;
+    headerSvg += `<rect x="${paddingLeft}" y="${hY}" width="${hW}" height="${titles.headerHeight}" fill="${sanitizeColor(style.headerFooterBackgroundColor)}"/>`;
     if (titles.headerText) {
-      const ty = n(titles.headerHeight * typography.headerFooterAlignmentFactor);
-      headerSvg += `<text x="${n(outerWidth / 2)}" y="${ty}" text-anchor="middle" font-family="'${escapeXml(typography.fontFamily)}'" font-size="${typography.headerFooterFontSize}" fill="black">${escapeXml(titles.headerText)}</text>`;
+      const ty = n(hY + titles.headerHeight * typography.headerFooterAlignmentFactor);
+      headerSvg += `<text x="${n(paddingLeft + hW / 2)}" y="${ty}" text-anchor="middle" font-family="'${escapeXml(typography.fontFamily)}'" font-size="${typography.headerFooterFontSize}" fill="black">${escapeXml(titles.headerText)}</text>`;
     }
   }
 
   // ── 6. Footer band ───────────────────────────────────────────────────────────
   if (titles.footerHeight > 0) {
-    const fy = outerHeight - titles.footerHeight;
-    footerSvg += `<rect x="0" y="${fy}" width="${outerWidth}" height="${titles.footerHeight}" fill="${sanitizeColor(style.headerFooterBackgroundColor)}"/>`;
+    const fy = outerHeight - paddingBottom - titles.footerHeight;
+    const fW = outerWidth - paddingLeft - paddingRight;
+    footerSvg += `<rect x="${paddingLeft}" y="${fy}" width="${fW}" height="${titles.footerHeight}" fill="${sanitizeColor(style.headerFooterBackgroundColor)}"/>`;
     if (titles.footerText) {
       const ty = n(fy + titles.footerHeight * typography.headerFooterAlignmentFactor);
-      footerSvg += `<text x="${n(outerWidth / 2)}" y="${ty}" text-anchor="middle" font-family="'${escapeXml(typography.fontFamily)}'" font-size="${typography.headerFooterFontSize}" fill="black">${escapeXml(titles.footerText)}</text>`;
+      footerSvg += `<text x="${n(paddingLeft + fW / 2)}" y="${ty}" text-anchor="middle" font-family="'${escapeXml(typography.fontFamily)}'" font-size="${typography.headerFooterFontSize}" fill="black">${escapeXml(titles.footerText)}</text>`;
     }
   }
 
