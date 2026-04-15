@@ -136,7 +136,7 @@ function renderChart(projectData) {
   sorted.forEach((s, i) => {
     const sy = n(taskRowY1 + startRowOf[s.id] * rowH);
     const sh = n(s.rowCount * rowH);
-    bands += `<rect x="${innerX1}" y="${sy}" width="${innerWidth}" height="${sh}" fill="${sanitizeColor(s.backgroundColor)}"/>`;
+    bands += `<rect x="${innerX1}" y="${sy}" width="${innerWidth}" height="${sh}" fill="${s.backgroundColor || 'white'}"/>`;
     if (layout.showRowDividers && i < sorted.length - 1) {
       const ly = n(sy + sh);
       bands += `<line x1="${innerX1}" y1="${ly}" x2="${innerX2}" y2="${ly}" stroke="${sanitizeColor(style.swimlaneDividerColor)}" stroke-width="1"/>`;
