@@ -112,35 +112,40 @@ function parseConfigSheet(worksheet) {
   return map;
 }
 
-function kvStr(map, key, def) {
-  const v = map[key];
+function kvStr(map, key, def, fallback) {
+  let v = map[key];
+  if ((v == null || v === '') && fallback !== undefined) v = map[fallback];
   if (v == null || v === '') return def;
   return String(v);
 }
 
-function kvInt(map, key, def) {
-  const v = map[key];
+function kvInt(map, key, def, fallback) {
+  let v = map[key];
+  if ((v == null || v === '') && fallback !== undefined) v = map[fallback];
   if (v == null || v === '') return def;
   const n = parseInt(v, 10);
   return Number.isFinite(n) ? n : def;
 }
 
-function kvFloat(map, key, def) {
-  const v = map[key];
+function kvFloat(map, key, def, fallback) {
+  let v = map[key];
+  if ((v == null || v === '') && fallback !== undefined) v = map[fallback];
   if (v == null || v === '') return def;
   const n = parseFloat(v);
   return Number.isFinite(n) ? n : def;
 }
 
-function kvBool(map, key, def) {
-  const v = map[key];
+function kvBool(map, key, def, fallback) {
+  let v = map[key];
+  if ((v == null || v === '') && fallback !== undefined) v = map[fallback];
   if (v == null || v === '') return def;
   if (typeof v === 'boolean') return v;
   return String(v).toLowerCase() === 'yes';
 }
 
-function kvDate(map, key) {
-  const v = map[key];
+function kvDate(map, key, fallback) {
+  let v = map[key];
+  if ((v == null || v === '') && fallback !== undefined) v = map[fallback];
   if (v == null || v === '') return null;
   return toISODate(v);
 }
@@ -307,7 +312,6 @@ function parseWorkbook(workbook) {
 
   // ── Config: Layout ─────────────────────────────────────────────────────────
   const layoutKV = parseConfigSheet(workbook.Sheets['Layout']);
-  console.log('Layout sheet — raw key-value pairs:', layoutKV);
   projectData.config.layout = {
     outerWidth:      kvInt(layoutKV,  'Outer Width',    1200),
     outerHeight:     kvInt(layoutKV,  'Outer Height',   700),
@@ -321,7 +325,6 @@ function parseWorkbook(workbook) {
 
   // ── Config: Timeline ───────────────────────────────────────────────────────
   const timelineKV = parseConfigSheet(workbook.Sheets['Timeline']);
-  console.log('Timeline sheet — raw key-value pairs:', timelineKV);
   let chartStartDate = kvDate(timelineKV, 'Chart Start Date');
   let chartEndDate   = kvDate(timelineKV, 'Chart End Date');
   // Derive from task dates if absent or unparseable
@@ -340,15 +343,14 @@ function parseWorkbook(workbook) {
     showMonths:     kvBool(timelineKV, 'Show Months',     true),
     showWeeks:      kvBool(timelineKV, 'Show Weeks',      false),
     showDays:       kvBool(timelineKV, 'Show Days',       false),
-    gridlineYears:  kvBool(timelineKV, 'Gridline Years',  true),
-    gridlineMonths: kvBool(timelineKV, 'Gridline Months', true),
-    gridlineWeeks:  kvBool(timelineKV, 'Gridline Weeks',  false),
-    gridlineDays:   kvBool(timelineKV, 'Gridline Days',   false),
+    gridlineYears:  kvBool(timelineKV, 'Gridline Years',  true,  'Vertical Gridline Years'),
+    gridlineMonths: kvBool(timelineKV, 'Gridline Months', true,  'Vertical Gridline Months'),
+    gridlineWeeks:  kvBool(timelineKV, 'Gridline Weeks',  false, 'Vertical Gridline Weeks'),
+    gridlineDays:   kvBool(timelineKV, 'Gridline Days',   false, 'Vertical Gridline Days'),
   };
 
   // ── Config: Titles ─────────────────────────────────────────────────────────
   const titlesKV = parseConfigSheet(workbook.Sheets['Titles']);
-  console.log('Titles sheet — raw key-value pairs:', titlesKV);
   projectData.config.titles = {
     headerHeight: kvInt(titlesKV, 'Header Height', 20),
     headerText:   kvStr(titlesKV, 'Header Text',   ''),
@@ -358,45 +360,42 @@ function parseWorkbook(workbook) {
 
   // ── Config: Style ──────────────────────────────────────────────────────────
   const styleKV = parseConfigSheet(workbook.Sheets['Style']);
-  console.log('Style sheet — raw key-value pairs:', styleKV);
   projectData.config.style = {
-    chartBackgroundColor:        kvStr(styleKV, 'Chart Background Color',         'white'),
-    headerFooterBackgroundColor: kvStr(styleKV, 'Header Footer Background Color', 'lightgrey'),
-    swimlaneLabelColor:          kvStr(styleKV, 'Swimlane Label Color',           'black'),
-    swimlaneDividerColor:        kvStr(styleKV, 'Swimlane Divider Color',         'grey'),
-    scaleBackgroundColor:        kvStr(styleKV, 'Scale Background Color',         'lightgrey'),
-    scaleTickColor:              kvStr(styleKV, 'Scale Tick Color',               'grey'),
-    gridlineHorizontalColor:     kvStr(styleKV, 'Gridline Horizontal Color',      'lightgrey'),
-    gridlineVerticalColor:       kvStr(styleKV, 'Gridline Vertical Color',        'lightgrey'),
-    taskStrokeColor:             kvStr(styleKV, 'Task Stroke Color',              'black'),
-    milestoneStrokeColor:        kvStr(styleKV, 'Milestone Stroke Color',         'black'),
-    outsideLabelTextColor:       kvStr(styleKV, 'Outside Label Text Color',       'black'),
-    outsideLabelLineColor:       kvStr(styleKV, 'Outside Label Line Color',       'black'),
+    chartBackgroundColor:        kvStr(styleKV, 'Chart Background Color',         'white',      'Chart Background Colour'),
+    headerFooterBackgroundColor: kvStr(styleKV, 'Header Footer Background Color', 'lightgrey',  'Header Footer Background Colour'),
+    swimlaneLabelColor:          kvStr(styleKV, 'Swimlane Label Color',           'black',      'Swimlane Label Colour'),
+    swimlaneDividerColor:        kvStr(styleKV, 'Swimlane Divider Color',         'grey',       'Swimlane Divider Colour'),
+    scaleBackgroundColor:        kvStr(styleKV, 'Scale Background Color',         'lightgrey',  'Scale Background Colour'),
+    scaleTickColor:              kvStr(styleKV, 'Scale Tick Color',               'grey',       'Scale Tick Colour'),
+    gridlineHorizontalColor:     kvStr(styleKV, 'Gridline Horizontal Color',      'lightgrey',  'Gridline Horizontal Colour'),
+    gridlineVerticalColor:       kvStr(styleKV, 'Gridline Vertical Color',        'lightgrey',  'Gridline Vertical Colour'),
+    taskStrokeColor:             kvStr(styleKV, 'Task Stroke Color',              'black',      'Task Stroke Colour'),
+    milestoneStrokeColor:        kvStr(styleKV, 'Milestone Stroke Color',         'black',      'Milestone Stroke Colour'),
+    outsideLabelTextColor:       kvStr(styleKV, 'Outside Label Text Color',       'black',      'Outside Label Text Colour'),
+    outsideLabelLineColor:       kvStr(styleKV, 'Outside Label Line Color',       'black',      'Outside Label Line Colour'),
   };
 
   // ── Config: Typography ─────────────────────────────────────────────────────
   const typographyKV = parseConfigSheet(workbook.Sheets['Typography']);
-  console.log('Typography sheet — raw key-value pairs:', typographyKV);
   projectData.config.typography = {
     fontFamily:                   kvStr(typographyKV,   'Font Family',                     'Arial'),
     taskFontSize:                 kvInt(typographyKV,   'Task Font Size',                  10),
     scaleFontSize:                kvInt(typographyKV,   'Scale Font Size',                 10),
-    headerFooterFontSize:         kvInt(typographyKV,   'Header Footer Font Size',          10),
+    headerFooterFontSize:         kvInt(typographyKV,   'Header Footer Font Size',          10,  'Header & Footer Font Size'),
     rowNumberFontSize:            kvInt(typographyKV,   'Row Number Font Size',             10),
     noteFontSize:                 kvInt(typographyKV,   'Note Font Size',                  10),
     swimlaneFontSize:             kvInt(typographyKV,   'Swimlane Font Size',               10),
-    scaleAlignmentFactor:         kvFloat(typographyKV, 'Scale Alignment Factor',           0.7),
-    taskAlignmentFactor:          kvFloat(typographyKV, 'Task Alignment Factor',            0.7),
-    rowNumberAlignmentFactor:     kvFloat(typographyKV, 'Row Number Alignment Factor',      0.7),
-    headerFooterAlignmentFactor:  kvFloat(typographyKV, 'Header Footer Alignment Factor',   0.7),
-    swimlaneTopAlignmentFactor:   kvFloat(typographyKV, 'Swimlane Top Alignment Factor',    0.7),
-    swimlaneBottomAlignmentFactor:kvFloat(typographyKV, 'Swimlane Bottom Alignment Factor', 0.7),
+    scaleAlignmentFactor:         kvFloat(typographyKV, 'Scale Alignment Factor',           0.7, 'Scale Vertical Alignment Factor'),
+    taskAlignmentFactor:          kvFloat(typographyKV, 'Task Alignment Factor',            0.7, 'Task Vertical Alignment Factor'),
+    rowNumberAlignmentFactor:     kvFloat(typographyKV, 'Row Number Alignment Factor',      0.7, 'Row Number Vertical Alignment Factor'),
+    headerFooterAlignmentFactor:  kvFloat(typographyKV, 'Header Footer Alignment Factor',   0.7, 'Header & Footer Vertical Alignment Factor'),
+    swimlaneTopAlignmentFactor:   kvFloat(typographyKV, 'Swimlane Top Alignment Factor',    0.7, 'Swimlane Top Vertical Alignment Factor'),
+    swimlaneBottomAlignmentFactor:kvFloat(typographyKV, 'Swimlane Bottom Alignment Factor', 0.7, 'Swimlane Bottom Vertical Alignment Factor'),
   };
 
   // ── Config: Preferences ────────────────────────────────────────────────────
   const prefsSheet = workbook.Sheets['Preferences'];
   const prefsKV    = parseConfigSheet(prefsSheet);
-  if (prefsSheet) console.log('Preferences sheet — raw key-value pairs:', prefsKV);
   projectData.config.preferences = {
     uiDateFormat:    kvStr(prefsKV, 'UI Date Format',    'dd/MM/yyyy'),
     chartDateFormat: kvStr(prefsKV, 'Chart Date Format', 'dd MMM'),
