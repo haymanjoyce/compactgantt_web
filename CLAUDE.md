@@ -94,7 +94,11 @@ const projectData = {
 
 \* Old-format name; new name is "Row" / "Name" / "Routing". Fallback handles both.
 
-Config sheet key names (Layout, Timeline, etc.) are **not yet confirmed** against the real file — diagnostic `console.log` of raw KV pairs is present in `parseWorkbook` for each config sheet. Remove the logs once key names are verified.
+Config sheet key names are confirmed. The `kv*` helpers (`kvStr/kvInt/kvFloat/kvBool/kvDate`) each accept an optional `fallback` key — same try-new-first pattern as entity column fallbacks. Known config key renames (new → old fallback):
+
+- **Style** — all 12 keys: `"… Color"` → `"… Colour"`
+- **Timeline** — gridline keys: `"Gridline X"` → `"Vertical Gridline X"`
+- **Typography** — alignment factors: `"X Alignment Factor"` → `"X Vertical Alignment Factor"`; also `"Header Footer Font Size"` → `"Header & Footer Font Size"`
 
 ## Derived fields
 
