@@ -6,9 +6,14 @@
   <title>CompactGantt</title>
   <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
   <script src="parser.js"></script>
+  <script src="renderer.js"></script>
   <style>
     body { font-family: sans-serif; padding: 1rem; }
-    #status { margin: 0.5rem 0 1.5rem; color: #555; }
+    #status { margin: 0.5rem 0 0.75rem; color: #555; }
+    .tabs { display: flex; gap: 4px; margin-bottom: 1rem; }
+    .tab { padding: 5px 18px; cursor: pointer; border: 1px solid #bbb; background: #f0f0f0; font-size: 0.9rem; }
+    .tab.active { background: white; border-bottom-color: white; font-weight: bold; }
+    #chartPanel { overflow-x: auto; }
     h2 { margin-bottom: 0.4rem; }
     table { border-collapse: collapse; margin-bottom: 2rem; font-size: 0.85rem; }
     th, td { border: 1px solid #ccc; padding: 4px 8px; white-space: nowrap; }
@@ -19,6 +24,11 @@
 
   <input type="file" id="fileInput" accept=".xlsx">
   <p id="status">No file loaded</p>
+
+  <div class="tabs">
+    <button class="tab active" id="tabData">Data</button>
+    <button class="tab"        id="tabChart">Chart</button>
+  </div>
 
   <div id="dataPanel">
     <h2>Tasks</h2>               <div id="tasksContainer"></div>
@@ -35,8 +45,12 @@
     <h2>Config: Preferences</h2> <div id="configPreferencesContainer"></div>
   </div>
 
+  <div id="chartPanel" style="display:none;">
+    <p id="chartMessage">No project loaded</p>
+  </div>
+
   <script>
-    // Render an entity array as a table; column headers are JS property names
+    // ── Table renderers ────────────────────────────────────────────────────────
     function renderEntityTable(container, data) {
       if (!data || !data.length) {
         container.innerHTML = '<p><em>No data</em></p>';
@@ -58,7 +72,6 @@
       container.innerHTML = html;
     }
 
-    // Render a config object as a two-column property / value table
     function renderConfigTable(container, config) {
       const entries = Object.entries(config);
       if (!entries.length) {
@@ -73,7 +86,28 @@
       container.innerHTML = html;
     }
 
-    // ── Event wiring ───────────────────────────────────────────────────────────
+    // ── Tab switching ──────────────────────────────────────────────────────────
+    function activateTab(name) {
+      const showData  = name === 'data';
+      document.getElementById('dataPanel').style.display  = showData ? '' : 'none';
+      document.getElementById('chartPanel').style.display = showData ? 'none' : '';
+      document.getElementById('tabData').classList.toggle('active',  showData);
+      document.getElementById('tabChart').classList.toggle('active', !showData);
+
+      if (!showData) {
+        const panel = document.getElementById('chartPanel');
+        if (projectData.tasks.length === 0) {
+          panel.innerHTML = '<p>No project loaded</p>';
+        } else {
+          panel.innerHTML = renderChart(projectData);
+        }
+      }
+    }
+
+    document.getElementById('tabData').addEventListener('click',  () => activateTab('data'));
+    document.getElementById('tabChart').addEventListener('click', () => activateTab('chart'));
+
+    // ── File loading ───────────────────────────────────────────────────────────
     document.getElementById('fileInput').addEventListener('change', function (e) {
       const file = e.target.files[0];
       if (!file) return;
@@ -84,7 +118,7 @@
         parseWorkbook(workbook);
 
         const d   = projectData;
-        const cnt = (n, s) => `${n} ${n === 1 ? s : s + 's'}`;
+        const cnt = (num, s) => `${num} ${num === 1 ? s : s + 's'}`;
         document.getElementById('status').textContent =
           `Loaded: ${file.name} — ` +
           `${cnt(d.tasks.length,    'task')}, `     +
