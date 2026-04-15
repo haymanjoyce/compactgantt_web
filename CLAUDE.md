@@ -39,29 +39,69 @@ Ignores:
 
 `temp/DOMAIN_SPEC.md` is the authoritative reference for all domain logic, data model, and business rules. Read it in full before writing any domain-related code.
 
-## Excel file format
+## Conventions
 
-- One worksheet per entity type; relevant sheets so far: **Tasks**, **Swimlanes**
-- Column lookups are **header-based**, never positional (uses `XLSX.utils.sheet_to_json` with `cellDates: true`)
-- Excel headers use title case with spaces; mapped to camelCase internal keys in `TASK_COLS` / `SWIMLANE_COLS`
-- Actual header names confirmed from a real project file:
+- **American spelling** throughout: "color" not "colour" in all property names, comments, and UI text
+- **camelCase** for all JS property names
+- **YYYY-MM-DD** strings for all date values stored in `projectData`
 
-| Sheet | Excel headers |
+## File responsibilities
+
+| File | Role |
 |---|---|
-| Swimlanes | ID, Title, Row Count, Label Position, Background Color |
-| Tasks | ID, Swimlane ID, Swimlane Row, Name, Start Date, Finish Date, Label Content, Label Placement, Label Offset, Fill Color, Fill Pattern, Date Format |
+| `index.html` | Script tags, `renderEntityTable`/`renderConfigTable` helpers, event wiring only |
+| `parser.js` | Owns `projectData`; exports `parseWorkbook(workbook)` |
+| `renderer.js` | (future) SVG generation |
 
-- Missing columns are silently skipped; each field has a declared default in the `*_COLS` map — required for backward compatibility with older project files
-- Date fields are converted from Excel serial / JS `Date` objects to `YYYY-MM-DD` strings via `toISODate()`
+Script loading order: SheetJS CDN → `parser.js` → `renderer.js` (when it exists) → inline script.
 
 ## Top-level state
 
+`parser.js` defines and owns `projectData`:
+
 ```js
-const projectData = { tasks: [], swimlanes: [] };
+const projectData = {
+  tasks: [], swimlanes: [], links: [], pipes: [], curtains: [], notes: [],
+  config: { layout: {}, timeline: {}, titles: {}, style: {}, typography: {}, preferences: {} }
+};
 ```
 
-This object will grow as further entity types are added. Always extend it here rather than introducing new globals.
+`parseWorkbook(workbook)` resets and repopulates it on every file load. The renderer reads from it; nothing else writes to it.
 
-## Current UI (Slice 1 — temporary)
+## Excel file format
 
-A file input loads an `.xlsx`; parsed data is shown as two plain debug tables (Swimlanes first, Tasks second) with a status line. These tables will be replaced in Slice 2.
+`XLSX.read` is called with `{ cellDates: true }` so date-formatted cells arrive as JS `Date` objects.
+
+**Entity sheets** (tabular, row 1 = column headers):
+- Tasks, Swimlanes, Links, Pipes, Curtains, Notes
+- Parsed via `parseEntitySheet(worksheet, colDefs)` — header-based, never positional
+- Missing columns silently receive their declared default (backward-compatibility requirement)
+- Column-name fallbacks handle old-format files: `"Row"→"Swimlane Row"`, `"Name"→"Title"`, `"Routing"→"Link Routing"`
+
+**Config sheets** (key-value: col A = field name, col B = value):
+- Layout, Timeline, Titles, Style, Typography, Preferences
+- Parsed via `parseConfigSheet(worksheet)` → plain map, then read with `kvStr/kvInt/kvFloat/kvBool/kvDate`
+
+**Date parsing** (`toISODate`): handles both `instanceof Date` (uses `getFullYear/getMonth/getDate` — never `toISOString`, timezone-safe) and DD/MM/YYYY strings (split on `/`, never passed to `new Date()`).
+
+**Confirmed Excel column headers** (from real project file):
+
+| Sheet | Headers |
+|---|---|
+| Tasks | ID, Swimlane ID, Swimlane Row\*, Name, Start Date, Finish Date, Label Content, Label Placement, Label Offset, Fill Color, Fill Pattern, Date Format |
+| Swimlanes | ID, Title\*, Row Count, Label Position, Background Color |
+| Links | ID, From Task ID, To Task ID, Line Color, Line Style, Link Routing\* |
+
+\* Old-format name; new name is "Row" / "Name" / "Routing". Fallback handles both.
+
+Config sheet key names (Layout, Timeline, etc.) are **not yet confirmed** against the real file — diagnostic `console.log` of raw KV pairs is present in `parseWorkbook` for each config sheet. Remove the logs once key names are verified.
+
+## Derived fields
+
+- `task.isMilestone = startDate !== null && startDate === finishDate` (null-guard prevents false positive when both dates are absent)
+- `swimlane.order` = 1-based sheet-row position (not stored in Excel)
+- `config.timeline.chartStartDate/chartEndDate` derived from `min(task.startDate)` / `max(task.finishDate)` if absent from the Timeline sheet
+
+## Current UI (Slice 2 in progress — debug tables)
+
+File input → `parseWorkbook()` → Data panel shows one table per entity type (Tasks, Swimlanes, Links, Pipes, Curtains, Notes) followed by six config key/value tables. Status line: `"Loaded: file.xlsx — N tasks, M swimlanes, …"`. Chart tab not yet implemented.
