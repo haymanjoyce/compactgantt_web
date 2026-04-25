@@ -43,6 +43,7 @@
     <h2>Config: Style</h2>       <div id="configStyleContainer"></div>
     <h2>Config: Typography</h2>  <div id="configTypographyContainer"></div>
     <h2>Config: Preferences</h2> <div id="configPreferencesContainer"></div>
+    <h2>Config: Rendering</h2>  <div id="configRenderingContainer"></div>
   </div>
 
   <div id="chartPanel" style="display:none;">
@@ -141,6 +142,7 @@
         renderConfigTable(document.getElementById('configStyleContainer'),       d.config.style);
         renderConfigTable(document.getElementById('configTypographyContainer'),  d.config.typography);
         renderConfigTable(document.getElementById('configPreferencesContainer'), d.config.preferences);
+        renderConfigTable(document.getElementById('configRenderingContainer'),  d.config.rendering);
       };
       reader.readAsArrayBuffer(file);
     });

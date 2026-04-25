@@ -161,7 +161,7 @@ function parseWorkbook(workbook) {
   projectData.curtains  = [];
   projectData.notes     = [];
   projectData.config    = {
-    layout: {}, timeline: {}, titles: {}, style: {}, typography: {}, preferences: {}
+    layout: {}, timeline: {}, titles: {}, style: {}, typography: {}, preferences: {}, rendering: {}
   };
 
   // ── Tasks ──────────────────────────────────────────────────────────────────
@@ -399,5 +399,23 @@ function parseWorkbook(workbook) {
   projectData.config.preferences = {
     uiDateFormat:    kvStr(prefsKV, 'UI Date Format',    'dd/MM/yyyy'),
     chartDateFormat: kvStr(prefsKV, 'Chart Date Format', 'dd MMM'),
+  };
+
+  // ── Config: Rendering ──────────────────────────────────────────────────────
+  // Not driven by any Excel sheet — hard-coded defaults only.
+  projectData.config.rendering = {
+    taskBarHeightFactor:        0.7,
+    milestoneSizeFactor:        0.7,
+    arrowheadSizeFactor:        0.3,
+    originMarkerSizeFactor:     0.15,
+    taskCornerRadius:           2,
+    swimlaneLabelPadding:       4,
+    minScaleBandHeight:         20,
+    gridlineStrokeWidth:        0.5,
+    scaleTickStrokeWidth:       0.5,
+    taskStrokeWidth:            0.5,
+    milestoneStrokeWidth:       0.5,
+    swimlaneDividerStrokeWidth: 1,
+    linkStrokeWidth:            1,
   };
 }
