@@ -1,13 +1,6 @@
 // writer.js — serialises projectData back to an .xlsx file
 // Exports writeWorkbook(projectData) → Uint8Array (SheetJS type:'array')
 
-// Convert YYYY-MM-DD string to a timezone-safe JS Date. Returns null for absent values.
-function isoToDate(iso) {
-  if (!iso) return null;
-  const [y, m, d] = iso.split('-').map(Number);
-  return new Date(y, m - 1, d);
-}
-
 // Serialise a boolean as the string expected by the parser's kvBool helper.
 function boolStr(v) { return v ? 'Yes' : 'No'; }
 
@@ -28,7 +21,7 @@ function writeWorkbook(projectData) {
      'Fill Color', 'Fill Pattern', 'Pattern Color'],
     ...tasks.map(t => [
       t.id, t.swimlaneId, t.row, t.name,
-      isoToDate(t.startDate), isoToDate(t.finishDate),
+      toJsDate(t.startDate), toJsDate(t.finishDate),
       t.labelContent, t.labelPlacement, t.labelOffset, t.dateFormat,
       t.fillColor, t.fillPattern, t.patternColor,
     ]),
@@ -54,7 +47,7 @@ function writeWorkbook(projectData) {
   addSheet('Pipes', [
     ['ID', 'Date', 'Name', 'Color', 'Line Style'],
     ...pipes.map(p => [
-      p.id, isoToDate(p.date), p.name, p.color, p.lineStyle,
+      p.id, toJsDate(p.date), p.name, p.color, p.lineStyle,
     ]),
   ]);
 
@@ -62,7 +55,7 @@ function writeWorkbook(projectData) {
   addSheet('Curtains', [
     ['ID', 'Start Date', 'End Date', 'Name', 'Color', 'Opacity'],
     ...curtains.map(c => [
-      c.id, isoToDate(c.startDate), isoToDate(c.endDate), c.name, c.color, c.opacity,
+      c.id, toJsDate(c.startDate), toJsDate(c.endDate), c.name, c.color, c.opacity,
     ]),
   ]);
 
@@ -93,8 +86,8 @@ function writeWorkbook(projectData) {
   // continues to work after a save/reload cycle.
   addSheet('Timeline', [
     ['Field', 'Value'],
-    ['Chart Start Date', timeline.chartStartDateExplicit ? isoToDate(timeline.chartStartDate) : null],
-    ['Chart End Date',   timeline.chartEndDateExplicit   ? isoToDate(timeline.chartEndDate)   : null],
+    ['Chart Start Date', timeline.chartStartDateExplicit ? toJsDate(timeline.chartStartDate) : null],
+    ['Chart End Date',   timeline.chartEndDateExplicit   ? toJsDate(timeline.chartEndDate)   : null],
     ['Show Years',    boolStr(timeline.showYears)],
     ['Show Months',   boolStr(timeline.showMonths)],
     ['Show Weeks',    boolStr(timeline.showWeeks)],

@@ -1,46 +1,4 @@
-// parser.js — owns projectData and all .xlsx parsing logic
-
-// ── Top-level state ────────────────────────────────────────────────────────────
-const projectData = {
-  tasks:     [],
-  swimlanes: [],
-  links:     [],
-  pipes:     [],
-  curtains:  [],
-  notes:     [],
-  config: {
-    layout:      {},
-    timeline:    {},
-    titles:      {},
-    style:       {},
-    typography:  {},
-    preferences: {}
-  }
-};
-
-// ── Date helper ────────────────────────────────────────────────────────────────
-// Accepts a JS Date object (from SheetJS with cellDates:true) or a DD/MM/YYYY
-// string (text-stored cells). Returns YYYY-MM-DD, or null if absent/unparseable.
-// Never uses Date.toString() or toISOString() — timezone offsets can shift the date.
-function toISODate(val) {
-  if (val == null || val === '') return null;
-  if (val instanceof Date) {
-    const y = val.getFullYear();
-    const m = String(val.getMonth() + 1).padStart(2, '0');
-    const d = String(val.getDate()).padStart(2, '0');
-    return `${y}-${m}-${d}`;
-  }
-  if (typeof val === 'string') {
-    const parts = val.split('/');
-    if (parts.length === 3) {
-      // Interpret as DD/MM/YYYY — do not pass to new Date() (treats as MM/DD/YYYY)
-      const [dd, mm, yyyy] = parts;
-      return `${yyyy}-${String(mm).padStart(2, '0')}-${String(dd).padStart(2, '0')}`;
-    }
-    return val; // assume already YYYY-MM-DD
-  }
-  return null;
-}
+// parser.js — .xlsx parsing logic; exports parseWorkbook and createEmptyProjectData
 
 // ── Numeric helpers ────────────────────────────────────────────────────────────
 function toInt(val, def = null) {
@@ -143,26 +101,93 @@ function kvBool(map, key, def, fallback) {
   return String(v).toLowerCase() === 'yes';
 }
 
-function kvDate(map, key, fallback) {
+function kvDate(map, key, fallback /* reserved — old-format key fallback, unused today */) {
   let v = map[key];
   if ((v == null || v === '') && fallback !== undefined) v = map[fallback];
   if (v == null || v === '') return null;
   return toISODate(v);
 }
 
+// ── Default shape ──────────────────────────────────────────────────────────────
+// Single source of truth for the projectData shape and all default values.
+// parseWorkbook calls this and overwrites from the workbook.
+// ui.js calls this to initialise projectData before any file is loaded.
+function createEmptyProjectData() {
+  return {
+    tasks: [], swimlanes: [], links: [], pipes: [], curtains: [], notes: [],
+    config: {
+      layout: {
+        outerWidth: 1200, outerHeight: 700,
+        paddingTop: 20, paddingRight: 20, paddingBottom: 20, paddingLeft: 20,
+        showRowNumbers: false, showRowDividers: true,
+      },
+      timeline: {
+        chartStartDate: null, chartEndDate: null,
+        chartStartDateExplicit: false, chartEndDateExplicit: false,
+        showYears: true, showMonths: true, showWeeks: false, showDays: false,
+        gridlineYears: true, gridlineMonths: true, gridlineWeeks: false, gridlineDays: false,
+      },
+      titles: {
+        headerHeight: 20, headerText: '',
+        footerHeight: 20, footerText: '',
+      },
+      style: {
+        chartBackgroundColor:        'white',
+        headerFooterBackgroundColor: 'lightgrey',
+        swimlaneLabelColor:          'black',
+        swimlaneDividerColor:        'grey',
+        scaleBackgroundColor:        'lightgrey',
+        scaleTickColor:              'grey',
+        gridlineHorizontalColor:     'lightgrey',
+        gridlineVerticalColor:       'lightgrey',
+        taskStrokeColor:             'black',
+        milestoneStrokeColor:        'black',
+        outsideLabelTextColor:       'black',
+        outsideLabelLineColor:       'black',
+        insideLabelTextColor:        'black',
+      },
+      typography: {
+        fontFamily:                   'Arial',
+        taskFontSize:                 10,
+        scaleFontSize:                10,
+        headerFooterFontSize:         10,
+        rowNumberFontSize:            10,
+        noteFontSize:                 10,
+        swimlaneFontSize:             10,
+        scaleAlignmentFactor:         0.7,
+        taskAlignmentFactor:          0.7,
+        rowNumberAlignmentFactor:     0.7,
+        headerFooterAlignmentFactor:  0.7,
+        swimlaneTopAlignmentFactor:   0.7,
+        swimlaneBottomAlignmentFactor:0.7,
+      },
+      preferences: {
+        uiDateFormat:    'dd/MM/yyyy',
+        chartDateFormat: 'dd MMM',
+      },
+      rendering: {
+        taskBarHeightFactor:        0.7,
+        milestoneSizeFactor:        0.7,
+        arrowheadSizeFactor:        0.3,
+        originMarkerSizeFactor:     0.15,
+        taskCornerRadius:           2,
+        swimlaneLabelPadding:       4,
+        minScaleBandHeight:         20,
+        gridlineStrokeWidth:        0.5,
+        scaleTickStrokeWidth:       0.5,
+        taskStrokeWidth:            0.5,
+        milestoneStrokeWidth:       0.5,
+        swimlaneDividerStrokeWidth: 1,
+        linkStrokeWidth:            1,
+        insideLabelPadding:         2,
+      },
+    }
+  };
+}
+
 // ── Main parse function ────────────────────────────────────────────────────────
 function parseWorkbook(workbook) {
-
-  // Reset to empty state
-  projectData.tasks     = [];
-  projectData.swimlanes = [];
-  projectData.links     = [];
-  projectData.pipes     = [];
-  projectData.curtains  = [];
-  projectData.notes     = [];
-  projectData.config    = {
-    layout: {}, timeline: {}, titles: {}, style: {}, typography: {}, preferences: {}, rendering: {}
-  };
+  const projectData = createEmptyProjectData();
 
   // ── Tasks ──────────────────────────────────────────────────────────────────
   const tasksSheet = workbook.Sheets['Tasks'];
@@ -186,7 +211,7 @@ function parseWorkbook(workbook) {
       const startDate      = toISODate(t.startDate);
       const finishDate     = toISODate(t.finishDate);
       const isMilestone    = startDate !== null && startDate === finishDate;
-      const labelPlacement = isMilestone ? 'outside' : normalizeLabelPlacement(t.labelPlacement);
+      const labelPlacement = normalizeLabelPlacement(t.labelPlacement);
       return {
         id:             toInt(t.id),
         swimlaneId:     toInt(t.swimlaneId),
@@ -408,22 +433,5 @@ function parseWorkbook(workbook) {
     chartDateFormat: kvStr(prefsKV, 'Chart Date Format', 'dd MMM'),
   };
 
-  // ── Config: Rendering ──────────────────────────────────────────────────────
-  // Not driven by any Excel sheet — hard-coded defaults only.
-  projectData.config.rendering = {
-    taskBarHeightFactor:        0.7,
-    milestoneSizeFactor:        0.7,
-    arrowheadSizeFactor:        0.3,
-    originMarkerSizeFactor:     0.15,
-    taskCornerRadius:           2,
-    swimlaneLabelPadding:       4,
-    minScaleBandHeight:         20,
-    gridlineStrokeWidth:        0.5,
-    scaleTickStrokeWidth:       0.5,
-    taskStrokeWidth:            0.5,
-    milestoneStrokeWidth:       0.5,
-    swimlaneDividerStrokeWidth: 1,
-    linkStrokeWidth:            1,
-    insideLabelPadding:         2,
-  };
+  return projectData;
 }

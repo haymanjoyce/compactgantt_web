@@ -45,25 +45,39 @@ Ignores:
 
 | File | Role |
 |---|---|
-| `index.html` | Script tags, `renderEntityTable`/`renderConfigTable` helpers, tab switcher, event wiring |
-| `parser.js` | Owns `projectData`; exports `parseWorkbook(workbook)` |
+| `index.html` | Script tags, single `initUI()` call to boot the UI |
+| `dates.js` | Date helpers — single source of truth for all date conversion and arithmetic |
+| `parser.js` | Exports `parseWorkbook(workbook)` and `createEmptyProjectData()` |
 | `renderer.js` | Exports `renderChart(projectData)` → SVG string; no DOM dependency, no side effects |
 | `writer.js` | Exports `writeWorkbook(projectData)` → `Uint8Array`; no DOM dependency, no side effects |
+| `ui.js` | UI entry point; owns the live `projectData` reference; exports `initUI()` |
 
-Script loading order: SheetJS CDN → date-fns CDN (`3.6.0`, global `dateFns`) → `parser.js` → `renderer.js` → `writer.js` → inline script.
+Script loading order: SheetJS CDN → date-fns CDN (`3.6.0`, global `dateFns`) → `dates.js` → `parser.js` → `renderer.js` → `writer.js` → `ui.js` → inline script.
+
+## Date helpers (dates.js)
+
+`dates.js` is a shared module loaded before all four consuming files. All date conversion and arithmetic is centralised here; no local copies exist in `parser.js`, `renderer.js`, `writer.js`, or `ui.js`.
+
+| Function | Signature | Description |
+|---|---|---|
+| `toISODate` | `(val) → string\|null` | Accepts a JS `Date`, DD/MM/YYYY string, or YYYY-MM-DD string; returns YYYY-MM-DD or `null`. Timezone-safe. |
+| `toJsDate` | `(iso) → Date\|null` | Takes a YYYY-MM-DD string; returns a JS `Date` via `new Date(y, m-1, d)`. Returns `null` for absent input. |
+| `daysBetween` | `(a, b) → number` | Calendar days between two YYYY-MM-DD strings (`b − a`), computed via `Date.UTC`. |
+| `formatDate` | `(iso, formatStr) → string` | Formats a YYYY-MM-DD string using a date-fns format string. Timezone-safe via local-Date construction. Requires `dateFns` global. |
 
 ## Top-level state
 
-`parser.js` defines and owns `projectData`:
+`ui.js` owns the live `projectData` reference for the current session:
 
 ```js
-const projectData = {
-  tasks: [], swimlanes: [], links: [], pipes: [], curtains: [], notes: [],
-  config: { layout: {}, timeline: {}, titles: {}, style: {}, typography: {}, preferences: {}, rendering: {} }
-};
+let projectData = createEmptyProjectData();
 ```
 
-`parseWorkbook(workbook)` resets and repopulates it on every file load. The renderer reads from it; nothing else writes to it.
+It is initialised at startup by calling `createEmptyProjectData()` (exported from `parser.js`) — never `null`. The "no file loaded" condition is `projectData.tasks.length === 0`, the same as before.
+
+`parseWorkbook(workbook)` is a pure function: it builds a fresh `projectData` object locally and returns it. `ui.js` assigns the return value to its `projectData` on every file load. `renderer.js` and `writer.js` take `projectData` as a parameter and have no dependency on the global.
+
+`createEmptyProjectData()` is the single source of truth for the `projectData` shape and all default config values. `parseWorkbook` calls it to get a clean starting object, then overwrites entity arrays and config sections from the workbook.
 
 ## Excel file format
 
@@ -85,7 +99,7 @@ const projectData = {
 
 | Sheet | Headers |
 |---|---|
-| Tasks | ID, Swimlane ID, Swimlane Row\*, Name, Start Date, Finish Date, Label Content, Label Placement, Label Offset, Fill Color, Fill Pattern, Date Format |
+| Tasks | ID, Swimlane ID, Swimlane Row\*, Name, Start Date, Finish Date, Label Content, Label Placement, Label Offset, Fill Color, Fill Pattern, Pattern Color, Date Format |
 | Swimlanes | ID, Title\*, Row Count, Label Position, Background Color |
 | Links | ID, From Task ID, To Task ID, Line Color, Line Style, Link Routing\* |
 
@@ -116,14 +130,14 @@ Config sheet key names are confirmed. The `kv*` helpers (`kvStr/kvInt/kvFloat/kv
 - **`daysBetween(a, b)`:** uses `Date.UTC()` — timezone-safe, no `toISOString()`
 - **Milestones:** SVG `<polygon>` diamond centred on `startDate`; bars: `<rect rx="${rendering.taskCornerRadius}">`
 - **Skip rules:** orphaned tasks, `finishDate < startDate`, tasks outside chart date range all silently skipped; out-of-range `row` clamped to 1
-- **Milestone labels:** forced to `'outside'` at parse time in `parser.js`; the renderer never needs to check placement for milestones.
+- **Milestone labels:** the renderer's milestone branch always renders labels outside unconditionally, without reading `task.labelPlacement`. The parser does not override the stored placement value — milestones retain whatever placement the user set.
 - **Task labels (slot 12):** built from `task.labelContent` (`none`/`name`/`date`/`name_and_date`) with date-fns formatting. Per-task `task.dateFormat` overrides `config.preferences.chartDateFormat`. Dates parsed timezone-safely: split YYYY-MM-DD on `-` then `new Date(y, m-1, d)`. Inside label fill: `config.style.insideLabelTextColor`; outside label fill: `config.style.outsideLabelTextColor`.
   - *Inside labels* (bars only): truncated via character-width estimate (`fontSize * 0.6` per character, sans-serif approximation). Prefers word-boundary break; falls back to character truncation; emits nothing if `…` alone exceeds available width. Available width = `barWidth - 2 * rendering.insideLabelPadding`.
   - *Outside labels*: no truncation. `x = rightEdge + task.labelOffset`; right edge = `xFor(finishDate)` for bars, `xFor(startDate) + milestoneHalf` for milestones.
 
 ## config.rendering
 
-Not driven by any Excel sheet — populated unconditionally by `parseWorkbook` with hard-coded defaults. Also reset to `{}` at the top of `parseWorkbook` so reloads start clean.
+Not driven by any Excel sheet — hard-coded defaults only. Defined in `createEmptyProjectData()` alongside all other config defaults. `parseWorkbook` does not touch `config.rendering`; every reload gets a fresh object from `createEmptyProjectData()`.
 
 | Key | Default | Description |
 |---|---|---|

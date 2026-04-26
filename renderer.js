@@ -3,14 +3,6 @@
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
-// Calendar days from YYYY-MM-DD string a to b (b - a).
-// Uses Date.UTC to avoid timezone shifts.
-function daysBetween(a, b) {
-  const [ay, am, ad] = a.split('-').map(Number);
-  const [by, bm, bd] = b.split('-').map(Number);
-  return (Date.UTC(by, bm - 1, bd) - Date.UTC(ay, am - 1, ad)) / 86400000;
-}
-
 // Escape characters that are unsafe in SVG text content and attribute values.
 function escapeXml(str) {
   return String(str)
@@ -20,19 +12,13 @@ function escapeXml(str) {
     .replace(/"/g, '&quot;');
 }
 
-// Timezone-safe parse of YYYY-MM-DD to a JS Date, then format via date-fns.
-function formatTaskDate(isoStr, formatStr) {
-  const [y, m, d] = isoStr.split('-').map(Number);
-  return dateFns.format(new Date(y, m - 1, d), formatStr);
-}
-
 // Build display text for a task label; returns null when labelContent is 'none'.
 function buildLabelText(task, defaultFmt) {
   if (task.labelContent === 'none') return null;
   const fmt = task.dateFormat || defaultFmt;
   if (task.labelContent === 'name') return task.name;
-  const sd = task.startDate ? formatTaskDate(task.startDate, fmt) : '';
-  const fd = task.finishDate ? formatTaskDate(task.finishDate, fmt) : '';
+  const sd = task.startDate ? formatDate(task.startDate, fmt) : '';
+  const fd = task.finishDate ? formatDate(task.finishDate, fmt) : '';
   if (task.labelContent === 'date') return task.isMilestone ? sd : `${sd} - ${fd}`;
   return task.isMilestone ? `${task.name} (${sd})` : `${task.name} (${sd} - ${fd})`;
 }
