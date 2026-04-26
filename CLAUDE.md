@@ -48,8 +48,9 @@ Ignores:
 | `index.html` | Script tags, `renderEntityTable`/`renderConfigTable` helpers, tab switcher, event wiring |
 | `parser.js` | Owns `projectData`; exports `parseWorkbook(workbook)` |
 | `renderer.js` | Exports `renderChart(projectData)` → SVG string; no DOM dependency, no side effects |
+| `writer.js` | Exports `writeWorkbook(projectData)` → `Uint8Array`; no DOM dependency, no side effects |
 
-Script loading order: SheetJS CDN → date-fns CDN (`3.6.0`, global `dateFns`) → `parser.js` → `renderer.js` → inline script.
+Script loading order: SheetJS CDN → date-fns CDN (`3.6.0`, global `dateFns`) → `parser.js` → `renderer.js` → `writer.js` → inline script.
 
 ## Top-level state
 
@@ -101,7 +102,7 @@ Config sheet key names are confirmed. The `kv*` helpers (`kvStr/kvInt/kvFloat/kv
 
 - `task.isMilestone = startDate !== null && startDate === finishDate` (null-guard prevents false positive when both dates are absent)
 - `swimlane.order` = 1-based sheet-row position (not stored in Excel)
-- `config.timeline.chartStartDate/chartEndDate` derived from `min(task.startDate)` / `max(task.finishDate)` if absent from the Timeline sheet
+- `config.timeline.chartStartDate/chartEndDate` derived from `min(task.startDate)` / `max(task.finishDate)` if absent from the Timeline sheet; `chartStartDateExplicit` / `chartEndDateExplicit` (booleans in `config.timeline`) record whether each came from the cell (`true`) or was derived (`false`) — used by the writer to decide whether to emit or leave empty, preserving auto-derive behaviour across save/reload cycles
 
 ## Renderer (renderer.js)
 
@@ -170,3 +171,21 @@ Links are Finish-to-Start dependency arrows. Implementation notes:
 ## Current UI
 
 Two-tab layout: **Data** tab shows debug tables (one per entity type + seven config KV tables); **Chart** tab calls `renderChart(projectData)` on every activation and injects the SVG into a horizontally-scrollable container. "No project loaded" shown if tasks array is empty when Chart tab is opened.
+
+## Excel export (writer.js)
+
+`writeWorkbook(projectData)` returns a `Uint8Array` (SheetJS `type: 'array'`), ready for `new Blob([data], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })`.
+
+**Named-column policy:** columns are identified by header name, not index. The writer emits named headers; column order within each sheet is presentation-only and not load-bearing for the schema.
+
+**Sheet order:** Tasks → Swimlanes → Links → Pipes → Curtains → Notes → Layout → Timeline → Titles → Style → Typography → Preferences. `config.rendering` is deliberately excluded (hard-coded defaults; not a user-configurable concern at this stage).
+
+**Entity sheets:** header row + one data row per entity; always emitted even if the array is empty. Derived fields (`task.isMilestone`, `swimlane.order`) are not written. `task.dateFormat` and null date fields write as empty cells (`null` in the AOA → empty cell in SheetJS).
+
+**Date cells:** YYYY-MM-DD strings converted timezone-safely via `split('-')` → `new Date(y, m-1, d)` before being passed to SheetJS. Null → empty cell. Timeline dates obey `chartStartDateExplicit` / `chartEndDateExplicit` — only written when explicit; otherwise left empty so auto-derivation from task dates continues to work after a save/reload cycle.
+
+**Boolean cells:** `"Yes"` / `"No"` strings — matches `kvBool`'s string parsing.
+
+**Config sheets:** two-column layout with `["Field", "Value"]` header row in row 1. `parseConfigSheet` picks up the header as a harmless extra map entry that no `kv*` call looks up — round-trip is safe.
+
+**Save button:** disabled until `tasks.length > 0 || swimlanes.length > 0` (i.e. at least one entity array is non-empty). Suggested download filename is the originally loaded filename if one was loaded, otherwise `"compactgantt_project.xlsx"`.

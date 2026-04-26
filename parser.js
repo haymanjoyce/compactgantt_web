@@ -329,6 +329,8 @@ function parseWorkbook(workbook) {
   const timelineKV = parseConfigSheet(workbook.Sheets['Timeline']);
   let chartStartDate = kvDate(timelineKV, 'Chart Start Date');
   let chartEndDate   = kvDate(timelineKV, 'Chart End Date');
+  const chartStartDateExplicit = chartStartDate !== null;
+  const chartEndDateExplicit   = chartEndDate !== null;
   // Derive from task dates if absent or unparseable
   if (!chartStartDate) {
     const dates = projectData.tasks.map(t => t.startDate).filter(Boolean).sort();
@@ -341,6 +343,8 @@ function parseWorkbook(workbook) {
   projectData.config.timeline = {
     chartStartDate,
     chartEndDate,
+    chartStartDateExplicit,
+    chartEndDateExplicit,
     showYears:      kvBool(timelineKV, 'Show Years',      true),
     showMonths:     kvBool(timelineKV, 'Show Months',     true),
     showWeeks:      kvBool(timelineKV, 'Show Weeks',      false),

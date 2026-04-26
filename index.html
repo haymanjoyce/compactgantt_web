@@ -8,6 +8,7 @@
   <script src="https://cdn.jsdelivr.net/npm/date-fns@3.6.0/cdn.min.js"></script>
   <script src="parser.js"></script>
   <script src="renderer.js"></script>
+  <script src="writer.js"></script>
   <style>
     body { font-family: sans-serif; padding: 1rem; }
     #status { margin: 0.5rem 0 0.75rem; color: #555; }
@@ -24,6 +25,7 @@
 <body>
 
   <input type="file" id="fileInput" accept=".xlsx">
+  <button id="saveBtn" disabled>Save</button>
   <p id="status">No file loaded</p>
 
   <div class="tabs">
@@ -109,6 +111,8 @@
     document.getElementById('tabData').addEventListener('click',  () => activateTab('data'));
     document.getElementById('tabChart').addEventListener('click', () => activateTab('chart'));
 
+    let loadedFilename = null;
+
     // ── File loading ───────────────────────────────────────────────────────────
     document.getElementById('fileInput').addEventListener('change', function (e) {
       const file = e.target.files[0];
@@ -118,8 +122,10 @@
       reader.onload = function (ev) {
         const workbook = XLSX.read(new Uint8Array(ev.target.result), { type: 'array', cellDates: true });
         parseWorkbook(workbook);
+        loadedFilename = file.name;
 
         const d   = projectData;
+        document.getElementById('saveBtn').disabled = d.tasks.length === 0 && d.swimlanes.length === 0;
         const cnt = (num, s) => `${num} ${num === 1 ? s : s + 's'}`;
         document.getElementById('status').textContent =
           `Loaded: ${file.name} — ` +
@@ -146,6 +152,19 @@
         renderConfigTable(document.getElementById('configRenderingContainer'),  d.config.rendering);
       };
       reader.readAsArrayBuffer(file);
+    });
+
+    // ── Save ──────────────────────────────────────────────────────────────────
+    document.getElementById('saveBtn').addEventListener('click', function () {
+      const filename = loadedFilename || 'compactgantt_project.xlsx';
+      const data = writeWorkbook(projectData);
+      const blob = new Blob([data], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement('a');
+      a.href     = url;
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(url);
     });
   </script>
 
