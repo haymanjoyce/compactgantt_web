@@ -1,39 +1,6 @@
 // renderer.js — SVG chart generation
 // Exports renderChart(projectData) → SVG string. Does not modify projectData.
 
-// ── Color validation ───────────────────────────────────────────────────────────
-// Named colors from the domain spec plus CSS defaults used in config.
-// Hex (#xxx / #xxxxxx) and rgb/rgba values are also accepted.
-// Anything outside the set falls back to 'steelblue'.
-const VALID_CSS_COLORS = new Set([
-  // Domain spec named colors
-  'blue','red','green','yellow','orange','purple','black','white','grey','gray',
-  'cyan','magenta',
-  // Config default colors and confirmed app colors
-  'lightgrey','lightgray','steelblue','lavender','lightcyan',
-  // Common CSS named colors likely to appear in project files
-  'navy','teal','aqua','fuchsia','maroon','olive','lime','silver',
-  'darkblue','darkgreen','darkred','darkorange','darkgrey','darkgray',
-  'lightblue','lightgreen','lightyellow','lightsalmon',
-  'cornflowerblue','royalblue','mediumblue','skyblue','deepskyblue',
-  'coral','salmon','tomato','crimson','firebrick',
-  'gold','goldenrod','khaki',
-  'pink','hotpink','deeppink',
-  'violet','indigo','plum','orchid',
-  'brown','chocolate','saddlebrown','sienna','tan','beige',
-  'turquoise','mediumturquoise','mediumseagreen','seagreen',
-  'transparent',
-]);
-
-function sanitizeColor(color) {
-  if (!color) return 'steelblue';
-  const c = String(color).trim();
-  if (VALID_CSS_COLORS.has(c.toLowerCase())) return c;
-  if (/^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(c)) return c;
-  if (/^rgba?\s*\(/i.test(c)) return c;
-  return 'steelblue';
-}
-
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
 // Calendar days from YYYY-MM-DD string a to b (b - a).
@@ -51,6 +18,37 @@ function escapeXml(str) {
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;');
+}
+
+// Timezone-safe parse of YYYY-MM-DD to a JS Date, then format via date-fns.
+function formatTaskDate(isoStr, formatStr) {
+  const [y, m, d] = isoStr.split('-').map(Number);
+  return dateFns.format(new Date(y, m - 1, d), formatStr);
+}
+
+// Build display text for a task label; returns null when labelContent is 'none'.
+function buildLabelText(task, defaultFmt) {
+  if (task.labelContent === 'none') return null;
+  const fmt = task.dateFormat || defaultFmt;
+  if (task.labelContent === 'name') return task.name;
+  const sd = task.startDate ? formatTaskDate(task.startDate, fmt) : '';
+  const fd = task.finishDate ? formatTaskDate(task.finishDate, fmt) : '';
+  if (task.labelContent === 'date') return task.isMilestone ? sd : `${sd} - ${fd}`;
+  return task.isMilestone ? `${task.name} (${sd})` : `${task.name} (${sd} - ${fd})`;
+}
+
+// Truncate label to fit availWidth using fontSize * 0.6 per character (sans-serif estimate).
+// Prefers a word-boundary break; falls back to character truncation.
+function truncateLabel(text, availWidth, fontSize) {
+  const charW = fontSize * 0.6;
+  if (text.length * charW <= availWidth) return text;
+  const ellipsisW = charW;
+  if (ellipsisW > availWidth) return '';
+  const maxChars = Math.floor((availWidth - ellipsisW) / charW);
+  if (maxChars <= 0) return '';
+  const sub = text.slice(0, maxChars);
+  const lastSpace = sub.lastIndexOf(' ');
+  return (lastSpace > 0 ? text.slice(0, lastSpace) : sub) + '…';
 }
 
 // Format a number to at most 2 decimal places, dropping trailing zeros.
@@ -138,14 +136,14 @@ function renderChart(projectData) {
       barsSvg = '',       // 9  task bars
       milestonesSvg = '', // 10 milestones
       linkHeadSvg = '',   // 11 link arrowheads and origin markers
-                          // 12 task labels — not yet implemented
+      taskLabelsSvg = '', // 12 task labels
       labelsSvg = '',     // 13 swimlane label overlays
                           // 14 notes — not yet implemented
       headerSvg = '',     // 15 header band  \
       footerSvg = '';     // 15 footer band  /  emitted together, last
 
   // ── 1. Chart background ──────────────────────────────────────────────────────
-  bg = `<rect x="0" y="0" width="${outerWidth}" height="${outerHeight}" fill="${sanitizeColor(style.chartBackgroundColor)}"/>`;
+  bg = `<rect x="0" y="0" width="${outerWidth}" height="${outerHeight}" fill="${style.chartBackgroundColor}"/>`;
 
   // ── 2. Swimlane backgrounds ──────────────────────────────────────────────────
   for (const s of sorted) {
@@ -157,7 +155,7 @@ function renderChart(projectData) {
   // ── 4. Vertical gridlines ────────────────────────────────────────────────────
   function vLine(x) {
     const xr = n(x);
-    return `<line x1="${xr}" y1="${n(taskRowY1)}" x2="${xr}" y2="${n(taskRowY2)}" stroke="${sanitizeColor(style.gridlineVerticalColor)}" stroke-width="${rendering.gridlineStrokeWidth}"/>`;
+    return `<line x1="${xr}" y1="${n(taskRowY1)}" x2="${xr}" y2="${n(taskRowY2)}" stroke="${style.gridlineVerticalColor}" stroke-width="${rendering.gridlineStrokeWidth}"/>`;
   }
 
   // Year gridlines: at Jan 1 of each year after chartStartDate
@@ -186,11 +184,11 @@ function renderChart(projectData) {
     const bY  = n(scaleY + idx * bandH);
     const bY2 = n(bY + bandH);
 
-    scaleSvg += `<rect x="${innerX1}" y="${bY}" width="${innerWidth}" height="${n(bandH)}" fill="${sanitizeColor(style.scaleBackgroundColor)}"/>`;
+    scaleSvg += `<rect x="${innerX1}" y="${bY}" width="${innerWidth}" height="${n(bandH)}" fill="${style.scaleBackgroundColor}"/>`;
 
     function tick(x) {
       const xr = n(x);
-      return `<line x1="${xr}" y1="${bY}" x2="${xr}" y2="${bY2}" stroke="${sanitizeColor(style.scaleTickColor)}" stroke-width="${rendering.scaleTickStrokeWidth}"/>`;
+      return `<line x1="${xr}" y1="${bY}" x2="${xr}" y2="${bY2}" stroke="${style.scaleTickColor}" stroke-width="${rendering.scaleTickStrokeWidth}"/>`;
     }
 
     function label(cx, text) {
@@ -223,7 +221,7 @@ function renderChart(projectData) {
     }
 
     // Bottom border for each scale band
-    scaleSvg += `<line x1="${innerX1}" y1="${bY2}" x2="${innerX2}" y2="${bY2}" stroke="${sanitizeColor(style.scaleTickColor)}" stroke-width="${rendering.scaleTickStrokeWidth}"/>`;
+    scaleSvg += `<line x1="${innerX1}" y1="${bY2}" x2="${innerX2}" y2="${bY2}" stroke="${style.scaleTickColor}" stroke-width="${rendering.scaleTickStrokeWidth}"/>`;
   });
 
   // ── 6. Swimlane dividers ─────────────────────────────────────────────────────
@@ -232,7 +230,7 @@ function renderChart(projectData) {
       const sy = taskRowY1 + startRowOf[s.id] * rowH;
       const sh = s.rowCount * rowH;
       const ly = n(sy + sh);
-      dividersSvg += `<line x1="${innerX1}" y1="${ly}" x2="${innerX2}" y2="${ly}" stroke="${sanitizeColor(style.swimlaneDividerColor)}" stroke-width="${rendering.swimlaneDividerStrokeWidth}"/>`;
+      dividersSvg += `<line x1="${innerX1}" y1="${ly}" x2="${innerX2}" y2="${ly}" stroke="${style.swimlaneDividerColor}" stroke-width="${rendering.swimlaneDividerStrokeWidth}"/>`;
     }
   });
 
@@ -240,7 +238,7 @@ function renderChart(projectData) {
   if (titles.headerHeight > 0) {
     const hY = paddingTop;
     const hW = outerWidth - paddingLeft - paddingRight;
-    headerSvg += `<rect x="${paddingLeft}" y="${hY}" width="${hW}" height="${titles.headerHeight}" fill="${sanitizeColor(style.headerFooterBackgroundColor)}"/>`;
+    headerSvg += `<rect x="${paddingLeft}" y="${hY}" width="${hW}" height="${titles.headerHeight}" fill="${style.headerFooterBackgroundColor}"/>`;
     if (titles.headerText) {
       const ty = n(hY + titles.headerHeight * typography.headerFooterAlignmentFactor);
       headerSvg += `<text x="${n(paddingLeft + hW / 2)}" y="${ty}" text-anchor="middle" font-family="'${escapeXml(typography.fontFamily)}'" font-size="${typography.headerFooterFontSize}" fill="black">${escapeXml(titles.headerText)}</text>`;
@@ -251,7 +249,7 @@ function renderChart(projectData) {
   if (titles.footerHeight > 0) {
     const fy = outerHeight - paddingBottom - titles.footerHeight;
     const fW = outerWidth - paddingLeft - paddingRight;
-    footerSvg += `<rect x="${paddingLeft}" y="${fy}" width="${fW}" height="${titles.footerHeight}" fill="${sanitizeColor(style.headerFooterBackgroundColor)}"/>`;
+    footerSvg += `<rect x="${paddingLeft}" y="${fy}" width="${fW}" height="${titles.footerHeight}" fill="${style.headerFooterBackgroundColor}"/>`;
     if (titles.footerText) {
       const ty = n(fy + titles.footerHeight * typography.headerFooterAlignmentFactor);
       footerSvg += `<text x="${n(paddingLeft + fW / 2)}" y="${ty}" text-anchor="middle" font-family="'${escapeXml(typography.fontFamily)}'" font-size="${typography.headerFooterFontSize}" fill="black">${escapeXml(titles.footerText)}</text>`;
@@ -276,14 +274,14 @@ function renderChart(projectData) {
     const absRow     = startRowOf[task.swimlaneId] + row - 1;
     const rowY       = taskRowY1 + absRow * rowH;
     const rowCenterY = rowY + rowH / 2;
-    const color      = sanitizeColor(task.fillColor);
+    const color      = task.fillColor;
 
     if (task.isMilestone) {
       const cx   = xFor(task.startDate);
       const cy   = rowCenterY;
       const half = milestoneHalf;
       const pts  = `${n(cx)},${n(cy - half)} ${n(cx + half)},${n(cy)} ${n(cx)},${n(cy + half)} ${n(cx - half)},${n(cy)}`;
-      milestonesSvg += `<polygon points="${pts}" fill="${color}" stroke="${sanitizeColor(style.milestoneStrokeColor)}" stroke-width="${rendering.milestoneStrokeWidth}"/>`;
+      milestonesSvg += `<polygon points="${pts}" fill="${color}" stroke="${style.milestoneStrokeColor}" stroke-width="${rendering.milestoneStrokeWidth}"/>`;
 
       taskGeom.set(task.id, {
         absRow,
@@ -295,13 +293,20 @@ function renderChart(projectData) {
         startDate:  task.startDate,
         finishDate: task.finishDate,
       });
+
+      const milestoneLabel = buildLabelText(task, config.preferences.chartDateFormat);
+      if (milestoneLabel) {
+        const lx = n(cx + half + task.labelOffset);
+        const ly = n(rowY + rowH * typography.taskAlignmentFactor);
+        taskLabelsSvg += `<text x="${lx}" y="${ly}" text-anchor="start" font-family="'${escapeXml(typography.fontFamily)}'" font-size="${typography.taskFontSize}" fill="${style.outsideLabelTextColor}">${escapeXml(milestoneLabel)}</text>`;
+      }
     } else {
       const x1   = Math.max(innerX1, xFor(task.startDate));
       const x2   = Math.min(innerX2, xFor(task.finishDate));
       const bw   = x2 - x1;
       if (bw <= 0) continue;
       const barY = rowY + (rowH - barH) / 2;
-      barsSvg += `<rect x="${n(x1)}" y="${n(barY)}" width="${n(bw)}" height="${n(barH)}" rx="${rendering.taskCornerRadius}" fill="${color}" stroke="${sanitizeColor(style.taskStrokeColor)}" stroke-width="${rendering.taskStrokeWidth}"/>`;
+      barsSvg += `<rect x="${n(x1)}" y="${n(barY)}" width="${n(bw)}" height="${n(barH)}" rx="${rendering.taskCornerRadius}" fill="${color}" stroke="${style.taskStrokeColor}" stroke-width="${rendering.taskStrokeWidth}"/>`;
 
       taskGeom.set(task.id, {
         absRow,
@@ -313,6 +318,23 @@ function renderChart(projectData) {
         startDate:  task.startDate,
         finishDate: task.finishDate,
       });
+
+      const barLabel = buildLabelText(task, config.preferences.chartDateFormat);
+      if (barLabel) {
+        if (task.labelPlacement === 'inside') {
+          const availW    = bw - 2 * rendering.insideLabelPadding;
+          const truncated = truncateLabel(barLabel, availW, typography.taskFontSize);
+          if (truncated) {
+            const lx = n(x1 + rendering.insideLabelPadding);
+            const ly = n(rowY + rowH * typography.taskAlignmentFactor);
+            taskLabelsSvg += `<text x="${lx}" y="${ly}" text-anchor="start" font-family="'${escapeXml(typography.fontFamily)}'" font-size="${typography.taskFontSize}" fill="${style.insideLabelTextColor}">${escapeXml(truncated)}</text>`;
+          }
+        } else {
+          const lx = n(xFor(task.finishDate) + task.labelOffset);
+          const ly = n(rowY + rowH * typography.taskAlignmentFactor);
+          taskLabelsSvg += `<text x="${lx}" y="${ly}" text-anchor="start" font-family="'${escapeXml(typography.fontFamily)}'" font-size="${typography.taskFontSize}" fill="${style.outsideLabelTextColor}">${escapeXml(barLabel)}</text>`;
+        }
+      }
     }
   }
 
@@ -328,7 +350,7 @@ function renderChart(projectData) {
     const succ = taskGeom.get(link.toTaskId);
     if (!pred || !succ) continue; // orphaned — one or both tasks not rendered
 
-    const color    = sanitizeColor(link.lineColor);
+    const color = link.lineColor;
     const dashAttr = link.lineStyle === 'dashed' ? ' stroke-dasharray="4 3"' : '';
 
     const origX = pred.originX;
@@ -423,7 +445,7 @@ function renderChart(projectData) {
       ty = n(sy + sh - rowH * (1 - typography.swimlaneBottomAlignmentFactor));
     }
 
-    labelsSvg += `<text x="${n(tx)}" y="${ty}" text-anchor="${anchor}" font-family="'${escapeXml(typography.fontFamily)}'" font-size="${typography.swimlaneFontSize}" fill="${sanitizeColor(style.swimlaneLabelColor)}">${escapeXml(s.name)}</text>`;
+    labelsSvg += `<text x="${n(tx)}" y="${ty}" text-anchor="${anchor}" font-family="'${escapeXml(typography.fontFamily)}'" font-size="${typography.swimlaneFontSize}" fill="${style.swimlaneLabelColor}">${escapeXml(s.name)}</text>`;
   }
 
   // ── Assemble SVG (painter's algorithm, back to front) ────────────────────────
@@ -438,6 +460,7 @@ function renderChart(projectData) {
     `<g id="task-bars">${barsSvg}</g>`,
     `<g id="milestones">${milestonesSvg}</g>`,
     `<g id="link-heads">${linkHeadSvg}</g>`,
+    `<g id="task-labels">${taskLabelsSvg}</g>`,
     `<g id="swimlane-labels">${labelsSvg}</g>`,
     `<g id="header-footer">${headerSvg}${footerSvg}</g>`,
     `</svg>`,

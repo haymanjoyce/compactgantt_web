@@ -183,8 +183,10 @@ function parseWorkbook(workbook) {
       'Date Format':     { key: 'dateFormat',      def: null                   },
     });
     projectData.tasks = raw.map(t => {
-      const startDate  = toISODate(t.startDate);
-      const finishDate = toISODate(t.finishDate);
+      const startDate      = toISODate(t.startDate);
+      const finishDate     = toISODate(t.finishDate);
+      const isMilestone    = startDate !== null && startDate === finishDate;
+      const labelPlacement = isMilestone ? 'outside' : normalizeLabelPlacement(t.labelPlacement);
       return {
         id:             toInt(t.id),
         swimlaneId:     toInt(t.swimlaneId),
@@ -192,9 +194,9 @@ function parseWorkbook(workbook) {
         name:           t.name,
         startDate,
         finishDate,
-        isMilestone:    startDate !== null && startDate === finishDate,
+        isMilestone,
         labelContent:   normalizeLabelContent(t.labelContent),
-        labelPlacement: normalizeLabelPlacement(t.labelPlacement),
+        labelPlacement,
         labelOffset:    toInt(t.labelOffset, 0),
         fillColor:      t.fillColor,
         fillPattern:    t.fillPattern,
@@ -373,6 +375,7 @@ function parseWorkbook(workbook) {
     milestoneStrokeColor:        kvStr(styleKV, 'Milestone Stroke Color',         'black',      'Milestone Stroke Colour'),
     outsideLabelTextColor:       kvStr(styleKV, 'Outside Label Text Color',       'black',      'Outside Label Text Colour'),
     outsideLabelLineColor:       kvStr(styleKV, 'Outside Label Line Color',       'black',      'Outside Label Line Colour'),
+    insideLabelTextColor:        kvStr(styleKV, 'Inside Label Text Color',        'black'),
   };
 
   // ── Config: Typography ─────────────────────────────────────────────────────
@@ -417,5 +420,6 @@ function parseWorkbook(workbook) {
     milestoneStrokeWidth:       0.5,
     swimlaneDividerStrokeWidth: 1,
     linkStrokeWidth:            1,
+    insideLabelPadding:         2,
   };
 }

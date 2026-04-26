@@ -49,7 +49,7 @@ Ignores:
 | `parser.js` | Owns `projectData`; exports `parseWorkbook(workbook)` |
 | `renderer.js` | Exports `renderChart(projectData)` → SVG string; no DOM dependency, no side effects |
 
-Script loading order: SheetJS CDN → `parser.js` → `renderer.js` → inline script.
+Script loading order: SheetJS CDN → date-fns CDN (`3.6.0`, global `dateFns`) → `parser.js` → `renderer.js` → inline script.
 
 ## Top-level state
 
@@ -93,7 +93,7 @@ const projectData = {
 Config sheet key names are confirmed. The `kv*` helpers (`kvStr/kvInt/kvFloat/kvBool/kvDate`) each accept an optional `fallback` key — same try-new-first pattern as entity column fallbacks. Known config key renames (new → old fallback):
 
 - **Layout** — padding keys: `"Padding Top/Right/Bottom/Left"` → `"Margin Top/Right/Bottom/Left"`
-- **Style** — all 12 keys: `"… Color"` → `"… Colour"`
+- **Style** — 12 existing keys: `"… Color"` → `"… Colour"` (the newer `insideLabelTextColor` has no old-format fallback)
 - **Timeline** — gridline keys: `"Gridline X"` → `"Vertical Gridline X"`
 - **Typography** — alignment factors: `"X Alignment Factor"` → `"X Vertical Alignment Factor"`; also `"Header Footer Font Size"` → `"Header & Footer Font Size"`
 
@@ -109,14 +109,16 @@ Config sheet key names are confirmed. The `kv*` helpers (`kvStr/kvInt/kvFloat/kv
 
 - **Coordinate areas:** `innerX1 = paddingLeft`; `innerX2 = outerWidth - paddingRight`; `taskRowY1 = paddingTop + headerHeight + scaleTotalHeight`; `taskRowY2 = outerHeight - paddingBottom - footerHeight`
 - **Scale band height:** `max(rendering.minScaleBandHeight, scaleFontSize * 2.5)` per visible scale; total = count × bandHeight
-- **Render order (painter's algorithm, 15 slots):** (1) chart background → (2) swimlane backgrounds → (4) gridlines → (5) scale bands → (6) swimlane dividers → (8) link bodies → (9) task bars → (10) milestones → (11) link heads → (13) swimlane labels → (15) header/footer. Slots 3 curtains, 7 pipes, 12 task labels, 14 notes are reserved but not yet implemented (no empty `<g>` emitted). Header/footer paint last so they frame the chart regardless of unusual layout dimensions.
-- **Swimlane bands:** use `s.backgroundColor` directly (not through `sanitizeColor`) — value comes pre-validated from the parser
-- **Task/milestone colors:** go through `sanitizeColor`; invalid names fall back to `'steelblue'`
-- **`sanitizeColor`:** accepts the domain spec named-color set, common CSS named colors (including `lavender`, `lightcyan`), hex `#xxx`/`#xxxxxx`, and `rgb`/`rgba`
+- **Render order (painter's algorithm, 15 slots):** (1) chart background → (2) swimlane backgrounds → (4) gridlines → (5) scale bands → (6) swimlane dividers → (8) link bodies → (9) task bars → (10) milestones → (11) link heads → (12) task labels → (13) swimlane labels → (15) header/footer. Slots 3 curtains, 7 pipes, 14 notes are reserved but not yet implemented (no empty `<g>` emitted). Header/footer paint last so they frame the chart regardless of unusual layout dimensions.
+- **Color handling:** all color values are passed directly from `projectData` to SVG `fill`/`stroke` attributes without validation. Invalid CSS color names render as SVG's default (black). Validation is moving to a separate module — the renderer trusts its input.
 - **Swimlane labels:** `swimlaneTopAlignmentFactor` for top variants, `swimlaneBottomAlignmentFactor` for bottom variants
 - **`daysBetween(a, b)`:** uses `Date.UTC()` — timezone-safe, no `toISOString()`
 - **Milestones:** SVG `<polygon>` diamond centred on `startDate`; bars: `<rect rx="${rendering.taskCornerRadius}">`
 - **Skip rules:** orphaned tasks, `finishDate < startDate`, tasks outside chart date range all silently skipped; out-of-range `row` clamped to 1
+- **Milestone labels:** forced to `'outside'` at parse time in `parser.js`; the renderer never needs to check placement for milestones.
+- **Task labels (slot 12):** built from `task.labelContent` (`none`/`name`/`date`/`name_and_date`) with date-fns formatting. Per-task `task.dateFormat` overrides `config.preferences.chartDateFormat`. Dates parsed timezone-safely: split YYYY-MM-DD on `-` then `new Date(y, m-1, d)`. Inside label fill: `config.style.insideLabelTextColor`; outside label fill: `config.style.outsideLabelTextColor`.
+  - *Inside labels* (bars only): truncated via character-width estimate (`fontSize * 0.6` per character, sans-serif approximation). Prefers word-boundary break; falls back to character truncation; emits nothing if `…` alone exceeds available width. Available width = `barWidth - 2 * rendering.insideLabelPadding`.
+  - *Outside labels*: no truncation. `x = rightEdge + task.labelOffset`; right edge = `xFor(finishDate)` for bars, `xFor(startDate) + milestoneHalf` for milestones.
 
 ## config.rendering
 
@@ -137,6 +139,7 @@ Not driven by any Excel sheet — populated unconditionally by `parseWorkbook` w
 | `milestoneStrokeWidth` | 0.5 | milestone diamond outline stroke width |
 | `swimlaneDividerStrokeWidth` | 1 | swimlane divider stroke width |
 | `linkStrokeWidth` | 1 | link path stroke width |
+| `insideLabelPadding` | 2 | horizontal inset of inside-label text from bar edges, in px |
 
 ## Link rendering
 
