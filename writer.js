@@ -76,7 +76,6 @@ function writeWorkbook(projectData) {
     ['Padding Right',  layout.paddingRight],
     ['Padding Bottom', layout.paddingBottom],
     ['Padding Left',   layout.paddingLeft],
-    ['Row Numbers',    boolStr(layout.showRowNumbers)],
     ['Row Dividers',   boolStr(layout.showRowDividers)],
   ]);
 
@@ -116,7 +115,6 @@ function writeWorkbook(projectData) {
     ['Swimlane Divider Color',         style.swimlaneDividerColor],
     ['Scale Background Color',         style.scaleBackgroundColor],
     ['Scale Tick Color',               style.scaleTickColor],
-    ['Gridline Horizontal Color',      style.gridlineHorizontalColor],
     ['Gridline Vertical Color',        style.gridlineVerticalColor],
     ['Task Stroke Color',              style.taskStrokeColor],
     ['Milestone Stroke Color',         style.milestoneStrokeColor],
@@ -132,12 +130,10 @@ function writeWorkbook(projectData) {
     ['Task Font Size',                   typography.taskFontSize],
     ['Scale Font Size',                  typography.scaleFontSize],
     ['Header Footer Font Size',          typography.headerFooterFontSize],
-    ['Row Number Font Size',             typography.rowNumberFontSize],
     ['Note Font Size',                   typography.noteFontSize],
     ['Swimlane Font Size',               typography.swimlaneFontSize],
     ['Scale Alignment Factor',           typography.scaleAlignmentFactor],
     ['Task Alignment Factor',            typography.taskAlignmentFactor],
-    ['Row Number Alignment Factor',      typography.rowNumberAlignmentFactor],
     ['Header Footer Alignment Factor',   typography.headerFooterAlignmentFactor],
     ['Swimlane Top Alignment Factor',    typography.swimlaneTopAlignmentFactor],
     ['Swimlane Bottom Alignment Factor', typography.swimlaneBottomAlignmentFactor],
