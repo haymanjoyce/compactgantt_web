@@ -42,7 +42,7 @@ function n(v) { return parseFloat(v.toFixed(2)); }
 
 // ── Main render function ───────────────────────────────────────────────────────
 function renderChart(projectData) {
-  const { tasks, swimlanes, links, config } = projectData;
+  const { tasks, swimlanes, links, pipes, config } = projectData;
   const { layout, bars, timeline, titles, style, typography, rendering } = config;
 
   const { outerWidth, outerHeight, paddingLeft, paddingRight, paddingTop, paddingBottom } = layout;
@@ -123,7 +123,7 @@ function renderChart(projectData) {
       gridlines = '',     // 4  vertical gridlines
       scaleSvg = '',      // 5  scale bands
       dividersSvg = '',   // 6  swimlane dividers
-                          // 7  pipes — not yet implemented
+      pipesSvg = '',      // 7  pipes
       linkBodySvg = '',   // 8  link bodies (path segments, no heads)
       barsSvg = '',       // 9  task bars
       milestonesSvg = '', // 10 milestones
@@ -325,6 +325,31 @@ function renderChart(projectData) {
       dividersSvg += `<line x1="${innerX1}" y1="${ly}" x2="${innerX2}" y2="${ly}" stroke="${style.swimlaneDividerColor}" stroke-width="${rendering.swimlaneDividerStrokeWidth}"/>`;
     }
   });
+
+  // ── 7. Pipes ─────────────────────────────────────────────────────────────────
+  for (const pipe of pipes) {
+    if (!pipe.date) continue;
+    if (pipe.date < chartStartDate || pipe.date > chartEndDate) continue;
+
+    const px = xFor(pipe.date);
+    const dashAttr = pipe.lineStyle === 'dashed' ? ' stroke-dasharray="4 3"'
+                   : pipe.lineStyle === 'dotted'  ? ' stroke-dasharray="1 2"'
+                   : '';
+    pipesSvg += `<line x1="${n(px)}" y1="${n(taskRowY1)}" x2="${n(px)}" y2="${n(taskRowY2)}" stroke="${pipe.color}" stroke-width="${rendering.pipeStrokeWidth}"${dashAttr}/>`;
+
+    if (pipe.name) {
+      const fontSize   = typography.pipeFontSize;
+      const textW      = fontSize * 0.6 * pipe.name.length;
+      const badgeW     = textW + 2 * rendering.pipeBadgePaddingX;
+      const badgeH     = fontSize + 2 * rendering.pipeBadgePaddingY;
+      const areaH      = taskRowY2 - taskRowY1;
+      const badgeTopY  = taskRowY1 + (1 - pipe.labelPosition) * (areaH - badgeH);
+      const textCX     = px + badgeW / 2;
+      const textY      = n(badgeTopY + badgeH * typography.scaleAlignmentFactor);
+      pipesSvg += `<rect x="${n(px)}" y="${n(badgeTopY)}" width="${n(badgeW)}" height="${n(badgeH)}" fill="${style.chartBackgroundColor}" stroke="${pipe.color}" stroke-width="${rendering.pipeStrokeWidth}"/>`;
+      pipesSvg += `<text x="${n(textCX)}" y="${textY}" text-anchor="middle" font-family="'${escapeXml(typography.fontFamily)}'" font-size="${fontSize}" fill="${pipe.color}">${escapeXml(pipe.name)}</text>`;
+    }
+  }
 
   // ── 15. Header band ──────────────────────────────────────────────────────────
   if (titles.headerHeight > 0) {
@@ -548,6 +573,7 @@ function renderChart(projectData) {
     `<g id="gridlines">${gridlines}</g>`,
     `<g id="scale-bands">${scaleSvg}</g>`,
     `<g id="swimlane-dividers">${dividersSvg}</g>`,
+    `<g id="pipes">${pipesSvg}</g>`,
     `<g id="link-bodies">${linkBodySvg}</g>`,
     `<g id="task-bars">${barsSvg}</g>`,
     `<g id="milestones">${milestonesSvg}</g>`,

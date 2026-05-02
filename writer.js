@@ -45,9 +45,9 @@ function writeWorkbook(projectData) {
 
   // ── 4. Pipes ──────────────────────────────────────────────────────────────────
   addSheet('Pipes', [
-    ['ID', 'Date', 'Name', 'Color', 'Line Style'],
+    ['ID', 'Date', 'Name', 'Color', 'Line Style', 'Label Position'],
     ...pipes.map(p => [
-      p.id, toJsDate(p.date), p.name, p.color, p.lineStyle,
+      p.id, toJsDate(p.date), p.name, p.color, p.lineStyle, p.labelPosition,
     ]),
   ]);
 
@@ -142,6 +142,7 @@ function writeWorkbook(projectData) {
     ['Header Footer Font Size',          typography.headerFooterFontSize],
     ['Note Font Size',                   typography.noteFontSize],
     ['Swimlane Font Size',               typography.swimlaneFontSize],
+    ['Pipe Font Size',                   typography.pipeFontSize],
     ['Scale Alignment Factor',           typography.scaleAlignmentFactor],
     ['Task Alignment Factor',            typography.taskAlignmentFactor],
     ['Header Footer Alignment Factor',   typography.headerFooterAlignmentFactor],

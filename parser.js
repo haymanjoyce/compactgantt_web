@@ -157,6 +157,7 @@ function createEmptyProjectData() {
         headerFooterFontSize:         10,
         noteFontSize:                 10,
         swimlaneFontSize:             10,
+        pipeFontSize:                 10,
         scaleAlignmentFactor:         0.7,
         taskAlignmentFactor:          0.7,
         headerFooterAlignmentFactor:  0.7,
@@ -179,6 +180,9 @@ function createEmptyProjectData() {
         swimlaneDividerStrokeWidth: 1,
         linkStrokeWidth:            1,
         insideLabelPadding:         2,
+        pipeStrokeWidth:            1,
+        pipeBadgePaddingX:          4,
+        pipeBadgePaddingY:          2,
       },
     }
   };
@@ -275,18 +279,20 @@ function parseWorkbook(workbook) {
   const pipesSheet = workbook.Sheets['Pipes'];
   if (pipesSheet) {
     const raw = parseEntitySheet(pipesSheet, {
-      'ID':         { key: 'id',        def: null    },
-      'Date':       { key: 'date',      def: null    },
-      'Name':       { key: 'name',      def: ''      },
-      'Color':      { key: 'color',     def: 'black' },
-      'Line Style': { key: 'lineStyle', def: 'solid' },
+      'ID':             { key: 'id',            def: null    },
+      'Date':           { key: 'date',          def: null    },
+      'Name':           { key: 'name',          def: ''      },
+      'Color':          { key: 'color',         def: 'black' },
+      'Line Style':     { key: 'lineStyle',     def: 'solid' },
+      'Label Position': { key: 'labelPosition', def: 1       },
     });
     projectData.pipes = raw.map(p => ({
-      id:        toInt(p.id),
-      date:      toISODate(p.date),
-      name:      p.name,
-      color:     p.color,
-      lineStyle: p.lineStyle,
+      id:            toInt(p.id),
+      date:          toISODate(p.date),
+      name:          p.name,
+      color:         p.color,
+      lineStyle:     p.lineStyle,
+      labelPosition: toFloat(p.labelPosition, 1),
     }));
   }
 
@@ -423,6 +429,7 @@ function parseWorkbook(workbook) {
     headerFooterFontSize:         kvInt(typographyKV,   'Header Footer Font Size',          10,  'Header & Footer Font Size'),
     noteFontSize:                 kvInt(typographyKV,   'Note Font Size',                  10),
     swimlaneFontSize:             kvInt(typographyKV,   'Swimlane Font Size',               10),
+    pipeFontSize:                 kvInt(typographyKV,   'Pipe Font Size',                   10),
     scaleAlignmentFactor:         kvFloat(typographyKV, 'Scale Alignment Factor',           0.7, 'Scale Vertical Alignment Factor'),
     taskAlignmentFactor:          kvFloat(typographyKV, 'Task Alignment Factor',            0.7, 'Task Vertical Alignment Factor'),
     headerFooterAlignmentFactor:  kvFloat(typographyKV, 'Header Footer Alignment Factor',   0.7, 'Header & Footer Vertical Alignment Factor'),

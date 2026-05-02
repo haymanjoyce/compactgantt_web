@@ -104,6 +104,7 @@ It is initialised at startup by calling `createEmptyProjectData()` (exported fro
 | Tasks | ID, Swimlane ID, Swimlane Row\*, Name, Start Date, Finish Date, Label Content, Label Placement, Label Offset, Fill Color, Fill Pattern, Pattern Color, Date Format |
 | Swimlanes | ID, Title\*, Row Count, Label Position, Background Color |
 | Links | ID, From Task ID, To Task ID, Line Color, Line Style, Link Routing\* |
+| Pipes | ID, Date, Name, Color, Line Style, Label Position |
 
 \* Old-format name; new name is "Row" / "Name" / "Routing". Fallback handles both.
 
@@ -112,7 +113,7 @@ Config sheet key names are confirmed. The `kv*` helpers (`kvStr/kvInt/kvFloat/kv
 - **Layout** — padding keys: `"Padding Top/Right/Bottom/Left"` → `"Margin Top/Right/Bottom/Left"`
 - **Style** — 11 existing keys: `"… Color"` → `"… Colour"` (the newer `insideLabelTextColor` has no old-format fallback)
 - **Timeline** — gridline keys for years/months/weeks: `"Gridline X"` → `"Vertical Gridline X"`; the four days/dates keys (`"Show Days"`, `"Show Dates"`, `"Gridline Days"`, `"Gridline Dates"`) have no old-format fallback
-- **Typography** — alignment factors: `"X Alignment Factor"` → `"X Vertical Alignment Factor"`; also `"Header Footer Font Size"` → `"Header & Footer Font Size"`
+- **Typography** — alignment factors: `"X Alignment Factor"` → `"X Vertical Alignment Factor"`; also `"Header Footer Font Size"` → `"Header & Footer Font Size"`; `"Pipe Font Size"` has no old-format fallback
 
 ## Derived fields
 
@@ -127,7 +128,7 @@ Config sheet key names are confirmed. The `kv*` helpers (`kvStr/kvInt/kvFloat/kv
 - **Coordinate areas:** `innerX1 = paddingLeft`; `innerX2 = outerWidth - paddingRight`; `taskRowY1 = paddingTop + headerHeight + scaleTotalHeight`; `taskRowY2 = outerHeight - paddingBottom - footerHeight`
 - **Scale band height:** `max(rendering.minScaleBandHeight, scaleFontSize * 2.5)` per visible scale; total = count × bandHeight
 - **Five scale bands** (top-to-bottom): years, months, weeks (ISO `"W03"`), days (named: Monday/Mon/M), dates (numeric day-of-month). Hidden bands occupy no space. Named-day cells degrade width-adaptively through full→short→letter→empty using `fontSize * 0.6` per character — the standard ≥20 px label gate does not apply to the days band.
-- **Render order (painter's algorithm, 15 slots):** (1) chart background → (2) swimlane backgrounds → (4) gridlines → (5) scale bands → (6) swimlane dividers → (8) link bodies → (9) task bars → (10) milestones → (11) link heads → (12) task labels → (13) swimlane labels → (15) header/footer. Slots 3 curtains, 7 pipes, 14 notes are reserved but not yet implemented (no empty `<g>` emitted). Header/footer paint last so they frame the chart regardless of unusual layout dimensions.
+- **Render order (painter's algorithm, 15 slots):** (1) chart background → (2) swimlane backgrounds → (4) gridlines → (5) scale bands → (6) swimlane dividers → (7) pipes → (8) link bodies → (9) task bars → (10) milestones → (11) link heads → (12) task labels → (13) swimlane labels → (15) header/footer. Slots 3 curtains, 14 notes are reserved but not yet implemented (no empty `<g>` emitted). Header/footer paint last so they frame the chart regardless of unusual layout dimensions.
 - **Color handling:** all color values are passed directly from `projectData` to SVG `fill`/`stroke` attributes without validation. Invalid CSS color names render as SVG's default (black). Validation is moving to a separate module — the renderer trusts its input.
 - **Swimlane labels:** `swimlaneTopAlignmentFactor` for top variants, `swimlaneBottomAlignmentFactor` for bottom variants
 - **`daysBetween(a, b)`:** uses `Date.UTC()` — timezone-safe, no `toISOString()`
@@ -165,6 +166,9 @@ Not driven by any Excel sheet — hard-coded defaults only. Defined in `createEm
 | `swimlaneDividerStrokeWidth` | 1 | swimlane divider stroke width |
 | `linkStrokeWidth` | 1 | link path stroke width |
 | `insideLabelPadding` | 2 | horizontal inset of inside-label text from bar edges, in px |
+| `pipeStrokeWidth` | 1 | pipe line and badge border stroke width |
+| `pipeBadgePaddingX` | 4 | horizontal inset of badge text from badge edges, in px |
+| `pipeBadgePaddingY` | 2 | vertical inset of badge text from badge edges, in px |
 
 ## Link rendering
 
@@ -191,6 +195,24 @@ Links are Finish-to-Start dependency arrows. Implementation notes:
 **Z-order split:** All renderedLinks are pre-computed into an array. The array is iterated once to emit `<path>` bodies into `linkBodySvg` (slot 8), then iterated again to emit `<circle>` origin markers and `<polygon>` arrowheads into `linkHeadSvg` (slot 11). This two-pass approach keeps task bars and milestones between the two link layers without duplicating classification logic.
 
 **Arrowheads:** Per-link `<polygon>` triangles (not SVG `<marker>` in `<defs>`). Per-link polygons are simpler, have no browser-consistency issues with `context-fill`/`context-stroke`, and are trivially sized by `arrowheadSizeFactor * rowH` per link. The SVG `<marker>` approach would save bytes on charts with many links but introduces marker-scaling and color-inheritance complexity that outweighs the benefit at this scale.
+
+## Pipes rendering
+
+Pipes are vertical reference lines drawn at a given date with an optional text badge. Rendered in slot 7 (above swimlane dividers, below link bodies).
+
+**Skip rules:** pipe skipped silently if `pipe.date` is null, `pipe.date < chartStartDate`, or `pipe.date > chartEndDate`.
+
+**Line:** `<line>` from `(x, taskRowY1)` to `(x, taskRowY2)` where `x = xFor(pipe.date)`. stroke-dasharray: solid → none, dashed → `"4 3"`, dotted → `"1 2"`. Stroke color = `pipe.color`, stroke-width = `rendering.pipeStrokeWidth`.
+
+**Badge** (emitted only when `pipe.name` is non-empty):
+- Text width estimated as `typography.pipeFontSize * 0.6 * pipe.name.length`
+- `badgeW = textWidth + 2 * rendering.pipeBadgePaddingX`; `badgeH = pipeFontSize + 2 * rendering.pipeBadgePaddingY`
+- `badgeTopY = taskRowY1 + (1 - pipe.labelPosition) * (taskRowAreaH - badgeH)` — `labelPosition = 1` pins badge to top, `0` to bottom
+- Badge left edge abuts the pipe line at `x`; badge may overflow past `innerX2` (no clipping)
+- `<rect>` fill = `style.chartBackgroundColor`, stroke = `pipe.color`
+- `<text>` centred horizontally in badge; vertical position = `badgeTopY + badgeH * typography.scaleAlignmentFactor`; font from `typography.fontFamily` / `typography.pipeFontSize`; fill = `pipe.color`
+
+**`pipe.labelPosition`** — float, Excel column `"Label Position"`, default `1`. No old-format fallback. `typography.pipeFontSize` — integer, Typography sheet key `"Pipe Font Size"`, default `10`. No old-format fallback.
 
 ## Current UI
 
