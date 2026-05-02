@@ -6,7 +6,7 @@ function boolStr(v) { return v ? 'Yes' : 'No'; }
 
 function writeWorkbook(projectData) {
   const { tasks, swimlanes, links, pipes, curtains, notes, config } = projectData;
-  const { layout, timeline, titles, style, typography, preferences } = config;
+  const { layout, bars, timeline, titles, style, typography, preferences } = config;
 
   const wb = XLSX.utils.book_new();
 
@@ -79,7 +79,15 @@ function writeWorkbook(projectData) {
     ['Row Dividers',   boolStr(layout.showRowDividers)],
   ]);
 
-  // ── 8. Timeline ───────────────────────────────────────────────────────────────
+  // ── 8. Bars ───────────────────────────────────────────────────────────────────
+  addSheet('Bars', [
+    ['Field', 'Value'],
+    ['Task Bar Height Factor', bars.taskBarHeightFactor],
+    ['Milestone Size Factor',  bars.milestoneSizeFactor],
+    ['Task Corner Radius',     bars.taskCornerRadius],
+  ]);
+
+  // ── 9. Timeline ───────────────────────────────────────────────────────────────
   // Dates are only written when they were explicitly set in the source file.
   // If derived from task dates, the cell is left empty so auto-derivation
   // continues to work after a save/reload cycle.
@@ -97,7 +105,7 @@ function writeWorkbook(projectData) {
     ['Gridline Days',   boolStr(timeline.gridlineDays)],
   ]);
 
-  // ── 9. Titles ─────────────────────────────────────────────────────────────────
+  // ── 10. Titles ────────────────────────────────────────────────────────────────
   addSheet('Titles', [
     ['Field', 'Value'],
     ['Header Height', titles.headerHeight],
@@ -106,7 +114,7 @@ function writeWorkbook(projectData) {
     ['Footer Text',   titles.footerText],
   ]);
 
-  // ── 10. Style ─────────────────────────────────────────────────────────────────
+  // ── 11. Style ─────────────────────────────────────────────────────────────────
   addSheet('Style', [
     ['Field', 'Value'],
     ['Chart Background Color',         style.chartBackgroundColor],
@@ -123,7 +131,7 @@ function writeWorkbook(projectData) {
     ['Inside Label Text Color',        style.insideLabelTextColor],
   ]);
 
-  // ── 11. Typography ────────────────────────────────────────────────────────────
+  // ── 12. Typography ────────────────────────────────────────────────────────────
   addSheet('Typography', [
     ['Field', 'Value'],
     ['Font Family',                      typography.fontFamily],
@@ -139,7 +147,7 @@ function writeWorkbook(projectData) {
     ['Swimlane Bottom Alignment Factor', typography.swimlaneBottomAlignmentFactor],
   ]);
 
-  // ── 12. Preferences ───────────────────────────────────────────────────────────
+  // ── 13. Preferences ───────────────────────────────────────────────────────────
   addSheet('Preferences', [
     ['Field', 'Value'],
     ['UI Date Format',    preferences.uiDateFormat],

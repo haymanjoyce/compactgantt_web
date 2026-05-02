@@ -43,7 +43,7 @@ function n(v) { return parseFloat(v.toFixed(2)); }
 // ── Main render function ───────────────────────────────────────────────────────
 function renderChart(projectData) {
   const { tasks, swimlanes, links, config } = projectData;
-  const { layout, timeline, titles, style, typography, rendering } = config;
+  const { layout, bars, timeline, titles, style, typography, rendering } = config;
 
   const { outerWidth, outerHeight, paddingLeft, paddingRight, paddingTop, paddingBottom } = layout;
   const { chartStartDate, chartEndDate } = timeline;
@@ -244,8 +244,8 @@ function renderChart(projectData) {
 
   // ── 9 / 10. Task bars, milestones, and task geometry lookup ──────────────────
   // taskGeom is also consumed by the link renderer (slots 8 and 11).
-  const barH          = rowH * rendering.taskBarHeightFactor;
-  const milestoneHalf = (rowH * rendering.milestoneSizeFactor) / 2;
+  const barH          = rowH * bars.taskBarHeightFactor;
+  const milestoneHalf = (rowH * bars.milestoneSizeFactor) / 2;
   const taskGeom      = new Map(); // task.id → geometry used by link renderer
 
   for (const task of tasks) {
@@ -292,7 +292,7 @@ function renderChart(projectData) {
       const bw   = x2 - x1;
       if (bw <= 0) continue;
       const barY = rowY + (rowH - barH) / 2;
-      barsSvg += `<rect x="${n(x1)}" y="${n(barY)}" width="${n(bw)}" height="${n(barH)}" rx="${rendering.taskCornerRadius}" fill="${color}" stroke="${style.taskStrokeColor}" stroke-width="${rendering.taskStrokeWidth}"/>`;
+      barsSvg += `<rect x="${n(x1)}" y="${n(barY)}" width="${n(bw)}" height="${n(barH)}" rx="${bars.taskCornerRadius}" fill="${color}" stroke="${style.taskStrokeColor}" stroke-width="${rendering.taskStrokeWidth}"/>`;
 
       taskGeom.set(task.id, {
         absRow,

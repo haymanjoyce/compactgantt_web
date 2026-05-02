@@ -121,6 +121,11 @@ function createEmptyProjectData() {
         paddingTop: 20, paddingRight: 20, paddingBottom: 20, paddingLeft: 20,
         showRowDividers: true,
       },
+      bars: {
+        taskBarHeightFactor: 0.7,
+        milestoneSizeFactor: 0.7,
+        taskCornerRadius:    2,
+      },
       timeline: {
         chartStartDate: null, chartEndDate: null,
         chartStartDateExplicit: false, chartEndDateExplicit: false,
@@ -163,11 +168,8 @@ function createEmptyProjectData() {
         chartDateFormat: 'dd MMM',
       },
       rendering: {
-        taskBarHeightFactor:        0.7,
-        milestoneSizeFactor:        0.7,
         arrowheadSizeFactor:        0.3,
         originMarkerSizeFactor:     0.15,
-        taskCornerRadius:           2,
         swimlaneLabelPadding:       4,
         minScaleBandHeight:         20,
         gridlineStrokeWidth:        0.5,
@@ -344,6 +346,14 @@ function parseWorkbook(workbook) {
     paddingBottom:   kvInt(layoutKV,  'Padding Bottom', 20, 'Margin Bottom'),
     paddingLeft:     kvInt(layoutKV,  'Padding Left',   20, 'Margin Left'),
     showRowDividers: kvBool(layoutKV, 'Row Dividers',   true),
+  };
+
+  // ── Config: Bars ───────────────────────────────────────────────────────────
+  const barsKV = parseConfigSheet(workbook.Sheets['Bars']);
+  projectData.config.bars = {
+    taskBarHeightFactor: kvFloat(barsKV, 'Task Bar Height Factor', 0.7),
+    milestoneSizeFactor: kvFloat(barsKV, 'Milestone Size Factor',  0.7),
+    taskCornerRadius:    kvInt(barsKV,   'Task Corner Radius',      2),
   };
 
   // ── Config: Timeline ───────────────────────────────────────────────────────

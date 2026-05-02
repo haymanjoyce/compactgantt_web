@@ -90,7 +90,7 @@ It is initialised at startup by calling `createEmptyProjectData()` (exported fro
 - Column-name fallbacks handle old-format files: `"Row"→"Swimlane Row"`, `"Name"→"Title"`, `"Routing"→"Link Routing"`
 
 **Config sheets** (key-value: col A = field name, col B = value):
-- Layout, Timeline, Titles, Style, Typography, Preferences
+- Layout, Bars, Timeline, Titles, Style, Typography, Preferences
 - Parsed via `parseConfigSheet(worksheet)` → plain map, then read with `kvStr/kvInt/kvFloat/kvBool/kvDate`
 
 **Date parsing** (`toISODate`): handles both `instanceof Date` (uses `getFullYear/getMonth/getDate` — never `toISOString`, timezone-safe) and DD/MM/YYYY strings (split on `/`, never passed to `new Date()`).
@@ -128,12 +128,22 @@ Config sheet key names are confirmed. The `kv*` helpers (`kvStr/kvInt/kvFloat/kv
 - **Color handling:** all color values are passed directly from `projectData` to SVG `fill`/`stroke` attributes without validation. Invalid CSS color names render as SVG's default (black). Validation is moving to a separate module — the renderer trusts its input.
 - **Swimlane labels:** `swimlaneTopAlignmentFactor` for top variants, `swimlaneBottomAlignmentFactor` for bottom variants
 - **`daysBetween(a, b)`:** uses `Date.UTC()` — timezone-safe, no `toISOString()`
-- **Milestones:** SVG `<polygon>` diamond centred on `startDate`; bars: `<rect rx="${rendering.taskCornerRadius}">`
+- **Milestones:** SVG `<polygon>` diamond centred on `startDate`; bars: `<rect rx="${bars.taskCornerRadius}">`
 - **Skip rules:** orphaned tasks, `finishDate < startDate`, tasks outside chart date range all silently skipped; out-of-range `row` clamped to 1
 - **Milestone labels:** the renderer's milestone branch always renders labels outside unconditionally, without reading `task.labelPlacement`. The parser does not override the stored placement value — milestones retain whatever placement the user set.
 - **Task labels (slot 12):** built from `task.labelContent` (`none`/`name`/`date`/`name_and_date`) with date-fns formatting. Per-task `task.dateFormat` overrides `config.preferences.chartDateFormat`. Dates parsed timezone-safely: split YYYY-MM-DD on `-` then `new Date(y, m-1, d)`. Inside label fill: `config.style.insideLabelTextColor`; outside label fill: `config.style.outsideLabelTextColor`.
   - *Inside labels* (bars only): truncated via character-width estimate (`fontSize * 0.6` per character, sans-serif approximation). Prefers word-boundary break; falls back to character truncation; emits nothing if `…` alone exceeds available width. Available width = `barWidth - 2 * rendering.insideLabelPadding`.
   - *Outside labels*: no truncation. `x = rightEdge + task.labelOffset`; right edge = `xFor(finishDate)` for bars, `xFor(startDate) + milestoneHalf` for milestones.
+
+## config.bars
+
+Driven by the "Bars" Excel config sheet. Parsed via `parseConfigSheet` / `kvFloat` / `kvInt`. No old-format fallbacks. Missing sheet or absent key silently falls back to the default.
+
+| Key | Default | Excel column name |
+|---|---|---|
+| `taskBarHeightFactor` | 0.7 | `Task Bar Height Factor` |
+| `milestoneSizeFactor` | 0.7 | `Milestone Size Factor` |
+| `taskCornerRadius` | 2 | `Task Corner Radius` |
 
 ## config.rendering
 
@@ -141,11 +151,8 @@ Not driven by any Excel sheet — hard-coded defaults only. Defined in `createEm
 
 | Key | Default | Description |
 |---|---|---|
-| `taskBarHeightFactor` | 0.7 | task bar height as fraction of rowHeight |
-| `milestoneSizeFactor` | 0.7 | milestone diamond size as fraction of rowHeight |
 | `arrowheadSizeFactor` | 0.3 | link arrowhead triangle size as fraction of rowHeight |
 | `originMarkerSizeFactor` | 0.15 | link origin circle radius as fraction of rowHeight |
-| `taskCornerRadius` | 2 | task bar `rx` in px |
 | `swimlaneLabelPadding` | 4 | label inset from chart edge in px |
 | `minScaleBandHeight` | 20 | floor for scale band height in px |
 | `gridlineStrokeWidth` | 0.5 | vertical gridline stroke width |
@@ -184,7 +191,7 @@ Links are Finish-to-Start dependency arrows. Implementation notes:
 
 ## Current UI
 
-Two-tab layout: **Data** tab shows debug tables (one per entity type + seven config KV tables); **Chart** tab calls `renderChart(projectData)` on every activation and injects the SVG into a horizontally-scrollable container. "No project loaded" shown if tasks array is empty when Chart tab is opened.
+Two-tab layout: **Data** tab shows debug tables (one per entity type + eight config KV tables); **Chart** tab calls `renderChart(projectData)` on every activation and injects the SVG into a horizontally-scrollable container. "No project loaded" shown if tasks array is empty when Chart tab is opened.
 
 ## Excel export (writer.js)
 
@@ -192,7 +199,7 @@ Two-tab layout: **Data** tab shows debug tables (one per entity type + seven con
 
 **Named-column policy:** columns are identified by header name, not index. The writer emits named headers; column order within each sheet is presentation-only and not load-bearing for the schema.
 
-**Sheet order:** Tasks → Swimlanes → Links → Pipes → Curtains → Notes → Layout → Timeline → Titles → Style → Typography → Preferences. `config.rendering` is deliberately excluded (hard-coded defaults; not a user-configurable concern at this stage).
+**Sheet order:** Tasks → Swimlanes → Links → Pipes → Curtains → Notes → Layout → Bars → Timeline → Titles → Style → Typography → Preferences. `config.rendering` is deliberately excluded (hard-coded defaults; not a user-configurable concern at this stage).
 
 **Entity sheets:** header row + one data row per entity; always emitted even if the array is empty. Derived fields (`task.isMilestone`, `swimlane.order`) are not written. `task.dateFormat` and null date fields write as empty cells (`null` in the AOA → empty cell in SheetJS).
 

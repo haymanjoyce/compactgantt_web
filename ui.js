@@ -92,6 +92,7 @@ function initUI() {
       renderEntityTable(document.getElementById('notesContainer'),     d.notes);
 
       renderConfigTable(document.getElementById('configLayoutContainer'),      d.config.layout);
+      renderConfigTable(document.getElementById('configBarsContainer'),        d.config.bars);
       renderConfigTable(document.getElementById('configTimelineContainer'),    d.config.timeline);
       renderConfigTable(document.getElementById('configTitlesContainer'),      d.config.titles);
       renderConfigTable(document.getElementById('configStyleContainer'),       d.config.style);
