@@ -104,7 +104,6 @@ It is initialised at startup by calling `createEmptyProjectData()` (exported fro
 | Tasks | ID, Swimlane ID, Swimlane Row\*, Name, Start Date, Finish Date, Label Content, Label Placement, Label Offset, Fill Color, Fill Pattern, Pattern Color, Date Format |
 | Swimlanes | ID, Title\*, Row Count, Label Position, Background Color |
 | Links | ID, From Task ID, To Task ID, Line Color, Line Style, Link Routing\* |
-| Pipes | ID, Date, Name, Color, Line Style, Label Position |
 
 \* Old-format name; new name is "Row" / "Name" / "Routing". Fallback handles both.
 
