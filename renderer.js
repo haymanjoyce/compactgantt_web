@@ -63,6 +63,7 @@ function renderChart(projectData) {
     { key: 'months', show: timeline.showMonths, gridline: timeline.gridlineMonths },
     { key: 'weeks',  show: timeline.showWeeks,  gridline: timeline.gridlineWeeks  },
     { key: 'days',   show: timeline.showDays,   gridline: timeline.gridlineDays   },
+    { key: 'dates',  show: timeline.showDates,  gridline: timeline.gridlineDates  },
   ].filter(s => s.show);
 
   const bandH       = Math.max(rendering.minScaleBandHeight, typography.scaleFontSize * 2.5);
@@ -107,6 +108,11 @@ function renderChart(projectData) {
 
   function moStr(yr, mo) {
     return `${yr}-${String(mo).padStart(2, '0')}-01`;
+  }
+
+  // JS Date → YYYY-MM-DD string, timezone-safe
+  function dtIso(dt) {
+    return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
   }
 
   // ── SVG layer accumulators ────────────────────────────────────────────────────
@@ -163,6 +169,43 @@ function renderChart(projectData) {
     }
   }
 
+  // Week gridlines: at each Monday strictly after chartStartDate, up to (not including) chartEndDate
+  if (timeline.gridlineWeeks) {
+    const [gwy, gwm, gwd] = chartStartDate.split('-').map(Number);
+    const gwdt = new Date(gwy, gwm - 1, gwd);
+    gwdt.setDate(gwdt.getDate() + (1 - gwdt.getDay() + 7) % 7);
+    while (true) {
+      const ds = dtIso(gwdt);
+      if (ds >= chartEndDate) break;
+      if (ds > chartStartDate) gridlines += vLine(xFor(ds));
+      gwdt.setDate(gwdt.getDate() + 7);
+    }
+  }
+
+  // Day gridlines: at each calendar day strictly between chartStartDate and chartEndDate
+  if (timeline.gridlineDays) {
+    const [gdy, gdm, gdd] = chartStartDate.split('-').map(Number);
+    const gddt = new Date(gdy, gdm - 1, gdd);
+    while (true) {
+      gddt.setDate(gddt.getDate() + 1);
+      const ds = dtIso(gddt);
+      if (ds >= chartEndDate) break;
+      gridlines += vLine(xFor(ds));
+    }
+  }
+
+  // Date gridlines: same boundaries as day gridlines
+  if (timeline.gridlineDates) {
+    const [gny, gnm, gnd] = chartStartDate.split('-').map(Number);
+    const gndt = new Date(gny, gnm - 1, gnd);
+    while (true) {
+      gndt.setDate(gndt.getDate() + 1);
+      const ds = dtIso(gndt);
+      if (ds >= chartEndDate) break;
+      gridlines += vLine(xFor(ds));
+    }
+  }
+
   // ── 5. Scale bands ───────────────────────────────────────────────────────────
   const MONTH_LETTERS = ['J','F','M','A','M','J','J','A','S','O','N','D'];
 
@@ -203,6 +246,69 @@ function renderChart(projectData) {
         if (thisStr > chartStartDate) scaleSvg += tick(Math.max(innerX1, xFor(thisStr)));
         if (cx2 - cx1 >= 20) scaleSvg += label(cx1 + (cx2 - cx1) / 2, MONTH_LETTERS[mmo - 1]);
         myr = nyr; mmo = nmo;
+      }
+
+    } else if (scale.key === 'weeks') {
+      // Build ordered list of Monday boundaries within the chart range
+      const [wy0, wm0, wd0] = chartStartDate.split('-').map(Number);
+      const wdt = new Date(wy0, wm0 - 1, wd0);
+      wdt.setDate(wdt.getDate() + (1 - wdt.getDay() + 7) % 7);
+      const wBounds = [chartStartDate];
+      while (true) {
+        const ds = dtIso(wdt);
+        if (ds >= chartEndDate) break;
+        wBounds.push(ds);
+        wdt.setDate(wdt.getDate() + 7);
+      }
+      wBounds.push(chartEndDate);
+      for (let i = 0; i < wBounds.length - 1; i++) {
+        const wStart = wBounds[i];
+        const wEnd   = wBounds[i + 1];
+        if (wStart >= wEnd) continue;
+        const cx1 = Math.max(innerX1, xFor(wStart));
+        const cx2 = Math.min(innerX2, xFor(wEnd));
+        if (cx1 >= innerX2) break;
+        if (wStart > chartStartDate) scaleSvg += tick(Math.max(innerX1, xFor(wStart)));
+        if (cx2 - cx1 >= 20) scaleSvg += label(cx1 + (cx2 - cx1) / 2, isoWeekLabel(wStart));
+      }
+
+    } else if (scale.key === 'days') {
+      // Named-day band: Monday/Mon/M/"" — width-adaptive, no fixed width gate
+      const [dy0, dm0, dd0] = chartStartDate.split('-').map(Number);
+      const ddt = new Date(dy0, dm0 - 1, dd0);
+      const charW = typography.scaleFontSize * 0.6;
+      while (true) {
+        const dayIso = dtIso(ddt);
+        if (dayIso >= chartEndDate) break;
+        ddt.setDate(ddt.getDate() + 1);
+        const nextIso = dtIso(ddt);
+        const cx1 = Math.max(innerX1, xFor(dayIso));
+        const cx2 = Math.min(innerX2, xFor(nextIso));
+        if (cx1 >= innerX2) break;
+        if (dayIso > chartStartDate) scaleSvg += tick(Math.max(innerX1, xFor(dayIso)));
+        const cellW = cx2 - cx1;
+        let chosen = '';
+        for (const v of [weekdayName(dayIso, 'full'), weekdayName(dayIso, 'short'), weekdayName(dayIso, 'letter')]) {
+          if (v.length * charW <= cellW) { chosen = v; break; }
+        }
+        if (chosen) scaleSvg += label(cx1 + cellW / 2, chosen);
+      }
+
+    } else if (scale.key === 'dates') {
+      // Numeric day-of-month band: "1" through "31"
+      const [ny0, nm0, nd0] = chartStartDate.split('-').map(Number);
+      const ndt = new Date(ny0, nm0 - 1, nd0);
+      while (true) {
+        const dayIso = dtIso(ndt);
+        if (dayIso >= chartEndDate) break;
+        ndt.setDate(ndt.getDate() + 1);
+        const nextIso = dtIso(ndt);
+        const cx1 = Math.max(innerX1, xFor(dayIso));
+        const cx2 = Math.min(innerX2, xFor(nextIso));
+        if (cx1 >= innerX2) break;
+        if (dayIso > chartStartDate) scaleSvg += tick(Math.max(innerX1, xFor(dayIso)));
+        const [, , dd] = dayIso.split('-').map(Number);
+        if (cx2 - cx1 >= 20) scaleSvg += label(cx1 + (cx2 - cx1) / 2, dd);
       }
     }
 

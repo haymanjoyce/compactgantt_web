@@ -45,3 +45,18 @@ function formatDate(iso, formatStr) {
   const [y, m, d] = iso.split('-').map(Number);
   return dateFns.format(new Date(y, m - 1, d), formatStr);
 }
+
+// Returns ISO week label for a YYYY-MM-DD string, e.g. "W03".
+// Monday is the first day of the ISO week.
+function isoWeekLabel(iso) {
+  const [y, m, d] = iso.split('-').map(Number);
+  return dateFns.format(new Date(y, m - 1, d), "'W'II");
+}
+
+// Returns weekday name for a YYYY-MM-DD string.
+// length: 'full' → 'Monday', 'short' → 'Mon', 'letter' → 'M'
+function weekdayName(iso, length) {
+  const [y, m, d] = iso.split('-').map(Number);
+  const fmt = length === 'full' ? 'EEEE' : length === 'short' ? 'EEE' : 'EEEEE';
+  return dateFns.format(new Date(y, m - 1, d), fmt);
+}
