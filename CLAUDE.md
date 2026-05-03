@@ -131,7 +131,7 @@ Config sheet key names are confirmed. The `kv*` helpers (`kvStr/kvInt/kvFloat/kv
 - **Color handling:** all color values are passed directly from `projectData` to SVG `fill`/`stroke` attributes without validation. Invalid CSS color names render as SVG's default (black). Validation is moving to a separate module — the renderer trusts its input.
 - **Swimlane labels:** `swimlaneTopAlignmentFactor` for top variants, `swimlaneBottomAlignmentFactor` for bottom variants
 - **`daysBetween(a, b)`:** uses `Date.UTC()` — timezone-safe, no `toISOString()`
-- **Milestones:** SVG `<polygon>` diamond centred on `startDate`; bars: `<rect rx="${bars.taskCornerRadius}">`
+- **Milestones:** SVG `<path>` of four cubic Béziers centred on `startDate`; anchors at cardinal tips; `controlOffset = (1 - milestoneCornerSharpness) * milestoneHalf * 0.5523` — sharpness 1.0 degenerates to a straight-line diamond, 0.0 approximates a circle. Bars: `<rect rx="${bars.taskCornerRadius}">`
 - **Skip rules:** orphaned tasks, `finishDate < startDate`, tasks outside chart date range all silently skipped; out-of-range `row` clamped to 1
 - **Milestone labels:** the renderer's milestone branch always renders labels outside unconditionally, without reading `task.labelPlacement`. The parser does not override the stored placement value — milestones retain whatever placement the user set.
 - **Task labels (slot 12):** built from `task.labelContent` (`none`/`name`/`date`/`name_and_date`) with date-fns formatting. Per-task `task.dateFormat` overrides `config.preferences.chartDateFormat`. Dates parsed timezone-safely: split YYYY-MM-DD on `-` then `new Date(y, m-1, d)`. Inside label fill: `config.style.insideLabelTextColor`; outside label fill: `config.style.outsideLabelTextColor`.
@@ -147,6 +147,7 @@ Driven by the "Bars" Excel config sheet. Parsed via `parseConfigSheet` / `kvFloa
 | `taskBarHeightFactor` | 0.7 | `Task Bar Height Factor` |
 | `milestoneSizeFactor` | 0.7 | `Milestone Size Factor` |
 | `taskCornerRadius` | 2 | `Task Corner Radius` |
+| `milestoneCornerSharpness` | 1.0 | `Milestone Corner Sharpness` |
 
 ## config.rendering
 
@@ -156,6 +157,7 @@ Not driven by any Excel sheet — hard-coded defaults only. Defined in `createEm
 |---|---|---|
 | `arrowheadSizeFactor` | 0.3 | link arrowhead triangle size as fraction of rowHeight |
 | `originMarkerSizeFactor` | 0.15 | link origin circle radius as fraction of rowHeight |
+| `linkArrowheadMilestoneGap` | 2 | gap in px between arrowhead tip and milestone perimeter on milestone successors |
 | `swimlaneLabelPadding` | 4 | label inset from chart edge in px |
 | `minScaleBandHeight` | 20 | floor for scale band height in px |
 | `gridlineStrokeWidth` | 0.5 | vertical gridline stroke width |
@@ -176,11 +178,11 @@ Not driven by any Excel sheet — hard-coded defaults only. Defined in `createEm
 
 Links are Finish-to-Start dependency arrows. Implementation notes:
 
-**Renderable-task lookup (`taskGeom` Map):** Built during the task-bar/milestone render pass. Keyed by `task.id`; value contains `{ absRow, rowCenterY, barTopY, barBottomY, originX, termX, startDate, finishDate }`. Any task skipped by the bar pass is simply absent, so orphaned-link detection is implicit — no duplicate skip logic in the link renderer. The same Map is iterated twice: once for bodies (slot 8) and once for heads (slot 11).
+**Renderable-task lookup (`taskGeom` Map):** Built during the task-bar/milestone render pass. Keyed by `task.id`; value contains `{ absRow, rowCenterY, barTopY, barBottomY, originX, termX, startDate, finishDate, isMilestone }`. Any task skipped by the bar pass is simply absent, so orphaned-link detection is implicit — no duplicate skip logic in the link renderer. The same Map is iterated twice: once for bodies (slot 8) and once for heads (slot 11).
 
 **Connection points:**
 - Task bar origin: `xFor(finishDate)` at row centre; termination: `xFor(startDate)` at row centre
-- Milestone origin: `xFor(startDate) + milestoneHalf`; termination: `xFor(startDate) - milestoneHalf`
+- Milestone origin: `xFor(startDate)` (centre); termination: `xFor(startDate)` (centre) — both connect at the milestone centre so milestone shape can change independently of link geometry
 
 **Link classification (computed at render time, not stored):**
 - *Forward*: `pred.finishDate <= succ.startDate` — terminate at left edge of succ; skip if `origX >= termX` (backwards geometry)
@@ -197,6 +199,10 @@ Links are Finish-to-Start dependency arrows. Implementation notes:
 **Z-order split:** All renderedLinks are pre-computed into an array. The array is iterated once to emit `<path>` bodies into `linkBodySvg` (slot 8), then iterated again to emit `<circle>` origin markers and `<polygon>` arrowheads into `linkHeadSvg` (slot 11). This two-pass approach keeps task bars and milestones between the two link layers without duplicating classification logic.
 
 **Arrowheads:** Per-link `<polygon>` triangles (not SVG `<marker>` in `<defs>`). Per-link polygons are simpler, have no browser-consistency issues with `context-fill`/`context-stroke`, and are trivially sized by `arrowheadSizeFactor * rowH` per link. The SVG `<marker>` approach would save bytes on charts with many links but introduces marker-scaling and color-inheritance complexity that outweighs the benefit at this scale.
+
+**Milestone predecessor/successor special cases (forward links only):**
+- *Origin marker suppressed* when `pred.isMilestone` — the link path still starts at the milestone centre but no filled circle is drawn over the shape.
+- *Arrowhead backed off* when `succ.isMilestone` — tip is placed at `milestoneHalf + rendering.linkArrowheadMilestoneGap` from the milestone centre along the arrowhead direction, so it sits just outside the milestone perimeter rather than at the centre. Late-recoverable links cannot have milestone successors (proof: milestone `startDate === finishDate` makes the late condition impossible), so no back-off applies to late links.
 
 ## Pipes rendering
 

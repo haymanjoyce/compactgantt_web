@@ -122,9 +122,10 @@ function createEmptyProjectData() {
         showRowDividers: true,
       },
       bars: {
-        taskBarHeightFactor: 0.7,
-        milestoneSizeFactor: 0.7,
-        taskCornerRadius:    2,
+        taskBarHeightFactor:       0.7,
+        milestoneSizeFactor:       0.7,
+        taskCornerRadius:          2,
+        milestoneCornerSharpness:  1.0,
       },
       timeline: {
         chartStartDate: null, chartEndDate: null,
@@ -170,8 +171,9 @@ function createEmptyProjectData() {
         chartDateFormat: 'dd MMM',
       },
       rendering: {
-        arrowheadSizeFactor:        0.3,
-        originMarkerSizeFactor:     0.15,
+        arrowheadSizeFactor:           0.3,
+        originMarkerSizeFactor:        0.15,
+        linkArrowheadMilestoneGap:     2,
         swimlaneLabelPadding:       4,
         minScaleBandHeight:         20,
         gridlineStrokeWidth:        0.5,
@@ -365,9 +367,10 @@ function parseWorkbook(workbook) {
   // ── Config: Bars ───────────────────────────────────────────────────────────
   const barsKV = parseConfigSheet(workbook.Sheets['Bars']);
   projectData.config.bars = {
-    taskBarHeightFactor: kvFloat(barsKV, 'Task Bar Height Factor', 0.7),
-    milestoneSizeFactor: kvFloat(barsKV, 'Milestone Size Factor',  0.7),
-    taskCornerRadius:    kvInt(barsKV,   'Task Corner Radius',      2),
+    taskBarHeightFactor:       kvFloat(barsKV, 'Task Bar Height Factor',      0.7),
+    milestoneSizeFactor:       kvFloat(barsKV, 'Milestone Size Factor',       0.7),
+    taskCornerRadius:          kvInt(barsKV,   'Task Corner Radius',           2),
+    milestoneCornerSharpness:  kvFloat(barsKV, 'Milestone Corner Sharpness',  1.0),
   };
 
   // ── Config: Timeline ───────────────────────────────────────────────────────

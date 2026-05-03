@@ -442,18 +442,24 @@ function renderChart(projectData) {
       const cx   = xFor(task.startDate);
       const cy   = rowCenterY;
       const half = milestoneHalf;
-      const pts  = `${n(cx)},${n(cy - half)} ${n(cx + half)},${n(cy)} ${n(cx)},${n(cy + half)} ${n(cx - half)},${n(cy)}`;
-      milestonesSvg += `<polygon points="${pts}" fill="${color}" stroke="${style.milestoneStrokeColor}" stroke-width="${rendering.milestoneStrokeWidth}"/>`;
+      const co   = (1 - bars.milestoneCornerSharpness) * half * 0.5523;
+      const aT = n(cy - half), aR = n(cx + half), aB = n(cy + half), aL = n(cx - half);
+      const aCX = n(cx), aCY = n(cy);
+      const xPco = n(cx + co), xMco = n(cx - co);
+      const yPco = n(cy + co), yMco = n(cy - co);
+      const pathD = `M ${aCX},${aT} C ${xPco},${aT} ${aR},${yMco} ${aR},${aCY} C ${aR},${yPco} ${xPco},${aB} ${aCX},${aB} C ${xMco},${aB} ${aL},${yPco} ${aL},${aCY} C ${aL},${yMco} ${xMco},${aT} ${aCX},${aT} Z`;
+      milestonesSvg += `<path d="${pathD}" fill="${color}" stroke="${style.milestoneStrokeColor}" stroke-width="${rendering.milestoneStrokeWidth}"/>`;
 
       taskGeom.set(task.id, {
         absRow,
-        rowCenterY: cy,
-        barTopY:    cy - half,   // top diamond tip
-        barBottomY: cy + half,   // bottom diamond tip
-        originX:    cx + half,   // rightmost diamond tip
-        termX:      cx - half,   // leftmost diamond tip
-        startDate:  task.startDate,
-        finishDate: task.finishDate,
+        rowCenterY:  cy,
+        barTopY:     cy - half,
+        barBottomY:  cy + half,
+        originX:     cx,
+        termX:       cx,
+        startDate:   task.startDate,
+        finishDate:  task.finishDate,
+        isMilestone: true,
       });
 
       const milestoneLabel = buildLabelText(task, config.preferences.chartDateFormat);
@@ -473,12 +479,13 @@ function renderChart(projectData) {
       taskGeom.set(task.id, {
         absRow,
         rowCenterY,
-        barTopY:    barY,
-        barBottomY: barY + barH,
-        originX:    xFor(task.finishDate),   // right edge at finish date (unclamped)
-        termX:      xFor(task.startDate),    // left edge at start date (unclamped)
-        startDate:  task.startDate,
-        finishDate: task.finishDate,
+        barTopY:     barY,
+        barBottomY:  barY + barH,
+        originX:     xFor(task.finishDate),
+        termX:       xFor(task.startDate),
+        startDate:   task.startDate,
+        finishDate:  task.finishDate,
+        isMilestone: false,
       });
 
       const barLabel = buildLabelText(task, config.preferences.chartDateFormat);
@@ -561,7 +568,7 @@ function renderChart(projectData) {
       }
     }
 
-    renderedLinks.push({ pathD, arrowDir, termX, termY, origX, origY, color, dashAttr });
+    renderedLinks.push({ pathD, arrowDir, termX, termY, origX, origY, color, dashAttr, predIsMilestone: pred.isMilestone, succIsMilestone: succ.isMilestone });
   }
 
   // Slot 8: link bodies
@@ -571,9 +578,18 @@ function renderChart(projectData) {
 
   // Slot 11: link arrowheads and origin markers
   for (const rl of renderedLinks) {
-    linkHeadSvg += `<circle cx="${n(rl.origX)}" cy="${n(rl.origY)}" r="${n(oR)}" fill="${rl.color}"/>`;
+    if (!rl.predIsMilestone) {
+      linkHeadSvg += `<circle cx="${n(rl.origX)}" cy="${n(rl.origY)}" r="${n(oR)}" fill="${rl.color}"/>`;
+    }
 
-    const { termX: tx, termY: ty, arrowDir: dir } = rl;
+    let tx = rl.termX, ty = rl.termY;
+    if (rl.succIsMilestone) {
+      const backoff = milestoneHalf + rendering.linkArrowheadMilestoneGap;
+      if      (rl.arrowDir === 'right') tx -= backoff;
+      else if (rl.arrowDir === 'down')  ty -= backoff;
+      else                              ty += backoff; // up
+    }
+    const dir = rl.arrowDir;
     let pts;
     if (dir === 'right') {
       pts = `${n(tx)},${n(ty)} ${n(tx - aH)},${n(ty - aH / 2)} ${n(tx - aH)},${n(ty + aH / 2)}`;
