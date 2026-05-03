@@ -42,7 +42,7 @@ function n(v) { return parseFloat(v.toFixed(2)); }
 
 // ── Main render function ───────────────────────────────────────────────────────
 function renderChart(projectData) {
-  const { tasks, swimlanes, links, pipes, config } = projectData;
+  const { tasks, swimlanes, links, pipes, curtains, config } = projectData;
   const { layout, bars, timeline, titles, style, typography, rendering } = config;
 
   const { outerWidth, outerHeight, paddingLeft, paddingRight, paddingTop, paddingBottom } = layout;
@@ -117,13 +117,14 @@ function renderChart(projectData) {
 
   // ── SVG layer accumulators ────────────────────────────────────────────────────
   // Slot numbers follow the painter's algorithm z-order defined in CLAUDE.md.
-  let bg = '',            // 1  chart background
-      bandsSvg = '',      // 2  swimlane backgrounds
-                          // 3  curtains — not yet implemented
-      gridlines = '',     // 4  vertical gridlines
-      scaleSvg = '',      // 5  scale bands
-      dividersSvg = '',   // 6  swimlane dividers
-      pipesSvg = '',      // 7  pipes
+  let bg = '',             // 1  chart background
+      bandsSvg = '',       // 2  swimlane backgrounds
+      curtainRectSvg = '', // 3  curtain tinted rectangles
+      gridlines = '',      // 4  vertical gridlines
+      scaleSvg = '',       // 5  scale bands
+      dividersSvg = '',    // 6  swimlane dividers
+      pipesSvg = '',       // 7  pipes
+      curtainEdgesSvg = '', //    curtain boundary lines and badges
       linkBodySvg = '',   // 8  link bodies (path segments, no heads)
       barsSvg = '',       // 9  task bars
       milestonesSvg = '', // 10 milestones
@@ -142,6 +143,17 @@ function renderChart(projectData) {
     const sy = n(taskRowY1 + startRowOf[s.id] * rowH);
     const sh = n(s.rowCount * rowH);
     bandsSvg += `<rect x="${innerX1}" y="${sy}" width="${innerWidth}" height="${sh}" fill="${s.backgroundColor || 'white'}"/>`;
+  }
+
+  // ── 3. Curtain tinted rectangles ─────────────────────────────────────────────
+  for (const curtain of curtains) {
+    if (!curtain.startDate || !curtain.endDate) continue;
+    if (curtain.endDate <= curtain.startDate) continue;
+    if (curtain.endDate < chartStartDate || curtain.startDate > chartEndDate) continue;
+    const cx1 = Math.max(xFor(curtain.startDate), innerX1);
+    const cx2 = Math.min(xFor(curtain.endDate), innerX2);
+    if (cx2 <= cx1) continue;
+    curtainRectSvg += `<rect x="${n(cx1)}" y="${n(taskRowY1)}" width="${n(cx2 - cx1)}" height="${n(taskRowY2 - taskRowY1)}" fill="${curtain.color}" fill-opacity="${curtain.opacity}"/>`;
   }
 
   // ── 4. Vertical gridlines ────────────────────────────────────────────────────
@@ -348,6 +360,39 @@ function renderChart(projectData) {
       const textY      = n(badgeTopY + badgeH * typography.scaleAlignmentFactor);
       pipesSvg += `<rect x="${n(px)}" y="${n(badgeTopY)}" width="${n(badgeW)}" height="${n(badgeH)}" fill="${style.chartBackgroundColor}" stroke="${pipe.color}" stroke-width="${rendering.pipeStrokeWidth}"/>`;
       pipesSvg += `<text x="${n(textCX)}" y="${textY}" text-anchor="middle" font-family="'${escapeXml(typography.fontFamily)}'" font-size="${fontSize}" fill="${pipe.color}">${escapeXml(pipe.name)}</text>`;
+    }
+  }
+
+  // ── 7. Curtain boundary lines and badges ─────────────────────────────────────
+  for (const curtain of curtains) {
+    if (!curtain.startDate || !curtain.endDate) continue;
+    if (curtain.endDate <= curtain.startDate) continue;
+    if (curtain.endDate < chartStartDate || curtain.startDate > chartEndDate) continue;
+
+    const xStart = xFor(curtain.startDate);
+    const xEnd   = xFor(curtain.endDate);
+
+    if (xStart >= innerX1 && xStart <= innerX2) {
+      curtainEdgesSvg += `<line x1="${n(xStart)}" y1="${n(taskRowY1)}" x2="${n(xStart)}" y2="${n(taskRowY2)}" stroke="${curtain.color}" stroke-width="${rendering.curtainStrokeWidth}"/>`;
+    }
+    if (xEnd >= innerX1 && xEnd <= innerX2) {
+      curtainEdgesSvg += `<line x1="${n(xEnd)}" y1="${n(taskRowY1)}" x2="${n(xEnd)}" y2="${n(taskRowY2)}" stroke="${curtain.color}" stroke-width="${rendering.curtainStrokeWidth}"/>`;
+    }
+
+    if (curtain.name) {
+      const anchorX = curtain.labelAnchor === 'end' ? xEnd : xStart;
+      if (anchorX >= innerX1 && anchorX <= innerX2) {
+        const fontSize  = typography.curtainFontSize;
+        const textW     = fontSize * 0.6 * curtain.name.length;
+        const badgeW    = textW + 2 * rendering.curtainBadgePaddingX;
+        const badgeH    = fontSize + 2 * rendering.curtainBadgePaddingY;
+        const areaH     = taskRowY2 - taskRowY1;
+        const badgeTopY = taskRowY1 + (1 - curtain.labelPosition) * (areaH - badgeH);
+        const textCX    = anchorX + badgeW / 2;
+        const textY     = n(badgeTopY + badgeH * typography.scaleAlignmentFactor);
+        curtainEdgesSvg += `<rect x="${n(anchorX)}" y="${n(badgeTopY)}" width="${n(badgeW)}" height="${n(badgeH)}" fill="${style.chartBackgroundColor}" stroke="${curtain.color}" stroke-width="${rendering.curtainStrokeWidth}"/>`;
+        curtainEdgesSvg += `<text x="${n(textCX)}" y="${textY}" text-anchor="middle" font-family="'${escapeXml(typography.fontFamily)}'" font-size="${fontSize}" fill="${curtain.color}">${escapeXml(curtain.name)}</text>`;
+      }
     }
   }
 
@@ -570,10 +615,12 @@ function renderChart(projectData) {
     `<svg xmlns="http://www.w3.org/2000/svg" width="${outerWidth}" height="${outerHeight}">`,
     `<g id="bg">${bg}</g>`,
     `<g id="swimlane-bands">${bandsSvg}</g>`,
+    `<g id="curtains">${curtainRectSvg}</g>`,
     `<g id="gridlines">${gridlines}</g>`,
     `<g id="scale-bands">${scaleSvg}</g>`,
     `<g id="swimlane-dividers">${dividersSvg}</g>`,
     `<g id="pipes">${pipesSvg}</g>`,
+    `<g id="curtain-edges">${curtainEdgesSvg}</g>`,
     `<g id="link-bodies">${linkBodySvg}</g>`,
     `<g id="task-bars">${barsSvg}</g>`,
     `<g id="milestones">${milestonesSvg}</g>`,

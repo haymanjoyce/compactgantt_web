@@ -53,9 +53,9 @@ function writeWorkbook(projectData) {
 
   // ── 5. Curtains ───────────────────────────────────────────────────────────────
   addSheet('Curtains', [
-    ['ID', 'Start Date', 'End Date', 'Name', 'Color', 'Opacity'],
+    ['ID', 'Start Date', 'End Date', 'Name', 'Color', 'Opacity', 'Label Position', 'Label Anchor'],
     ...curtains.map(c => [
-      c.id, toJsDate(c.startDate), toJsDate(c.endDate), c.name, c.color, c.opacity,
+      c.id, toJsDate(c.startDate), toJsDate(c.endDate), c.name, c.color, c.opacity, c.labelPosition, c.labelAnchor,
     ]),
   ]);
 
@@ -143,6 +143,7 @@ function writeWorkbook(projectData) {
     ['Note Font Size',                   typography.noteFontSize],
     ['Swimlane Font Size',               typography.swimlaneFontSize],
     ['Pipe Font Size',                   typography.pipeFontSize],
+    ['Curtain Font Size',                typography.curtainFontSize],
     ['Scale Alignment Factor',           typography.scaleAlignmentFactor],
     ['Task Alignment Factor',            typography.taskAlignmentFactor],
     ['Header Footer Alignment Factor',   typography.headerFooterAlignmentFactor],

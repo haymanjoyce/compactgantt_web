@@ -158,6 +158,7 @@ function createEmptyProjectData() {
         noteFontSize:                 10,
         swimlaneFontSize:             10,
         pipeFontSize:                 10,
+        curtainFontSize:              10,
         scaleAlignmentFactor:         0.7,
         taskAlignmentFactor:          0.7,
         headerFooterAlignmentFactor:  0.7,
@@ -183,6 +184,9 @@ function createEmptyProjectData() {
         pipeStrokeWidth:            1,
         pipeBadgePaddingX:          4,
         pipeBadgePaddingY:          2,
+        curtainStrokeWidth:         1,
+        curtainBadgePaddingX:       4,
+        curtainBadgePaddingY:       2,
       },
     }
   };
@@ -300,20 +304,24 @@ function parseWorkbook(workbook) {
   const curtainsSheet = workbook.Sheets['Curtains'];
   if (curtainsSheet) {
     const raw = parseEntitySheet(curtainsSheet, {
-      'ID':         { key: 'id',        def: null   },
-      'Start Date': { key: 'startDate', def: null   },
-      'End Date':   { key: 'endDate',   def: null   },
-      'Name':       { key: 'name',      def: ''     },
-      'Color':      { key: 'color',     def: 'grey' },
-      'Opacity':    { key: 'opacity',   def: 0.2    },
+      'ID':             { key: 'id',            def: null    },
+      'Start Date':     { key: 'startDate',     def: null    },
+      'End Date':       { key: 'endDate',       def: null    },
+      'Name':           { key: 'name',          def: ''      },
+      'Color':          { key: 'color',         def: 'grey'  },
+      'Opacity':        { key: 'opacity',       def: 0.2     },
+      'Label Position': { key: 'labelPosition', def: 1       },
+      'Label Anchor':   { key: 'labelAnchor',   def: 'start' },
     });
     projectData.curtains = raw.map(c => ({
-      id:        toInt(c.id),
-      startDate: toISODate(c.startDate),
-      endDate:   toISODate(c.endDate),
-      name:      c.name,
-      color:     c.color,
-      opacity:   toFloat(c.opacity, 0.2),
+      id:            toInt(c.id),
+      startDate:     toISODate(c.startDate),
+      endDate:       toISODate(c.endDate),
+      name:          c.name,
+      color:         c.color,
+      opacity:       toFloat(c.opacity, 0.2),
+      labelPosition: toFloat(c.labelPosition, 1),
+      labelAnchor:   c.labelAnchor,
     }));
   }
 
@@ -430,6 +438,7 @@ function parseWorkbook(workbook) {
     noteFontSize:                 kvInt(typographyKV,   'Note Font Size',                  10),
     swimlaneFontSize:             kvInt(typographyKV,   'Swimlane Font Size',               10),
     pipeFontSize:                 kvInt(typographyKV,   'Pipe Font Size',                   10),
+    curtainFontSize:              kvInt(typographyKV,   'Curtain Font Size',                10),
     scaleAlignmentFactor:         kvFloat(typographyKV, 'Scale Alignment Factor',           0.7, 'Scale Vertical Alignment Factor'),
     taskAlignmentFactor:          kvFloat(typographyKV, 'Task Alignment Factor',            0.7, 'Task Vertical Alignment Factor'),
     headerFooterAlignmentFactor:  kvFloat(typographyKV, 'Header Footer Alignment Factor',   0.7, 'Header & Footer Vertical Alignment Factor'),

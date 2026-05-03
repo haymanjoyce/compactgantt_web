@@ -112,7 +112,7 @@ Config sheet key names are confirmed. The `kv*` helpers (`kvStr/kvInt/kvFloat/kv
 - **Layout** — padding keys: `"Padding Top/Right/Bottom/Left"` → `"Margin Top/Right/Bottom/Left"`
 - **Style** — 11 existing keys: `"… Color"` → `"… Colour"` (the newer `insideLabelTextColor` has no old-format fallback)
 - **Timeline** — gridline keys for years/months/weeks: `"Gridline X"` → `"Vertical Gridline X"`; the four days/dates keys (`"Show Days"`, `"Show Dates"`, `"Gridline Days"`, `"Gridline Dates"`) have no old-format fallback
-- **Typography** — alignment factors: `"X Alignment Factor"` → `"X Vertical Alignment Factor"`; also `"Header Footer Font Size"` → `"Header & Footer Font Size"`; `"Pipe Font Size"` has no old-format fallback
+- **Typography** — alignment factors: `"X Alignment Factor"` → `"X Vertical Alignment Factor"`; also `"Header Footer Font Size"` → `"Header & Footer Font Size"`; `"Pipe Font Size"` and `"Curtain Font Size"` have no old-format fallback
 
 ## Derived fields
 
@@ -127,7 +127,7 @@ Config sheet key names are confirmed. The `kv*` helpers (`kvStr/kvInt/kvFloat/kv
 - **Coordinate areas:** `innerX1 = paddingLeft`; `innerX2 = outerWidth - paddingRight`; `taskRowY1 = paddingTop + headerHeight + scaleTotalHeight`; `taskRowY2 = outerHeight - paddingBottom - footerHeight`
 - **Scale band height:** `max(rendering.minScaleBandHeight, scaleFontSize * 2.5)` per visible scale; total = count × bandHeight
 - **Five scale bands** (top-to-bottom): years, months, weeks (ISO `"W03"`), days (named: Monday/Mon/M), dates (numeric day-of-month). Hidden bands occupy no space. Named-day cells degrade width-adaptively through full→short→letter→empty using `fontSize * 0.6` per character — the standard ≥20 px label gate does not apply to the days band.
-- **Render order (painter's algorithm, 15 slots):** (1) chart background → (2) swimlane backgrounds → (4) gridlines → (5) scale bands → (6) swimlane dividers → (7) pipes → (8) link bodies → (9) task bars → (10) milestones → (11) link heads → (12) task labels → (13) swimlane labels → (15) header/footer. Slots 3 curtains, 14 notes are reserved but not yet implemented (no empty `<g>` emitted). Header/footer paint last so they frame the chart regardless of unusual layout dimensions.
+- **Render order (painter's algorithm, 15 slots):** (1) chart background → (2) swimlane backgrounds → (3) curtain tinted rectangles → (4) gridlines → (5) scale bands → (6) swimlane dividers → (7) pipes + curtain boundary lines/badges → (8) link bodies → (9) task bars → (10) milestones → (11) link heads → (12) task labels → (13) swimlane labels → (15) header/footer. Slot 14 notes is reserved but not yet implemented (no empty `<g>` emitted). Header/footer paint last so they frame the chart regardless of unusual layout dimensions.
 - **Color handling:** all color values are passed directly from `projectData` to SVG `fill`/`stroke` attributes without validation. Invalid CSS color names render as SVG's default (black). Validation is moving to a separate module — the renderer trusts its input.
 - **Swimlane labels:** `swimlaneTopAlignmentFactor` for top variants, `swimlaneBottomAlignmentFactor` for bottom variants
 - **`daysBetween(a, b)`:** uses `Date.UTC()` — timezone-safe, no `toISOString()`
@@ -168,6 +168,9 @@ Not driven by any Excel sheet — hard-coded defaults only. Defined in `createEm
 | `pipeStrokeWidth` | 1 | pipe line and badge border stroke width |
 | `pipeBadgePaddingX` | 4 | horizontal inset of badge text from badge edges, in px |
 | `pipeBadgePaddingY` | 2 | vertical inset of badge text from badge edges, in px |
+| `curtainStrokeWidth` | 1 | curtain boundary line and badge border stroke width |
+| `curtainBadgePaddingX` | 4 | horizontal inset of curtain badge text from badge edges, in px |
+| `curtainBadgePaddingY` | 2 | vertical inset of curtain badge text from badge edges, in px |
 
 ## Link rendering
 
@@ -212,6 +215,25 @@ Pipes are vertical reference lines drawn at a given date with an optional text b
 - `<text>` centred horizontally in badge; vertical position = `badgeTopY + badgeH * typography.scaleAlignmentFactor`; font from `typography.fontFamily` / `typography.pipeFontSize`; fill = `pipe.color`
 
 **`pipe.labelPosition`** — float, Excel column `"Label Position"`, default `1`. No old-format fallback. `typography.pipeFontSize` — integer, Typography sheet key `"Pipe Font Size"`, default `10`. No old-format fallback.
+
+## Curtains rendering
+
+Curtains are tinted vertical bands over a date range with optional boundary lines and a name badge. Rendered across two slots: slot 3 (tinted rectangles, `<g id="curtains">`) and slot 7 (boundary lines + badge, `<g id="curtain-edges">`).
+
+**Skip rules (both slots):** curtain skipped silently if `startDate` is null, `endDate` is null, `endDate <= startDate`, `endDate < chartStartDate`, or `startDate > chartEndDate`.
+
+**Slot 3 — tinted rectangle:** `x1 = max(xFor(startDate), innerX1)`, `x2 = min(xFor(endDate), innerX2)`. Skipped if `x2 <= x1`. `<rect>` fill = `curtain.color`, `fill-opacity` = `curtain.opacity`, no stroke.
+
+**Slot 7 — boundary lines:** `xStart = xFor(startDate)`, `xEnd = xFor(endDate)` (unclamped). Each line emitted only if its x is within `[innerX1, innerX2]`. Stroke = `curtain.color`, stroke-width = `rendering.curtainStrokeWidth`, no dasharray.
+
+**Slot 7 — badge** (emitted only when `curtain.name` is non-empty):
+- Anchor x = `xFor(startDate)` when `curtain.labelAnchor !== 'end'`, else `xFor(endDate)`; badge skipped if anchor x is outside `[innerX1, innerX2]`
+- Text width estimated as `curtainFontSize * 0.6 * curtain.name.length`; `badgeW = textWidth + 2 * curtainBadgePaddingX`; `badgeH = curtainFontSize + 2 * curtainBadgePaddingY`
+- `badgeTopY = taskRowY1 + (1 - curtain.labelPosition) * (taskRowAreaH - badgeH)` — `labelPosition = 1` pins to top, `0` to bottom
+- Badge left edge = anchor x, always extends right; overflow past `innerX2` is allowed (no clip)
+- `<rect>` fill = `style.chartBackgroundColor`, stroke = `curtain.color`; `<text>` centred horizontally, vertical position = `badgeTopY + badgeH * typography.scaleAlignmentFactor`; fill = `curtain.color`
+
+**Curtains entity columns:** ID, Start Date, End Date, Name, Color, Opacity, Label Position, Label Anchor. `labelPosition` — float, default `1`, no old-format fallback. `labelAnchor` — string (`'start'` or `'end'`), default `'start'`, no old-format fallback; anything other than `'end'` treated as `'start'` by renderer. `typography.curtainFontSize` — integer, Typography sheet key `"Curtain Font Size"`, default `10`, no old-format fallback.
 
 ## Current UI
 
