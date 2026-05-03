@@ -40,6 +40,12 @@ function truncateLabel(text, availWidth, fontSize) {
 // Format a number to at most 2 decimal places, dropping trailing zeros.
 function n(v) { return parseFloat(v.toFixed(2)); }
 
+const PATTERN_TYPES = new Set(['hatch', 'cross-hatch', 'horizontal', 'vertical', 'dots']);
+
+function makePatternId(fillPattern, fillColor, patternColor) {
+  return `pattern-${fillPattern}-${fillColor}-${patternColor}`.replace(/[^A-Za-z0-9-]/g, '-');
+}
+
 // ── Main render function ───────────────────────────────────────────────────────
 function renderChart(projectData) {
   const { tasks, swimlanes, links, pipes, curtains, config } = projectData;
@@ -418,6 +424,42 @@ function renderChart(projectData) {
     }
   }
 
+  // ── <defs>: SVG fill patterns ────────────────────────────────────────────────
+  let defsSvg = '';
+  {
+    const patternDefs = new Map();
+    for (const task of tasks) {
+      if (task.isMilestone || !PATTERN_TYPES.has(task.fillPattern)) continue;
+      const id = makePatternId(task.fillPattern, task.fillColor, task.patternColor);
+      if (!patternDefs.has(id)) {
+        patternDefs.set(id, { fillPattern: task.fillPattern, fillColor: task.fillColor, patternColor: task.patternColor });
+      }
+    }
+    if (patternDefs.size > 0) {
+      const ts = rendering.patternTileSize;
+      const sw = rendering.patternStrokeWidth;
+      const dr = rendering.patternDotRadius;
+      let defs = '';
+      for (const [id, { fillPattern, fillColor, patternColor }] of patternDefs) {
+        let overlay = '';
+        if (fillPattern === 'hatch') {
+          overlay = `<line x1="0" y1="${ts}" x2="${ts}" y2="0" stroke="${patternColor}" stroke-width="${sw}"/>`;
+        } else if (fillPattern === 'cross-hatch') {
+          overlay  = `<line x1="0" y1="${ts}" x2="${ts}" y2="0" stroke="${patternColor}" stroke-width="${sw}"/>`;
+          overlay += `<line x1="0" y1="0" x2="${ts}" y2="${ts}" stroke="${patternColor}" stroke-width="${sw}"/>`;
+        } else if (fillPattern === 'horizontal') {
+          overlay = `<line x1="0" y1="${n(ts / 2)}" x2="${ts}" y2="${n(ts / 2)}" stroke="${patternColor}" stroke-width="${sw}"/>`;
+        } else if (fillPattern === 'vertical') {
+          overlay = `<line x1="${n(ts / 2)}" y1="0" x2="${n(ts / 2)}" y2="${ts}" stroke="${patternColor}" stroke-width="${sw}"/>`;
+        } else { // dots
+          overlay = `<circle cx="${n(ts / 2)}" cy="${n(ts / 2)}" r="${dr}" fill="${patternColor}"/>`;
+        }
+        defs += `<pattern id="${id}" patternUnits="userSpaceOnUse" width="${ts}" height="${ts}"><rect width="${ts}" height="${ts}" fill="${fillColor}"/>${overlay}</pattern>`;
+      }
+      defsSvg = `<defs>${defs}</defs>`;
+    }
+  }
+
   // ── 9 / 10. Task bars, milestones, and task geometry lookup ──────────────────
   // taskGeom is also consumed by the link renderer (slots 8 and 11).
   const barH          = rowH * bars.taskBarHeightFactor;
@@ -474,7 +516,10 @@ function renderChart(projectData) {
       const bw   = x2 - x1;
       if (bw <= 0) continue;
       const barY = rowY + (rowH - barH) / 2;
-      barsSvg += `<rect x="${n(x1)}" y="${n(barY)}" width="${n(bw)}" height="${n(barH)}" rx="${bars.taskCornerRadius}" fill="${color}" stroke="${style.taskStrokeColor}" stroke-width="${rendering.taskStrokeWidth}"/>`;
+      const barFill = PATTERN_TYPES.has(task.fillPattern)
+        ? `url(#${makePatternId(task.fillPattern, task.fillColor, task.patternColor)})`
+        : color;
+      barsSvg += `<rect x="${n(x1)}" y="${n(barY)}" width="${n(bw)}" height="${n(barH)}" rx="${bars.taskCornerRadius}" fill="${barFill}" stroke="${style.taskStrokeColor}" stroke-width="${rendering.taskStrokeWidth}"/>`;
 
       taskGeom.set(task.id, {
         absRow,
@@ -648,6 +693,7 @@ function renderChart(projectData) {
   // ── Assemble SVG (painter's algorithm, back to front) ────────────────────────
   return [
     `<svg xmlns="http://www.w3.org/2000/svg" width="${outerWidth}" height="${outerHeight}">`,
+    defsSvg,
     `<g id="bg">${bg}</g>`,
     `<g id="swimlane-bands">${bandsSvg}</g>`,
     `<g id="curtains">${curtainRectSvg}</g>`,

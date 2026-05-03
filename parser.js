@@ -190,6 +190,9 @@ function createEmptyProjectData() {
         curtainStrokeWidth:         1,
         curtainBadgePaddingX:       4,
         curtainBadgePaddingY:       2,
+        patternTileSize:            8,
+        patternStrokeWidth:         1,
+        patternDotRadius:           1.5,
       },
     }
   };

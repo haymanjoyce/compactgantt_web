@@ -132,6 +132,7 @@ Config sheet key names are confirmed. The `kv*` helpers (`kvStr/kvInt/kvFloat/kv
 - **Swimlane labels:** `swimlaneTopAlignmentFactor` for top variants, `swimlaneBottomAlignmentFactor` for bottom variants
 - **`daysBetween(a, b)`:** uses `Date.UTC()` — timezone-safe, no `toISOString()`
 - **Milestones:** SVG `<path>` of four cubic Béziers centred on `startDate`; anchors at cardinal tips; `controlOffset = (1 - milestoneCornerSharpness) * milestoneHalf * 0.5523` — sharpness 1.0 degenerates to a straight-line diamond, 0.0 approximates a circle. Bars: `<rect rx="${bars.taskCornerRadius}">`
+- **Task bar pattern fills:** `task.fillPattern` drives an SVG `<defs>` block emitted between the `<svg>` open tag and slot 1. `"solid"` (or any unrecognised value) → `fill="${fillColor}"` unchanged. The five named patterns (`hatch`, `cross-hatch`, `horizontal`, `vertical`, `dots`) → `fill="url(#id)"` referencing a deduplicated `<pattern>` keyed by sanitised `(fillPattern, fillColor, patternColor)` triple. Patterns use `patternUnits="userSpaceOnUse"` with no `x`/`y` — tiles anchor at SVG origin so bars on the same row share a continuous-field phase. `<defs>` is omitted entirely when no bar uses a non-solid pattern. Milestones are always solid; their `fillPattern` is not consumed by the renderer.
 - **Skip rules:** orphaned tasks, `finishDate < startDate`, tasks outside chart date range all silently skipped; out-of-range `row` clamped to 1
 - **Milestone labels:** the renderer's milestone branch always renders labels outside unconditionally, without reading `task.labelPlacement`. The parser does not override the stored placement value — milestones retain whatever placement the user set.
 - **Task labels (slot 12):** built from `task.labelContent` (`none`/`name`/`date`/`name_and_date`) with date-fns formatting. Per-task `task.dateFormat` overrides `config.preferences.chartDateFormat`. Dates parsed timezone-safely: split YYYY-MM-DD on `-` then `new Date(y, m-1, d)`. Inside label fill: `config.style.insideLabelTextColor`; outside label fill: `config.style.outsideLabelTextColor`.
@@ -174,6 +175,9 @@ Not driven by any Excel sheet — hard-coded defaults only. Defined in `createEm
 | `curtainStrokeWidth` | 1 | curtain boundary line and badge border stroke width |
 | `curtainBadgePaddingX` | 4 | horizontal inset of curtain badge text from badge edges, in px |
 | `curtainBadgePaddingY` | 2 | vertical inset of curtain badge text from badge edges, in px |
+| `patternTileSize` | 8 | SVG pattern tile size in px (square) |
+| `patternStrokeWidth` | 1 | stroke width for hatch / cross-hatch / horizontal / vertical pattern lines |
+| `patternDotRadius` | 1.5 | radius of the dot in the dots pattern |
 
 ## Link rendering
 
