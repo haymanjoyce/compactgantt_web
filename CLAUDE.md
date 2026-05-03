@@ -166,6 +166,7 @@ Not driven by any Excel sheet — hard-coded defaults only. Defined in `createEm
 | `milestoneStrokeWidth` | 0.5 | milestone diamond outline stroke width |
 | `swimlaneDividerStrokeWidth` | 1 | swimlane divider stroke width |
 | `linkStrokeWidth` | 1 | link path stroke width |
+| `linkCornerRadius` | 3 | radius in px of the quarter-circle arc inserted at each HV/VH/V-H-V bend |
 | `insideLabelPadding` | 2 | horizontal inset of inside-label text from bar edges, in px |
 | `pipeStrokeWidth` | 1 | pipe line and badge border stroke width |
 | `pipeBadgePaddingX` | 4 | horizontal inset of badge text from badge edges, in px |
@@ -195,6 +196,8 @@ Links are Finish-to-Start dependency arrows. Implementation notes:
 - `VH`: V to termY, H to termX; arrowhead direction = right
 - `AUTO` + same row: direct horizontal line, arrowhead right
 - `AUTO` + different rows: V-H-V with midY = mean of origY and termY; arrowhead direction = vertical
+
+**Rounded corners at bends (HV, VH, AUTO V-H-V only):** Each sharp 90° bend is replaced with a quarter-circle SVG arc of effective radius `r = min(linkCornerRadius, segA/2, segB/2)` where segA and segB are the lengths of the two segments meeting at that corner. The incoming segment stops `r` short of the bend point; the arc carries the path to a point `r` along the outgoing segment. Sweep flag is per-bend based on the turn direction: `(right→down)` = 1, `(right→up)` = 0, `(down→right)` = 0, `(up→right)` = 1. For AUTO V-H-V the two bends always carry opposite sweep flags. Same-row AUTO (no bends) and late-recoverable vertical links are unchanged.
 
 **Z-order split:** All renderedLinks are pre-computed into an array. The array is iterated once to emit `<path>` bodies into `linkBodySvg` (slot 8), then iterated again to emit `<circle>` origin markers and `<polygon>` arrowheads into `linkHeadSvg` (slot 11). This two-pass approach keeps task bars and milestones between the two link layers without duplicating classification logic.
 

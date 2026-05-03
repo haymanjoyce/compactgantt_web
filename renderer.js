@@ -551,19 +551,38 @@ function renderChart(projectData) {
       const sameRow = pred.absRow === succ.absRow;
 
       if (routing === 'AUTO' && sameRow) {
-        // Direct horizontal line — V-H-V collapses to zero-length vertical legs here
+        // Direct horizontal line — no bends, unchanged
         pathD    = `M ${n(origX)},${n(origY)} L ${n(termX)},${n(termY)}`;
         arrowDir = 'right';
       } else if (routing === 'HV') {
-        pathD    = `M ${n(origX)},${n(origY)} L ${n(termX)},${n(origY)} L ${n(termX)},${n(termY)}`;
+        const segA  = termX - origX;
+        const segB  = Math.abs(termY - origY);
+        const r     = Math.min(rendering.linkCornerRadius, segA / 2, segB / 2);
+        const sweep = termY >= origY ? 1 : 0;
+        const arcEndY = termY >= origY ? origY + r : origY - r;
+        pathD    = `M ${n(origX)},${n(origY)} L ${n(termX - r)},${n(origY)} A ${n(r)} ${n(r)} 0 0 ${sweep} ${n(termX)},${n(arcEndY)} L ${n(termX)},${n(termY)}`;
         arrowDir = (origY === termY) ? 'right' : (termY > origY ? 'down' : 'up');
       } else if (routing === 'VH') {
-        pathD    = `M ${n(origX)},${n(origY)} L ${n(origX)},${n(termY)} L ${n(termX)},${n(termY)}`;
+        const segA      = Math.abs(termY - origY);
+        const segB      = termX - origX;
+        const r         = Math.min(rendering.linkCornerRadius, segA / 2, segB / 2);
+        const sweep     = termY >= origY ? 0 : 1;
+        const arcStartY = termY >= origY ? termY - r : termY + r;
+        pathD    = `M ${n(origX)},${n(origY)} L ${n(origX)},${n(arcStartY)} A ${n(r)} ${n(r)} 0 0 ${sweep} ${n(origX + r)},${n(termY)} L ${n(termX)},${n(termY)}`;
         arrowDir = 'right';
       } else {
         // AUTO V-H-V: midpoint y is the mean of origin y and termination y
-        const midY = (origY + termY) / 2;
-        pathD    = `M ${n(origX)},${n(origY)} L ${n(origX)},${n(midY)} L ${n(termX)},${n(midY)} L ${n(termX)},${n(termY)}`;
+        const midY  = (origY + termY) / 2;
+        const A1    = Math.abs(midY - origY);
+        const H     = termX - origX;
+        const A2    = Math.abs(termY - midY);
+        const r1    = Math.min(rendering.linkCornerRadius, A1 / 2, H / 2);
+        const r2    = Math.min(rendering.linkCornerRadius, A2 / 2, H / 2);
+        const sweep1   = termY >= origY ? 0 : 1; // down→right: 0, up→right: 1
+        const sweep2   = termY >= origY ? 1 : 0; // right→down: 1, right→up: 0
+        const b1StartY = termY >= origY ? midY - r1 : midY + r1;
+        const b2EndY   = termY >= origY ? midY + r2 : midY - r2;
+        pathD    = `M ${n(origX)},${n(origY)} L ${n(origX)},${n(b1StartY)} A ${n(r1)} ${n(r1)} 0 0 ${sweep1} ${n(origX + r1)},${n(midY)} L ${n(termX - r2)},${n(midY)} A ${n(r2)} ${n(r2)} 0 0 ${sweep2} ${n(termX)},${n(b2EndY)} L ${n(termX)},${n(termY)}`;
         arrowDir = termY > origY ? 'down' : 'up';
       }
     }

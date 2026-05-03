@@ -182,6 +182,7 @@ function createEmptyProjectData() {
         milestoneStrokeWidth:       0.5,
         swimlaneDividerStrokeWidth: 1,
         linkStrokeWidth:            1,
+        linkCornerRadius:           3,
         insideLabelPadding:         2,
         pipeStrokeWidth:            1,
         pipeBadgePaddingX:          4,
