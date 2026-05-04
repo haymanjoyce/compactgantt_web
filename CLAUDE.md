@@ -252,6 +252,8 @@ Curtains are tinted vertical bands over a date range with optional boundary line
 
 Two-tab layout: **Data** tab shows debug tables (one per entity type + eight config KV tables); **Chart** tab calls `renderChart(projectData)` on every activation and injects the SVG into a horizontally-scrollable container. "No project loaded" shown if tasks array is empty when Chart tab is opened.
 
+Toolbar buttons (left to right): file input → **Save** (xlsx) → **Save SVG**. Both Save buttons share the same disabled gate (`tasks.length === 0 && swimlanes.length === 0`) toggled in the file-load handler. The Save SVG button calls `renderChart(projectData)` directly regardless of which tab is active, wraps the result in a `Blob('image/svg+xml')`, and downloads via `URL.createObjectURL`. Filename: loaded filename with last extension replaced by `.svg` (e.g. `report.final.xlsx` → `report.final.svg`); defaults to `"compactgantt_chart.svg"` if no file is loaded.
+
 ## Excel export (writer.js)
 
 `writeWorkbook(projectData)` returns a `Uint8Array` (SheetJS `type: 'array'`), ready for `new Blob([data], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })`.
@@ -268,4 +270,4 @@ Two-tab layout: **Data** tab shows debug tables (one per entity type + eight con
 
 **Config sheets:** two-column layout with `["Field", "Value"]` header row in row 1. `parseConfigSheet` picks up the header as a harmless extra map entry that no `kv*` call looks up — round-trip is safe.
 
-**Save button:** disabled until `tasks.length > 0 || swimlanes.length > 0` (i.e. at least one entity array is non-empty). Suggested download filename is the originally loaded filename if one was loaded, otherwise `"compactgantt_project.xlsx"`.
+**Save button:** disabled until `tasks.length > 0 || swimlanes.length > 0` (i.e. at least one entity array is non-empty). Suggested download filename is the originally loaded filename if one was loaded, otherwise `"compactgantt_project.xlsx"`. See also Save SVG in the Current UI section above.

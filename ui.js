@@ -73,7 +73,9 @@ function initUI() {
       loadedFilename = file.name;
 
       const d = projectData;
-      document.getElementById('saveBtn').disabled = d.tasks.length === 0 && d.swimlanes.length === 0;
+      const noData = d.tasks.length === 0 && d.swimlanes.length === 0;
+      document.getElementById('saveBtn').disabled    = noData;
+      document.getElementById('saveSvgBtn').disabled = noData;
       const cnt = (num, s) => `${num} ${num === 1 ? s : s + 's'}`;
       document.getElementById('status').textContent =
         `Loaded: ${file.name} — `                    +
@@ -107,6 +109,21 @@ function initUI() {
     const filename = loadedFilename || 'compactgantt_project.xlsx';
     const data = writeWorkbook(projectData);
     const blob = new Blob([data], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href     = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+  });
+
+  document.getElementById('saveSvgBtn').addEventListener('click', function() {
+    const base = loadedFilename
+      ? (loadedFilename.includes('.') ? loadedFilename.slice(0, loadedFilename.lastIndexOf('.')) : loadedFilename)
+      : 'compactgantt_chart';
+    const filename = base + '.svg';
+    const svg  = renderChart(projectData);
+    const blob = new Blob([svg], { type: 'image/svg+xml' });
     const url  = URL.createObjectURL(blob);
     const a    = document.createElement('a');
     a.href     = url;
