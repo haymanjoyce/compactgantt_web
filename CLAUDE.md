@@ -104,6 +104,7 @@ It is initialised at startup by calling `createEmptyProjectData()` (exported fro
 | Tasks | ID, Swimlane ID, Swimlane Row\*, Name, Start Date, Finish Date, Label Content, Label Placement, Label Offset, Fill Color, Fill Pattern, Pattern Color, Date Format |
 | Swimlanes | ID, Title\*, Row Count, Label Position, Background Color |
 | Links | ID, From Task ID, To Task ID, Line Color, Line Style, Link Routing\* |
+| Notes | ID, X %, Y %, Width %, Height %, Text Align, Vertical Align, Border Color, Fill Color, Text |
 
 \* Old-format name; new name is "Row" / "Name" / "Routing". Fallback handles both.
 
@@ -127,12 +128,12 @@ Config sheet key names are confirmed. The `kv*` helpers (`kvStr/kvInt/kvFloat/kv
 - **Coordinate areas:** `innerX1 = paddingLeft`; `innerX2 = outerWidth - paddingRight`; `taskRowY1 = paddingTop + headerHeight + scaleTotalHeight`; `taskRowY2 = outerHeight - paddingBottom - footerHeight`
 - **Scale band height:** `max(rendering.minScaleBandHeight, scaleFontSize * 2.5)` per visible scale; total = count × bandHeight
 - **Five scale bands** (top-to-bottom): years, months, weeks (ISO `"W03"`), days (named: Monday/Mon/M), dates (numeric day-of-month). Hidden bands occupy no space. Named-day cells degrade width-adaptively through full→short→letter→empty using `fontSize * 0.6` per character — the standard ≥20 px label gate does not apply to the days band.
-- **Render order (painter's algorithm, 15 slots):** (1) chart background → (2) swimlane backgrounds → (3) curtain tinted rectangles → (4) gridlines → (5) scale bands → (6) swimlane dividers → (7) pipes + curtain boundary lines/badges → (8) link bodies → (9) task bars → (10) milestones → (11) link heads → (12) task labels → (13) swimlane labels → (15) header/footer. Slot 14 notes is reserved but not yet implemented (no empty `<g>` emitted). Header/footer paint last so they frame the chart regardless of unusual layout dimensions.
+- **Render order (painter's algorithm, 15 slots):** (1) chart background → (2) swimlane backgrounds → (3) curtain tinted rectangles → (4) gridlines → (5) scale bands → (6) swimlane dividers → (7) pipes + curtain boundary lines/badges → (8) link bodies → (9) task bars → (10) milestones → (11) link heads → (12) task labels → (13) swimlane labels → (14) notes → (15) header/footer. Header/footer paint last so they frame the chart regardless of unusual layout dimensions.
 - **Color handling:** all color values are passed directly from `projectData` to SVG `fill`/`stroke` attributes without validation. Invalid CSS color names render as SVG's default (black). Validation is moving to a separate module — the renderer trusts its input.
 - **Swimlane labels:** `swimlaneTopAlignmentFactor` for top variants, `swimlaneBottomAlignmentFactor` for bottom variants
 - **`daysBetween(a, b)`:** uses `Date.UTC()` — timezone-safe, no `toISOString()`
 - **Milestones:** SVG `<path>` of four cubic Béziers centred on `startDate`; anchors at cardinal tips; `controlOffset = (1 - milestoneCornerSharpness) * milestoneHalf * 0.5523` — sharpness 1.0 degenerates to a straight-line diamond, 0.0 approximates a circle. Bars: `<rect rx="${bars.taskCornerRadius}">`
-- **Task bar pattern fills:** `task.fillPattern` drives an SVG `<defs>` block emitted between the `<svg>` open tag and slot 1. `"solid"` (or any unrecognised value) → `fill="${fillColor}"` unchanged. The five named patterns (`hatch`, `cross-hatch`, `horizontal`, `vertical`, `dots`) → `fill="url(#id)"` referencing a deduplicated `<pattern>` keyed by sanitised `(fillPattern, fillColor, patternColor)` triple. Patterns use `patternUnits="userSpaceOnUse"` with no `x`/`y` — tiles anchor at SVG origin so bars on the same row share a continuous-field phase. `<defs>` is omitted entirely when no bar uses a non-solid pattern. Milestones are always solid; their `fillPattern` is not consumed by the renderer.
+- **Task bar pattern fills:** `task.fillPattern` drives SVG `<pattern>` elements in the shared `<defs>` block (see Notes rendering for combined-defs design). `"solid"` (or any unrecognised value) → `fill="${fillColor}"` unchanged. The five named patterns (`hatch`, `cross-hatch`, `horizontal`, `vertical`, `dots`) → `fill="url(#id)"` referencing a deduplicated `<pattern>` keyed by sanitised `(fillPattern, fillColor, patternColor)` triple. Patterns use `patternUnits="userSpaceOnUse"` with no `x`/`y` — tiles anchor at SVG origin so bars on the same row share a continuous-field phase. Milestones are always solid; their `fillPattern` is not consumed by the renderer.
 - **Skip rules:** orphaned tasks, `finishDate < startDate`, tasks outside chart date range all silently skipped; out-of-range `row` clamped to 1
 - **Milestone labels:** the renderer's milestone branch always renders labels outside unconditionally, without reading `task.labelPlacement`. The parser does not override the stored placement value — milestones retain whatever placement the user set.
 - **Task labels (slot 12):** built from `task.labelContent` (`none`/`name`/`date`/`name_and_date`) with date-fns formatting. Per-task `task.dateFormat` overrides `config.preferences.chartDateFormat`. Dates parsed timezone-safely: split YYYY-MM-DD on `-` then `new Date(y, m-1, d)`. Inside label fill: `config.style.insideLabelTextColor`; outside label fill: `config.style.outsideLabelTextColor`.
@@ -181,6 +182,9 @@ Not driven by any Excel sheet — hard-coded defaults only. Defined in `createEm
 | `patternDotRadius` | 1.5 | radius of the dot in the dots pattern |
 | `leaderLineStrokeWidth` | 0.5 | stroke width for outside-label leader lines |
 | `outsideLabelKissingGap` | 2 | gap in px between bar/milestone right edge and outside label start (applied even when `labelOffset === 0`; leader line spans the `labelOffset` portion only) |
+| `noteBorderStrokeWidth` | 1 | stroke width for note box border |
+| `notePadding` | 4 | horizontal and vertical inset of note text from note box edges, in px |
+| `noteLineHeightFactor` | 1.2 | line height multiplier for note text (`lineHeight = noteFontSize * noteLineHeightFactor`) |
 
 ## Link rendering
 
@@ -250,6 +254,37 @@ Curtains are tinted vertical bands over a date range with optional boundary line
 - `<rect>` fill = `style.chartBackgroundColor`, stroke = `curtain.color`; `<text>` centred horizontally, vertical position = `badgeTopY + badgeH * typography.scaleAlignmentFactor`; fill = `curtain.color`
 
 **Curtains entity columns:** ID, Start Date, End Date, Name, Color, Opacity, Label Position, Label Anchor. `labelPosition` — float, default `1`, no old-format fallback. `labelAnchor` — string (`'start'` or `'end'`), default `'start'`, no old-format fallback; anything other than `'end'` treated as `'start'` by renderer. `typography.curtainFontSize` — integer, Typography sheet key `"Curtain Font Size"`, default `10`, no old-format fallback.
+
+## Notes rendering
+
+Notes are free-positioned text annotations rendered in slot 14 (`<g id="notes">`), above swimlane labels and below header/footer.
+
+**Coordinate model.** Dimensions are percentages of the task row area (`taskRowH = taskRowY2 - taskRowY1`):
+- `noteX = innerX1 + (xPct / 100) * innerWidth`
+- `noteY = taskRowY1 + (yPct / 100) * taskRowH`
+- `noteW = (widthPct / 100) * innerWidth`
+- `noteH = (heightPct / 100) * taskRowH`
+
+Partial overflow past task row area boundaries renders as-positioned — no clip to task row area.
+
+**Skip rules (silent):** note skipped entirely when `text === ""`, `widthPct <= 0`, `heightPct <= 0`, or fully off-chart (`xPct >= 100`, `yPct >= 100`, `xPct + widthPct <= 0`, or `yPct + heightPct <= 0`).
+
+**Optional box:** `<rect>` emitted only when `fillColor` is non-empty OR `borderColor` is non-empty. Fill = `fillColor` if non-empty, else `"none"`; stroke = `borderColor` if non-empty, else `"none"`; stroke-width = `rendering.noteBorderStrokeWidth`. When both are empty, no rect — note is text-only over a transparent area.
+
+**Text wrapping.** Available width = `noteW - 2 * rendering.notePadding`; if ≤ 0, text is skipped (rect still emits). Character-width estimate: `fontSize * 0.6` per character. Algorithm: split `text` on `\n` into segments; each segment wraps independently. Empty segments (from consecutive `\n`) produce a blank line. Within each segment, greedy line-fill from whitespace-split tokens. Unbreakable tokens (estimated width > availW) are character-truncated with `…` and emitted as their own line.
+
+**Vertical alignment.** `blockHeight = lineCount * lineHeight` where `lineHeight = noteFontSize * noteLineHeightFactor`. First-line baseline:
+- `top` — `noteY + notePadding + fontSize * scaleAlignmentFactor`
+- `middle` — `noteY + (noteH - blockHeight) / 2 + fontSize * scaleAlignmentFactor`
+- `bottom` — `noteY + noteH - notePadding - blockHeight + fontSize * scaleAlignmentFactor`
+
+**Horizontal alignment.** Per `<tspan>` (each repeats `x` alongside `dy`): `left` → `x = noteX + notePadding`, `text-anchor="start"`; `center` → `x = noteX + noteW / 2`, `text-anchor="middle"`; `right` → `x = noteX + noteW - notePadding`, `text-anchor="end"`.
+
+**Clip path.** Each note that emits text gets a per-note `<clipPath id="note-clip-${id}">` (rect matching note bounds) in `<defs>`. The `<text>` element references it via `clip-path="url(#note-clip-${id})"`. Overflow text is silently hidden.
+
+**`<defs>` block (combined).** Pattern-fill defs and note clip paths share one `<defs>` block placed between the `<svg>` open tag and slot 1. Pattern content is collected first but assembly is deferred until after the notes pass so both kinds of content can be combined. `<defs>` is omitted entirely when neither patterns nor note clip paths are needed.
+
+**Notes entity columns:** ID, X %, Y %, Width %, Height %, Text Align, Vertical Align, Border Color, Fill Color, Text. No old-format fallbacks on any column. `borderColor` — string, default `""` (no border). `fillColor` — string, default `""` (transparent/no fill). `typography.noteFontSize` — integer, Typography sheet key `"Note Font Size"`, default `10`, no old-format fallback. `style.noteTextColor` — string, Style sheet key `"Note Text Color"`, default `"black"`, no old-format fallback.
 
 ## Current UI
 

@@ -48,7 +48,7 @@ function makePatternId(fillPattern, fillColor, patternColor) {
 
 // ── Main render function ───────────────────────────────────────────────────────
 function renderChart(projectData) {
-  const { tasks, swimlanes, links, pipes, curtains, config } = projectData;
+  const { tasks, swimlanes, links, pipes, curtains, notes, config } = projectData;
   const { layout, bars, timeline, titles, style, typography, rendering } = config;
 
   const { outerWidth, outerHeight, paddingLeft, paddingRight, paddingTop, paddingBottom } = layout;
@@ -137,7 +137,7 @@ function renderChart(projectData) {
       linkHeadSvg = '',   // 11 link arrowheads and origin markers
       taskLabelsSvg = '', // 12 task labels
       labelsSvg = '',     // 13 swimlane label overlays
-                          // 14 notes — not yet implemented
+      notesSvg = '',      // 14 notes
       headerSvg = '',     // 15 header band  \
       footerSvg = '';     // 15 footer band  /  emitted together, last
 
@@ -424,8 +424,8 @@ function renderChart(projectData) {
     }
   }
 
-  // ── <defs>: SVG fill patterns ────────────────────────────────────────────────
-  let defsSvg = '';
+  // ── <defs>: collect SVG fill patterns (final assembly deferred until after notes pass) ──
+  let patternDefsContent = '';
   {
     const patternDefs = new Map();
     for (const task of tasks) {
@@ -439,7 +439,6 @@ function renderChart(projectData) {
       const ts = rendering.patternTileSize;
       const sw = rendering.patternStrokeWidth;
       const dr = rendering.patternDotRadius;
-      let defs = '';
       for (const [id, { fillPattern, fillColor, patternColor }] of patternDefs) {
         let overlay = '';
         if (fillPattern === 'hatch') {
@@ -454,9 +453,8 @@ function renderChart(projectData) {
         } else { // dots
           overlay = `<circle cx="${n(ts / 2)}" cy="${n(ts / 2)}" r="${dr}" fill="${patternColor}"/>`;
         }
-        defs += `<pattern id="${id}" patternUnits="userSpaceOnUse" width="${ts}" height="${ts}"><rect width="${ts}" height="${ts}" fill="${fillColor}"/>${overlay}</pattern>`;
+        patternDefsContent += `<pattern id="${id}" patternUnits="userSpaceOnUse" width="${ts}" height="${ts}"><rect width="${ts}" height="${ts}" fill="${fillColor}"/>${overlay}</pattern>`;
       }
-      defsSvg = `<defs>${defs}</defs>`;
     }
   }
 
@@ -698,6 +696,92 @@ function renderChart(projectData) {
     labelsSvg += `<text x="${n(tx)}" y="${ty}" text-anchor="${anchor}" font-family="'${escapeXml(typography.fontFamily)}'" font-size="${typography.swimlaneFontSize}" fill="${style.swimlaneLabelColor}">${escapeXml(s.name)}</text>`;
   }
 
+  // ── 14. Notes ─────────────────────────────────────────────────────────────────
+  let noteClipDefs = '';
+  for (const note of notes) {
+    if (note.text === '') continue;
+    if (note.widthPct <= 0 || note.heightPct <= 0) continue;
+    if (note.xPct >= 100 || note.yPct >= 100) continue;
+    if (note.xPct + note.widthPct <= 0 || note.yPct + note.heightPct <= 0) continue;
+
+    const noteX = innerX1 + (note.xPct / 100) * innerWidth;
+    const noteY = taskRowY1 + (note.yPct / 100) * taskRowH;
+    const noteW = (note.widthPct / 100) * innerWidth;
+    const noteH = (note.heightPct / 100) * taskRowH;
+
+    if (note.fillColor || note.borderColor) {
+      const fill   = note.fillColor   || 'none';
+      const stroke = note.borderColor || 'none';
+      notesSvg += `<rect x="${n(noteX)}" y="${n(noteY)}" width="${n(noteW)}" height="${n(noteH)}" fill="${fill}" stroke="${stroke}" stroke-width="${rendering.noteBorderStrokeWidth}"/>`;
+    }
+
+    const availW = noteW - 2 * rendering.notePadding;
+    if (availW <= 0) continue;
+
+    const fontSize   = typography.noteFontSize;
+    const charW      = fontSize * 0.6;
+    const lineHeight = n(fontSize * rendering.noteLineHeightFactor);
+
+    const lines = [];
+    for (const segment of note.text.split('\n')) {
+      if (!segment) { lines.push(''); continue; }
+      const tokens = segment.split(/\s+/).filter(t => t.length > 0);
+      let cur = '';
+      for (const token of tokens) {
+        if (token.length * charW > availW) {
+          if (cur) { lines.push(cur); cur = ''; }
+          const maxChars = Math.floor((availW - charW) / charW);
+          lines.push(maxChars > 0 ? token.slice(0, maxChars) + '…' : '…');
+          continue;
+        }
+        const candidate = cur ? cur + ' ' + token : token;
+        if (candidate.length * charW <= availW) {
+          cur = candidate;
+        } else {
+          if (cur) lines.push(cur);
+          cur = token;
+        }
+      }
+      if (cur) lines.push(cur);
+    }
+
+    if (lines.length === 0) continue;
+
+    const blockHeight = lines.length * lineHeight;
+    const alignFactor = typography.scaleAlignmentFactor;
+    const vAlign      = (note.verticalAlign || 'top').toLowerCase();
+    let firstLineY;
+    if (vAlign === 'middle') {
+      firstLineY = noteY + (noteH - blockHeight) / 2 + fontSize * alignFactor;
+    } else if (vAlign === 'bottom') {
+      firstLineY = noteY + noteH - rendering.notePadding - blockHeight + fontSize * alignFactor;
+    } else {
+      firstLineY = noteY + rendering.notePadding + fontSize * alignFactor;
+    }
+
+    const hAlign = (note.textAlign || 'left').toLowerCase();
+    let textX, textAnchor;
+    if (hAlign === 'center') {
+      textX = noteX + noteW / 2;  textAnchor = 'middle';
+    } else if (hAlign === 'right') {
+      textX = noteX + noteW - rendering.notePadding;  textAnchor = 'end';
+    } else {
+      textX = noteX + rendering.notePadding;  textAnchor = 'start';
+    }
+
+    const clipId = `note-clip-${note.id}`;
+    noteClipDefs += `<clipPath id="${clipId}"><rect x="${n(noteX)}" y="${n(noteY)}" width="${n(noteW)}" height="${n(noteH)}"/></clipPath>`;
+
+    const firstTspan = `<tspan x="${n(textX)}">${escapeXml(lines[0])}</tspan>`;
+    const restTspans  = lines.slice(1).map(line => `<tspan x="${n(textX)}" dy="${lineHeight}">${escapeXml(line)}</tspan>`).join('');
+    notesSvg += `<text x="${n(textX)}" y="${n(firstLineY)}" text-anchor="${textAnchor}" font-family="'${escapeXml(typography.fontFamily)}'" font-size="${fontSize}" fill="${style.noteTextColor}" clip-path="url(#${clipId})">${firstTspan}${restTspans}</text>`;
+  }
+
+  // ── <defs>: final assembly (patterns + note clip paths) ──────────────────────
+  const defsSvg = (patternDefsContent || noteClipDefs)
+    ? `<defs>${patternDefsContent}${noteClipDefs}</defs>`
+    : '';
+
   // ── Assemble SVG (painter's algorithm, back to front) ────────────────────────
   return [
     `<svg xmlns="http://www.w3.org/2000/svg" width="${outerWidth}" height="${outerHeight}">`,
@@ -716,6 +800,7 @@ function renderChart(projectData) {
     `<g id="link-heads">${linkHeadSvg}</g>`,
     `<g id="task-labels">${taskLabelsSvg}</g>`,
     `<g id="swimlane-labels">${labelsSvg}</g>`,
+    `<g id="notes">${notesSvg}</g>`,
     `<g id="header-footer">${headerSvg}${footerSvg}</g>`,
     `</svg>`,
   ].join('');

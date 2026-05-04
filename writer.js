@@ -61,9 +61,9 @@ function writeWorkbook(projectData) {
 
   // ── 6. Notes ──────────────────────────────────────────────────────────────────
   addSheet('Notes', [
-    ['ID', 'X %', 'Y %', 'Width %', 'Height %', 'Text Align', 'Vertical Align', 'Text'],
+    ['ID', 'X %', 'Y %', 'Width %', 'Height %', 'Text Align', 'Vertical Align', 'Border Color', 'Fill Color', 'Text'],
     ...notes.map(n => [
-      n.id, n.xPct, n.yPct, n.widthPct, n.heightPct, n.textAlign, n.verticalAlign, n.text,
+      n.id, n.xPct, n.yPct, n.widthPct, n.heightPct, n.textAlign, n.verticalAlign, n.borderColor, n.fillColor, n.text,
     ]),
   ]);
 
@@ -132,6 +132,7 @@ function writeWorkbook(projectData) {
     ['Outside Label Text Color',       style.outsideLabelTextColor],
     ['Leader Line Color',              style.leaderLineColor],
     ['Inside Label Text Color',        style.insideLabelTextColor],
+    ['Note Text Color',                style.noteTextColor],
   ]);
 
   // ── 12. Typography ────────────────────────────────────────────────────────────

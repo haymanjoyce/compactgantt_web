@@ -150,6 +150,7 @@ function createEmptyProjectData() {
         outsideLabelTextColor:       'black',
         leaderLineColor:             'black',
         insideLabelTextColor:        'black',
+        noteTextColor:               'black',
       },
       typography: {
         fontFamily:                   'Arial',
@@ -195,6 +196,9 @@ function createEmptyProjectData() {
         patternDotRadius:           1.5,
         leaderLineStrokeWidth:      0.5,
         outsideLabelKissingGap:     2,
+        noteBorderStrokeWidth:      1,
+        notePadding:                4,
+        noteLineHeightFactor:       1.2,
       },
     }
   };
@@ -344,7 +348,9 @@ function parseWorkbook(workbook) {
       'Height %':       { key: 'heightPct',     def: 0      },
       'Text Align':     { key: 'textAlign',     def: 'left' },
       'Vertical Align': { key: 'verticalAlign', def: 'top'  },
-      'Text':           { key: 'text',          def: ''     },
+      'Border Color':   { key: 'borderColor',   def: ''     },
+      'Fill Color':     { key: 'fillColor',      def: ''     },
+      'Text':           { key: 'text',           def: ''     },
     });
     projectData.notes = raw.map(n => ({
       id:            toInt(n.id),
@@ -354,6 +360,8 @@ function parseWorkbook(workbook) {
       heightPct:     toFloat(n.heightPct, 0),
       textAlign:     n.textAlign,
       verticalAlign: n.verticalAlign,
+      borderColor:   n.borderColor,
+      fillColor:     n.fillColor,
       text:          n.text,
     }));
   }
@@ -435,6 +443,7 @@ function parseWorkbook(workbook) {
     outsideLabelTextColor:       kvStr(styleKV, 'Outside Label Text Color',       'black',      'Outside Label Text Colour'),
     leaderLineColor:             kvStr(styleKV, 'Leader Line Color',              'black',      'Outside Label Line Color'),
     insideLabelTextColor:        kvStr(styleKV, 'Inside Label Text Color',        'black'),
+    noteTextColor:               kvStr(styleKV, 'Note Text Color',                'black'),
   };
 
   // ── Config: Typography ─────────────────────────────────────────────────────
