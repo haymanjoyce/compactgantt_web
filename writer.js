@@ -130,7 +130,7 @@ function writeWorkbook(projectData) {
     ['Task Stroke Color',              style.taskStrokeColor],
     ['Milestone Stroke Color',         style.milestoneStrokeColor],
     ['Outside Label Text Color',       style.outsideLabelTextColor],
-    ['Outside Label Line Color',       style.outsideLabelLineColor],
+    ['Leader Line Color',              style.leaderLineColor],
     ['Inside Label Text Color',        style.insideLabelTextColor],
   ]);
 

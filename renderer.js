@@ -506,8 +506,12 @@ function renderChart(projectData) {
 
       const milestoneLabel = buildLabelText(task, config.preferences.chartDateFormat);
       if (milestoneLabel) {
-        const lx = n(cx + half + task.labelOffset);
+        const rightEdge = cx + half;
+        const lx = n(rightEdge + rendering.outsideLabelKissingGap + task.labelOffset);
         const ly = n(rowY + rowH * typography.taskAlignmentFactor);
+        if (task.labelOffset > 0) {
+          taskLabelsSvg += `<line x1="${n(rightEdge)}" y1="${n(cy)}" x2="${n(rightEdge + task.labelOffset)}" y2="${n(cy)}" stroke="${style.leaderLineColor}" stroke-width="${rendering.leaderLineStrokeWidth}"/>`;
+        }
         taskLabelsSvg += `<text x="${lx}" y="${ly}" text-anchor="start" font-family="'${escapeXml(typography.fontFamily)}'" font-size="${typography.taskFontSize}" fill="${style.outsideLabelTextColor}">${escapeXml(milestoneLabel)}</text>`;
       }
     } else {
@@ -544,8 +548,12 @@ function renderChart(projectData) {
             taskLabelsSvg += `<text x="${lx}" y="${ly}" text-anchor="start" font-family="'${escapeXml(typography.fontFamily)}'" font-size="${typography.taskFontSize}" fill="${style.insideLabelTextColor}">${escapeXml(truncated)}</text>`;
           }
         } else {
-          const lx = n(xFor(task.finishDate) + task.labelOffset);
+          const rightEdge = xFor(task.finishDate);
+          const lx = n(rightEdge + rendering.outsideLabelKissingGap + task.labelOffset);
           const ly = n(rowY + rowH * typography.taskAlignmentFactor);
+          if (task.labelOffset > 0) {
+            taskLabelsSvg += `<line x1="${n(rightEdge)}" y1="${n(rowCenterY)}" x2="${n(rightEdge + task.labelOffset)}" y2="${n(rowCenterY)}" stroke="${style.leaderLineColor}" stroke-width="${rendering.leaderLineStrokeWidth}"/>`;
+          }
           taskLabelsSvg += `<text x="${lx}" y="${ly}" text-anchor="start" font-family="'${escapeXml(typography.fontFamily)}'" font-size="${typography.taskFontSize}" fill="${style.outsideLabelTextColor}">${escapeXml(barLabel)}</text>`;
         }
       }

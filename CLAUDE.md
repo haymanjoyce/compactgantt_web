@@ -110,7 +110,7 @@ It is initialised at startup by calling `createEmptyProjectData()` (exported fro
 Config sheet key names are confirmed. The `kv*` helpers (`kvStr/kvInt/kvFloat/kvBool/kvDate`) each accept an optional `fallback` key — same try-new-first pattern as entity column fallbacks. Known config key renames (new → old fallback):
 
 - **Layout** — padding keys: `"Padding Top/Right/Bottom/Left"` → `"Margin Top/Right/Bottom/Left"`
-- **Style** — 11 existing keys: `"… Color"` → `"… Colour"` (the newer `insideLabelTextColor` has no old-format fallback)
+- **Style** — 11 existing keys: `"… Color"` → `"… Colour"` (the newer `insideLabelTextColor` has no old-format fallback). Exception: `outsideLabelLineColor` was renamed to `leaderLineColor`; its Excel column is now `"Leader Line Color"` with fallback `"Outside Label Line Color"` (British-spelling fallback `"Outside Label Line Colour"` dropped — files using it get the `"black"` default).
 - **Timeline** — gridline keys for years/months/weeks: `"Gridline X"` → `"Vertical Gridline X"`; the four days/dates keys (`"Show Days"`, `"Show Dates"`, `"Gridline Days"`, `"Gridline Dates"`) have no old-format fallback
 - **Typography** — alignment factors: `"X Alignment Factor"` → `"X Vertical Alignment Factor"`; also `"Header Footer Font Size"` → `"Header & Footer Font Size"`; `"Pipe Font Size"` and `"Curtain Font Size"` have no old-format fallback
 
@@ -137,7 +137,8 @@ Config sheet key names are confirmed. The `kv*` helpers (`kvStr/kvInt/kvFloat/kv
 - **Milestone labels:** the renderer's milestone branch always renders labels outside unconditionally, without reading `task.labelPlacement`. The parser does not override the stored placement value — milestones retain whatever placement the user set.
 - **Task labels (slot 12):** built from `task.labelContent` (`none`/`name`/`date`/`name_and_date`) with date-fns formatting. Per-task `task.dateFormat` overrides `config.preferences.chartDateFormat`. Dates parsed timezone-safely: split YYYY-MM-DD on `-` then `new Date(y, m-1, d)`. Inside label fill: `config.style.insideLabelTextColor`; outside label fill: `config.style.outsideLabelTextColor`.
   - *Inside labels* (bars only): truncated via character-width estimate (`fontSize * 0.6` per character, sans-serif approximation). Prefers word-boundary break; falls back to character truncation; emits nothing if `…` alone exceeds available width. Available width = `barWidth - 2 * rendering.insideLabelPadding`.
-  - *Outside labels*: no truncation. `x = rightEdge + task.labelOffset`; right edge = `xFor(finishDate)` for bars, `xFor(startDate) + milestoneHalf` for milestones.
+  - *Outside labels*: no truncation. `x = rightEdge + outsideLabelKissingGap + task.labelOffset`; right edge = `xFor(finishDate)` for bars, `xFor(startDate) + milestoneHalf` for milestones. The kiss gap keeps labels clear of the bar edge even at zero offset.
+  - *Leader lines*: horizontal `<line>` at row centre y, from `rightEdge` to `rightEdge + labelOffset` (spans exactly `labelOffset` px, with `outsideLabelKissingGap` clear between line end and label). Drawn when `labelOffset > 0`; for bars also requires `labelPlacement === 'outside'`. Stroke: `style.leaderLineColor` / `rendering.leaderLineStrokeWidth`. Emitted immediately before each task's `<text>` element inside slot 12 (interleaved per task, no separate pass). No clip — may overflow into right padding.
 
 ## config.bars
 
@@ -178,6 +179,8 @@ Not driven by any Excel sheet — hard-coded defaults only. Defined in `createEm
 | `patternTileSize` | 8 | SVG pattern tile size in px (square) |
 | `patternStrokeWidth` | 1 | stroke width for hatch / cross-hatch / horizontal / vertical pattern lines |
 | `patternDotRadius` | 1.5 | radius of the dot in the dots pattern |
+| `leaderLineStrokeWidth` | 0.5 | stroke width for outside-label leader lines |
+| `outsideLabelKissingGap` | 2 | gap in px between bar/milestone right edge and outside label start (applied even when `labelOffset === 0`; leader line spans the `labelOffset` portion only) |
 
 ## Link rendering
 

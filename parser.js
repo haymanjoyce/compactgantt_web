@@ -148,7 +148,7 @@ function createEmptyProjectData() {
         taskStrokeColor:             'black',
         milestoneStrokeColor:        'black',
         outsideLabelTextColor:       'black',
-        outsideLabelLineColor:       'black',
+        leaderLineColor:             'black',
         insideLabelTextColor:        'black',
       },
       typography: {
@@ -193,6 +193,8 @@ function createEmptyProjectData() {
         patternTileSize:            8,
         patternStrokeWidth:         1,
         patternDotRadius:           1.5,
+        leaderLineStrokeWidth:      0.5,
+        outsideLabelKissingGap:     2,
       },
     }
   };
@@ -431,7 +433,7 @@ function parseWorkbook(workbook) {
     taskStrokeColor:             kvStr(styleKV, 'Task Stroke Color',              'black',      'Task Stroke Colour'),
     milestoneStrokeColor:        kvStr(styleKV, 'Milestone Stroke Color',         'black',      'Milestone Stroke Colour'),
     outsideLabelTextColor:       kvStr(styleKV, 'Outside Label Text Color',       'black',      'Outside Label Text Colour'),
-    outsideLabelLineColor:       kvStr(styleKV, 'Outside Label Line Color',       'black',      'Outside Label Line Colour'),
+    leaderLineColor:             kvStr(styleKV, 'Leader Line Color',              'black',      'Outside Label Line Color'),
     insideLabelTextColor:        kvStr(styleKV, 'Inside Label Text Color',        'black'),
   };
 
