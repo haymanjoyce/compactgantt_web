@@ -146,6 +146,7 @@ function createEmptyProjectData() {
       style: {
         chartBackgroundColor:        'white',
         headerFooterBackgroundColor: 'lightgrey',
+        headerFooterBorderColor:     'grey',
         headerFooterTextColor:       'black',
         swimlaneLabelColor:          'black',
         swimlaneDividerColor:        'grey',
@@ -190,6 +191,7 @@ function createEmptyProjectData() {
         charWidthFactor:            0.6,
         monthLetters:               ['J','F','M','A','M','J','J','A','S','O','N','D'],
         headerFooterTextPadding:    4,
+        headerFooterBorderStrokeWidth: 0.5,
         gridlineStrokeWidth:        0.5,
         scaleTickStrokeWidth:       0.5,
         taskStrokeWidth:            0.5,
@@ -448,6 +450,7 @@ function parseWorkbook(workbook) {
   projectData.config.style = {
     chartBackgroundColor:        kvStr(styleKV, 'Chart Background Color',         'white',      'Chart Background Colour'),
     headerFooterBackgroundColor: kvStr(styleKV, 'Header Footer Background Color', 'lightgrey',  'Header Footer Background Colour'),
+    headerFooterBorderColor:     kvStr(styleKV, 'Header Footer Border Color',     'grey'),
     headerFooterTextColor:       kvStr(styleKV, 'Header Footer Text Color',       'black'),
     swimlaneLabelColor:          kvStr(styleKV, 'Swimlane Label Color',           'black',      'Swimlane Label Colour'),
     swimlaneDividerColor:        kvStr(styleKV, 'Swimlane Divider Color',         'grey',       'Swimlane Divider Colour'),

@@ -123,6 +123,7 @@ function writeWorkbook(projectData) {
     ['Field', 'Value'],
     ['Chart Background Color',         style.chartBackgroundColor],
     ['Header Footer Background Color', style.headerFooterBackgroundColor],
+    ['Header Footer Border Color',     style.headerFooterBorderColor],
     ['Header Footer Text Color',       style.headerFooterTextColor],
     ['Swimlane Label Color',           style.swimlaneLabelColor],
     ['Swimlane Divider Color',         style.swimlaneDividerColor],

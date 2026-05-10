@@ -405,6 +405,8 @@ function renderChart(projectData) {
       }
       headerSvg += `<text x="${n(tx)}" y="${ty}" text-anchor="${anchor}" font-family="'${escapeXml(typography.fontFamily)}'" font-size="${typography.headerFooterFontSize}" fill="${style.headerFooterTextColor}">${escapeXml(titles.headerText)}</text>`;
     }
+    const hBy = hY + titles.headerHeight;
+    headerSvg += `<line x1="${paddingLeft}" y1="${n(hBy)}" x2="${paddingLeft + hW}" y2="${n(hBy)}" stroke="${style.headerFooterBorderColor}" stroke-width="${rendering.headerFooterBorderStrokeWidth}"/>`;
   }
 
   // ── 15. Footer band ──────────────────────────────────────────────────────────
@@ -424,6 +426,7 @@ function renderChart(projectData) {
       }
       footerSvg += `<text x="${n(tx)}" y="${ty}" text-anchor="${anchor}" font-family="'${escapeXml(typography.fontFamily)}'" font-size="${typography.headerFooterFontSize}" fill="${style.headerFooterTextColor}">${escapeXml(titles.footerText)}</text>`;
     }
+    footerSvg += `<line x1="${paddingLeft}" y1="${n(fy)}" x2="${paddingLeft + fW}" y2="${n(fy)}" stroke="${style.headerFooterBorderColor}" stroke-width="${rendering.headerFooterBorderStrokeWidth}"/>`;
   }
 
   // ── <defs>: collect SVG fill patterns (final assembly deferred until after notes pass) ──
