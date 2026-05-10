@@ -712,7 +712,7 @@ function renderChart(projectData) {
     if (note.fillColor || note.borderColor) {
       const fill   = note.fillColor   || 'none';
       const stroke = note.borderColor || 'none';
-      notesSvg += `<rect x="${n(noteX)}" y="${n(noteY)}" width="${n(noteW)}" height="${n(noteH)}" fill="${fill}" stroke="${stroke}" stroke-width="${rendering.noteBorderStrokeWidth}"/>`;
+      notesSvg += `<rect x="${n(noteX)}" y="${n(noteY)}" width="${n(noteW)}" height="${n(noteH)}" rx="${rendering.noteCornerRadius}" fill="${fill}" stroke="${stroke}" stroke-width="${rendering.noteBorderStrokeWidth}"/>`;
     }
 
     const availW = noteW - 2 * rendering.notePadding;

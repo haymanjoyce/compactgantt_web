@@ -185,6 +185,7 @@ Not driven by any Excel sheet — hard-coded defaults only. Defined in `createEm
 | `noteBorderStrokeWidth` | 1 | stroke width for note box border |
 | `notePadding` | 4 | horizontal and vertical inset of note text from note box edges, in px |
 | `noteLineHeightFactor` | 1.2 | line height multiplier for note text (`lineHeight = noteFontSize * noteLineHeightFactor`) |
+| `noteCornerRadius` | 2 | corner radius in px applied as `rx` on the note rect |
 
 ## Link rendering
 
@@ -269,7 +270,7 @@ Partial overflow past task row area boundaries renders as-positioned — no clip
 
 **Skip rules (silent):** note skipped entirely when `text === ""`, `widthPct <= 0`, `heightPct <= 0`, or fully off-chart (`xPct >= 100`, `yPct >= 100`, `xPct + widthPct <= 0`, or `yPct + heightPct <= 0`).
 
-**Optional box:** `<rect>` emitted only when `fillColor` is non-empty OR `borderColor` is non-empty. Fill = `fillColor` if non-empty, else `"none"`; stroke = `borderColor` if non-empty, else `"none"`; stroke-width = `rendering.noteBorderStrokeWidth`. When both are empty, no rect — note is text-only over a transparent area.
+**Optional box:** `<rect>` emitted only when `fillColor` is non-empty OR `borderColor` is non-empty. Fill = `fillColor` if non-empty, else `"none"`; stroke = `borderColor` if non-empty, else `"none"`; stroke-width = `rendering.noteBorderStrokeWidth`; `rx` = `rendering.noteCornerRadius`. When both are empty, no rect — note is text-only over a transparent area.
 
 **Text wrapping.** Available width = `noteW - 2 * rendering.notePadding`; if ≤ 0, text is skipped (rect still emits). Character-width estimate: `fontSize * 0.6` per character. Algorithm: split `text` on `\n` into segments; each segment wraps independently. Empty segments (from consecutive `\n`) produce a blank line. Within each segment, greedy line-fill from whitespace-split tokens. Unbreakable tokens (estimated width > availW) are character-truncated with `…` and emitted as their own line.
 

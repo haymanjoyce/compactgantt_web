@@ -199,6 +199,7 @@ function createEmptyProjectData() {
         noteBorderStrokeWidth:      1,
         notePadding:                4,
         noteLineHeightFactor:       1.2,
+        noteCornerRadius:           2,
       },
     }
   };
