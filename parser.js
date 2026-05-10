@@ -41,6 +41,12 @@ function normalizeTextAlign(val) {
   return ['left', 'center', 'right'].includes(v) ? v : 'center';
 }
 
+function normalizeMilestoneShape(val) {
+  if (!val) return 'diamond';
+  const v = String(val).trim().toLowerCase();
+  return v === 'circle' ? 'circle' : 'diamond';
+}
+
 // ── Entity sheet parser ────────────────────────────────────────────────────────
 // colDefs: { 'Excel Column': { key, def, fallback? }, ... }
 // Tries the primary column name first; falls back to the old name if absent.
@@ -130,8 +136,9 @@ function createEmptyProjectData() {
       bars: {
         taskBarHeightFactor:       0.7,
         milestoneSizeFactor:       0.7,
+        milestoneShape:            'diamond',
+        milestoneCornerRadius:     0,
         taskCornerRadius:          2,
-        milestoneCornerSharpness:  1.0,
       },
       timeline: {
         chartStartDate: null, chartEndDate: null,
@@ -397,10 +404,11 @@ function parseWorkbook(workbook) {
   // ── Config: Bars ───────────────────────────────────────────────────────────
   const barsKV = parseConfigSheet(workbook.Sheets['Bars']);
   projectData.config.bars = {
-    taskBarHeightFactor:       kvFloat(barsKV, 'Task Bar Height Factor',      0.7),
-    milestoneSizeFactor:       kvFloat(barsKV, 'Milestone Size Factor',       0.7),
-    taskCornerRadius:          kvInt(barsKV,   'Task Corner Radius',           2),
-    milestoneCornerSharpness:  kvFloat(barsKV, 'Milestone Corner Sharpness',  1.0),
+    taskBarHeightFactor:       kvFloat(barsKV, 'Task Bar Height Factor',     0.7),
+    milestoneSizeFactor:       kvFloat(barsKV, 'Milestone Size Factor',      0.7),
+    milestoneShape:            normalizeMilestoneShape(kvStr(barsKV, 'Milestone Shape', 'diamond')),
+    milestoneCornerRadius:     kvFloat(barsKV, 'Milestone Corner Radius',    0),
+    taskCornerRadius:          kvInt(barsKV,   'Task Corner Radius',          2),
   };
 
   // ── Config: Timeline ───────────────────────────────────────────────────────

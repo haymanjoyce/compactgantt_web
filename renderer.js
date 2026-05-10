@@ -487,13 +487,26 @@ function renderChart(projectData) {
       const cx   = xFor(task.startDate);
       const cy   = rowCenterY;
       const half = milestoneHalf;
-      const co   = (1 - bars.milestoneCornerSharpness) * half * 0.5523;
-      const aT = n(cy - half), aR = n(cx + half), aB = n(cy + half), aL = n(cx - half);
-      const aCX = n(cx), aCY = n(cy);
-      const xPco = n(cx + co), xMco = n(cx - co);
-      const yPco = n(cy + co), yMco = n(cy - co);
-      const pathD = `M ${aCX},${aT} C ${xPco},${aT} ${aR},${yMco} ${aR},${aCY} C ${aR},${yPco} ${xPco},${aB} ${aCX},${aB} C ${xMco},${aB} ${aL},${yPco} ${aL},${aCY} C ${aL},${yMco} ${xMco},${aT} ${aCX},${aT} Z`;
-      milestonesSvg += `<path d="${pathD}" fill="${color}" stroke="${style.milestoneStrokeColor}" stroke-width="${rendering.milestoneStrokeWidth}"/>`;
+
+      if (bars.milestoneShape === 'circle') {
+        milestonesSvg += `<circle cx="${n(cx)}" cy="${n(cy)}" r="${n(half)}" fill="${color}" stroke="${style.milestoneStrokeColor}" stroke-width="${rendering.milestoneStrokeWidth}"/>`;
+      } else {
+        // Diamond with optional rounded corners. d = corner-shortening distance along each
+        // edge; r = arc radius (= d, since the diamond's interior angles are 90°).
+        const cr = bars.milestoneCornerRadius;
+        const r  = cr * half / Math.SQRT2;
+        const dh = cr * half / 2;             // d / sqrt(2) — projection of d onto x or y axis
+        const a1x = cx + dh,        a1y = cy - half + dh;  // top, shortened toward right
+        const a2x = cx + half - dh, a2y = cy - dh;         // right, shortened toward top
+        const b2x = cx + half - dh, b2y = cy + dh;         // right, shortened toward bottom
+        const a3x = cx + dh,        a3y = cy + half - dh;  // bottom, shortened toward right
+        const b3x = cx - dh,        b3y = cy + half - dh;  // bottom, shortened toward left
+        const a4x = cx - half + dh, a4y = cy + dh;         // left, shortened toward bottom
+        const b4x = cx - half + dh, b4y = cy - dh;         // left, shortened toward top
+        const c1x = cx - dh,        c1y = cy - half + dh;  // top, shortened toward left
+        const pathD = `M ${n(a1x)},${n(a1y)} L ${n(a2x)},${n(a2y)} A ${n(r)} ${n(r)} 0 0 1 ${n(b2x)},${n(b2y)} L ${n(a3x)},${n(a3y)} A ${n(r)} ${n(r)} 0 0 1 ${n(b3x)},${n(b3y)} L ${n(a4x)},${n(a4y)} A ${n(r)} ${n(r)} 0 0 1 ${n(b4x)},${n(b4y)} L ${n(c1x)},${n(c1y)} A ${n(r)} ${n(r)} 0 0 1 ${n(a1x)},${n(a1y)} Z`;
+        milestonesSvg += `<path d="${pathD}" fill="${color}" stroke="${style.milestoneStrokeColor}" stroke-width="${rendering.milestoneStrokeWidth}"/>`;
+      }
 
       taskGeom.set(task.id, {
         absRow,

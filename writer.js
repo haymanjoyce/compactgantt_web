@@ -82,10 +82,11 @@ function writeWorkbook(projectData) {
   // ── 8. Bars ───────────────────────────────────────────────────────────────────
   addSheet('Bars', [
     ['Field', 'Value'],
-    ['Task Bar Height Factor',     bars.taskBarHeightFactor],
-    ['Milestone Size Factor',      bars.milestoneSizeFactor],
-    ['Task Corner Radius',         bars.taskCornerRadius],
-    ['Milestone Corner Sharpness', bars.milestoneCornerSharpness],
+    ['Task Bar Height Factor',  bars.taskBarHeightFactor],
+    ['Milestone Size Factor',   bars.milestoneSizeFactor],
+    ['Milestone Shape',         bars.milestoneShape],
+    ['Milestone Corner Radius', bars.milestoneCornerRadius],
+    ['Task Corner Radius',      bars.taskCornerRadius],
   ]);
 
   // ── 9. Timeline ───────────────────────────────────────────────────────────────
