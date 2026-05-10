@@ -4,14 +4,17 @@ let projectData = createEmptyProjectData();
 let loadedFilename = null;
 
 // ── Table renderers ────────────────────────────────────────────────────────────
-function renderEntityTable(container, data) {
+function renderEntityTable(container, data, derivedKeys = []) {
   if (!data || !data.length) {
     container.innerHTML = '<p><em>No data</em></p>';
     return;
   }
   const keys = Object.keys(data[0]);
   let html = '<table><thead><tr>';
-  keys.forEach(k => { html += `<th>${k}</th>`; });
+  keys.forEach(k => {
+    const label = derivedKeys.includes(k) ? `${k} (derived)` : k;
+    html += `<th>${label}</th>`;
+  });
   html += '</tr></thead><tbody>';
   data.forEach(row => {
     html += '<tr>';
@@ -41,26 +44,76 @@ function renderConfigTable(container, config) {
 
 // ── Tab switching ──────────────────────────────────────────────────────────────
 function activateTab(name) {
-  const showData = name === 'data';
-  document.getElementById('dataPanel').style.display  = showData ? '' : 'none';
-  document.getElementById('chartPanel').style.display = showData ? 'none' : '';
-  document.getElementById('tabData').classList.toggle('active',  showData);
-  document.getElementById('tabChart').classList.toggle('active', !showData);
+  ['data', 'chart', 'inspector'].forEach(n => {
+    document.getElementById(n + 'Panel').style.display = n === name ? '' : 'none';
+    document.getElementById('tab' + n.charAt(0).toUpperCase() + n.slice(1)).classList.toggle('active', n === name);
+  });
 
-  if (!showData) {
+  if (name === 'chart') {
     const panel = document.getElementById('chartPanel');
-    if (projectData.tasks.length === 0) {
-      panel.innerHTML = '<p>No project loaded</p>';
-    } else {
-      panel.innerHTML = renderChart(projectData);
-    }
+    panel.innerHTML = projectData.tasks.length === 0
+      ? '<p>No project loaded</p>'
+      : renderChart(projectData);
   }
+
+  if (name === 'inspector') {
+    renderInspector(document.getElementById('inspectorPanel'));
+  }
+}
+
+// ── Inspector renderer ─────────────────────────────────────────────────────────
+function renderInspector(panel) {
+  const d = projectData;
+  panel.innerHTML = '';
+
+  function appendSection(path, sourceLabel, renderFn) {
+    const h2 = document.createElement('h2');
+    h2.textContent = `${path} — ${sourceLabel}`;
+    panel.appendChild(h2);
+    const div = document.createElement('div');
+    panel.appendChild(div);
+    renderFn(div);
+  }
+
+  appendSection('tasks',     'from Tasks sheet',     div => renderEntityTable(div, d.tasks,     ['isMilestone']));
+  appendSection('swimlanes', 'from Swimlanes sheet',  div => renderEntityTable(div, d.swimlanes, ['order']));
+  appendSection('links',     'from Links sheet',      div => renderEntityTable(div, d.links));
+  appendSection('pipes',     'from Pipes sheet',      div => renderEntityTable(div, d.pipes));
+  appendSection('curtains',  'from Curtains sheet',   div => renderEntityTable(div, d.curtains));
+  appendSection('notes',     'from Notes sheet',      div => renderEntityTable(div, d.notes));
+
+  appendSection('config.layout',      'from Layout sheet',     div => renderConfigTable(div, d.config.layout));
+  appendSection('config.bars',        'from Bars sheet',       div => renderConfigTable(div, d.config.bars));
+  appendSection('config.timeline',    'from Timeline sheet',   div => renderConfigTable(div, d.config.timeline));
+  appendSection('config.titles',      'from Titles sheet',     div => renderConfigTable(div, d.config.titles));
+  appendSection('config.style',       'from Style sheet',      div => renderConfigTable(div, d.config.style));
+  appendSection('config.typography',  'from Typography sheet', div => renderConfigTable(div, d.config.typography));
+  appendSection('config.preferences', 'from Preferences sheet',div => renderConfigTable(div, d.config.preferences));
+  appendSection('config.rendering',   'not in Excel',          div => renderConfigTable(div, d.config.rendering));
+
+  const FIXED = new Set(['tasks', 'swimlanes', 'links', 'pipes', 'curtains', 'notes', 'config']);
+  Object.keys(d).forEach(key => {
+    if (FIXED.has(key)) return;
+    const val = d[key];
+    appendSection(key, 'diagnostic', div => {
+      if (Array.isArray(val)) {
+        renderEntityTable(div, val);
+      } else if (val !== null && typeof val === 'object') {
+        renderConfigTable(div, val);
+      } else if (val === null || typeof val === 'string' || typeof val === 'number' || typeof val === 'boolean') {
+        div.innerHTML = `<table><tbody><tr><td>${val != null ? String(val) : ''}</td></tr></tbody></table>`;
+      } else {
+        div.innerHTML = `<table><tbody><tr><td>${JSON.stringify(val)}</td></tr></tbody></table>`;
+      }
+    });
+  });
 }
 
 // ── Public entry point ─────────────────────────────────────────────────────────
 function initUI() {
-  document.getElementById('tabData').addEventListener('click',  () => activateTab('data'));
-  document.getElementById('tabChart').addEventListener('click', () => activateTab('chart'));
+  document.getElementById('tabData').addEventListener('click',      () => activateTab('data'));
+  document.getElementById('tabChart').addEventListener('click',     () => activateTab('chart'));
+  document.getElementById('tabInspector').addEventListener('click', () => activateTab('inspector'));
 
   document.getElementById('fileInput').addEventListener('change', function(e) {
     const file = e.target.files[0];

@@ -288,7 +288,11 @@ Partial overflow past task row area boundaries renders as-positioned — no clip
 
 ## Current UI
 
-Two-tab layout: **Data** tab shows debug tables (one per entity type + eight config KV tables); **Chart** tab calls `renderChart(projectData)` on every activation and injects the SVG into a horizontally-scrollable container. "No project loaded" shown if tasks array is empty when Chart tab is opened.
+Three-tab layout: **Data** tab shows curated debug tables (one per entity type + eight config KV tables), updated on file load; **Chart** tab calls `renderChart(projectData)` on every activation and injects the SVG into a horizontally-scrollable container ("No project loaded" shown if tasks array is empty); **Inspector** tab renders every field of `projectData` as flat tables on every activation — exhaustive, read-only, developer-facing, always reflects current state including defaults before any file is loaded.
+
+**ui.js helpers:** `renderEntityTable(container, data, derivedKeys = [])` — the optional third argument lists keys whose column headers should be suffixed with ` (derived)` in the Inspector. Currently `['isMilestone']` for tasks and `['order']` for swimlanes; extend this list when new derived fields are added. `renderConfigTable(container, config)` renders a two-column key/value table. Both helpers are shared by the Data tab (no `derivedKeys` passed) and the Inspector.
+
+**Inspector dynamic walk:** `renderInspector` skips the seven fixed top-level keys (`tasks`, `swimlanes`, `links`, `pipes`, `curtains`, `notes`, `config`) and renders any remaining keys (e.g. future `_parseNotices`) as "diagnostic" sections. Array-of-objects → entity table; plain object → key-value table; primitive → single-cell table; anything else → `JSON.stringify` fallback.
 
 Toolbar buttons (left to right): file input → **Save** (xlsx) → **Save SVG**. Both Save buttons share the same disabled gate (`tasks.length === 0 && swimlanes.length === 0`) toggled in the file-load handler. The Save SVG button calls `renderChart(projectData)` directly regardless of which tab is active, wraps the result in a `Blob('image/svg+xml')`, and downloads via `URL.createObjectURL`. Filename: loaded filename with last extension replaced by `.svg` (e.g. `report.final.xlsx` → `report.final.svg`); defaults to `"compactgantt_chart.svg"` if no file is loaded.
 

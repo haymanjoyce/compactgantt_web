@@ -34,6 +34,7 @@
   <div class="tabs">
     <button class="tab active" id="tabData">Data</button>
     <button class="tab"        id="tabChart">Chart</button>
+    <button class="tab"        id="tabInspector">Inspector</button>
   </div>
 
   <div id="dataPanel">
@@ -50,12 +51,14 @@
     <h2>Config: Style</h2>       <div id="configStyleContainer"></div>
     <h2>Config: Typography</h2>  <div id="configTypographyContainer"></div>
     <h2>Config: Preferences</h2> <div id="configPreferencesContainer"></div>
-    <h2>Config: Rendering</h2>  <div id="configRenderingContainer"></div>
+    <h2>Config: Rendering</h2>   <div id="configRenderingContainer"></div>
   </div>
 
   <div id="chartPanel" style="display:none;">
-    <p id="chartMessage">No project loaded</p>
+    <p>No project loaded</p>
   </div>
+
+  <div id="inspectorPanel" style="display:none;"></div>
 
   <script>initUI();</script>
 
