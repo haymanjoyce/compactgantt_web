@@ -137,7 +137,7 @@ function createEmptyProjectData() {
         chartStartDate: null, chartEndDate: null,
         chartStartDateExplicit: false, chartEndDateExplicit: false,
         showYears: true, showMonths: true, showWeeks: false, showDays: false, showDates: false,
-        gridlineYears: true, gridlineMonths: true, gridlineWeeks: false, gridlineDays: false, gridlineDates: false,
+        gridlineYears: true, gridlineMonths: true, gridlineWeeks: false, gridlineDays: false,
       },
       titles: {
         headerHeight: 20, headerText: '', headerTextAlign: 'center',
@@ -430,7 +430,6 @@ function parseWorkbook(workbook) {
     gridlineMonths: kvBool(timelineKV, 'Gridline Months', true,  'Vertical Gridline Months'),
     gridlineWeeks:  kvBool(timelineKV, 'Gridline Weeks',  false, 'Vertical Gridline Weeks'),
     gridlineDays:   kvBool(timelineKV, 'Gridline Days',   false),
-    gridlineDates:  kvBool(timelineKV, 'Gridline Dates',  false),
   };
 
   // ── Config: Titles ─────────────────────────────────────────────────────────

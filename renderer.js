@@ -68,7 +68,7 @@ function renderChart(projectData) {
     { key: 'years',  show: timeline.showYears,  gridline: timeline.gridlineYears  },
     { key: 'months', show: timeline.showMonths, gridline: timeline.gridlineMonths },
     { key: 'weeks',  show: timeline.showWeeks,  gridline: timeline.gridlineWeeks  },
-    { key: 'dates',  show: timeline.showDates,  gridline: timeline.gridlineDates  },
+    { key: 'dates',  show: timeline.showDates                                     },
     { key: 'days',   show: timeline.showDays,   gridline: timeline.gridlineDays   },
   ].filter(s => s.show);
 
@@ -207,18 +207,6 @@ function renderChart(projectData) {
     while (true) {
       gddt.setDate(gddt.getDate() + 1);
       const ds = dtIso(gddt);
-      if (ds >= chartEndDate) break;
-      gridlines += vLine(xFor(ds));
-    }
-  }
-
-  // Date gridlines: same boundaries as day gridlines
-  if (timeline.gridlineDates) {
-    const [gny, gnm, gnd] = chartStartDate.split('-').map(Number);
-    const gndt = new Date(gny, gnm - 1, gnd);
-    while (true) {
-      gndt.setDate(gndt.getDate() + 1);
-      const ds = dtIso(gndt);
       if (ds >= chartEndDate) break;
       gridlines += vLine(xFor(ds));
     }

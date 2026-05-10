@@ -105,7 +105,6 @@ function writeWorkbook(projectData) {
     ['Gridline Months', boolStr(timeline.gridlineMonths)],
     ['Gridline Weeks',  boolStr(timeline.gridlineWeeks)],
     ['Gridline Days',   boolStr(timeline.gridlineDays)],
-    ['Gridline Dates',  boolStr(timeline.gridlineDates)],
   ]);
 
   // ── 10. Titles ────────────────────────────────────────────────────────────────

@@ -112,7 +112,7 @@ Config sheet key names are confirmed. The `kv*` helpers (`kvStr/kvInt/kvFloat/kv
 
 - **Layout** — padding keys: `"Padding Top/Right/Bottom/Left"` → `"Margin Top/Right/Bottom/Left"`
 - **Style** — 11 existing keys: `"… Color"` → `"… Colour"` (the newer `insideLabelTextColor`, `noteTextColor`, `headerFooterTextColor`, and `scaleLabelTextColor` have no old-format fallback). Exception: `outsideLabelLineColor` was renamed to `leaderLineColor`; its Excel column is now `"Leader Line Color"` with fallback `"Outside Label Line Color"` (British-spelling fallback `"Outside Label Line Colour"` dropped — files using it get the `"black"` default).
-- **Timeline** — gridline keys for years/months/weeks: `"Gridline X"` → `"Vertical Gridline X"`; the four days/dates keys (`"Show Days"`, `"Show Dates"`, `"Gridline Days"`, `"Gridline Dates"`) have no old-format fallback
+- **Timeline** — gridline keys for years/months/weeks: `"Gridline X"` → `"Vertical Gridline X"`; the three days/dates keys (`"Show Days"`, `"Show Dates"`, `"Gridline Days"`) have no old-format fallback. Note schema asymmetry: five `show*` fields (years, months, weeks, days, dates) but only four `gridline*` fields (years, months, weeks, days) — days and dates share calendar-day boundary granularity, so a single `gridlineDays` covers both.
 - **Typography** — alignment factors: `"X Alignment Factor"` → `"X Vertical Alignment Factor"`; also `"Header Footer Font Size"` → `"Header & Footer Font Size"`; `"Pipe Font Size"` and `"Curtain Font Size"` have no old-format fallback
 
 ## Derived fields
