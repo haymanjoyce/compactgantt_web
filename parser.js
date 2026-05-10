@@ -35,6 +35,12 @@ function normalizeLabelPosition(val) {
   return ['top-right', 'top-left', 'bottom-right', 'bottom-left'].includes(v) ? v : 'top-right';
 }
 
+function normalizeTextAlign(val) {
+  if (!val) return 'center';
+  const v = String(val).trim().toLowerCase();
+  return ['left', 'center', 'right'].includes(v) ? v : 'center';
+}
+
 // ── Entity sheet parser ────────────────────────────────────────────────────────
 // colDefs: { 'Excel Column': { key, def, fallback? }, ... }
 // Tries the primary column name first; falls back to the old name if absent.
@@ -134,8 +140,8 @@ function createEmptyProjectData() {
         gridlineYears: true, gridlineMonths: true, gridlineWeeks: false, gridlineDays: false, gridlineDates: false,
       },
       titles: {
-        headerHeight: 20, headerText: '',
-        footerHeight: 20, footerText: '',
+        headerHeight: 20, headerText: '', headerTextAlign: 'center',
+        footerHeight: 20, footerText: '', footerTextAlign: 'center',
       },
       style: {
         chartBackgroundColor:        'white',
@@ -183,6 +189,7 @@ function createEmptyProjectData() {
         scaleFontToBandHeightFactor: 2.5,
         charWidthFactor:            0.6,
         monthLetters:               ['J','F','M','A','M','J','J','A','S','O','N','D'],
+        headerFooterTextPadding:    4,
         gridlineStrokeWidth:        0.5,
         scaleTickStrokeWidth:       0.5,
         taskStrokeWidth:            0.5,
@@ -429,10 +436,12 @@ function parseWorkbook(workbook) {
   // ── Config: Titles ─────────────────────────────────────────────────────────
   const titlesKV = parseConfigSheet(workbook.Sheets['Titles']);
   projectData.config.titles = {
-    headerHeight: kvInt(titlesKV, 'Header Height', 20),
-    headerText:   kvStr(titlesKV, 'Header Text',   ''),
-    footerHeight: kvInt(titlesKV, 'Footer Height', 20),
-    footerText:   kvStr(titlesKV, 'Footer Text',   ''),
+    headerHeight:    kvInt(titlesKV, 'Header Height',     20),
+    headerText:      kvStr(titlesKV, 'Header Text',       ''),
+    headerTextAlign: normalizeTextAlign(kvStr(titlesKV, 'Header Text Align', 'center')),
+    footerHeight:    kvInt(titlesKV, 'Footer Height',     20),
+    footerText:      kvStr(titlesKV, 'Footer Text',       ''),
+    footerTextAlign: normalizeTextAlign(kvStr(titlesKV, 'Footer Text Align', 'center')),
   };
 
   // ── Config: Style ──────────────────────────────────────────────────────────

@@ -111,10 +111,12 @@ function writeWorkbook(projectData) {
   // ── 10. Titles ────────────────────────────────────────────────────────────────
   addSheet('Titles', [
     ['Field', 'Value'],
-    ['Header Height', titles.headerHeight],
-    ['Header Text',   titles.headerText],
-    ['Footer Height', titles.footerHeight],
-    ['Footer Text',   titles.footerText],
+    ['Header Height',     titles.headerHeight],
+    ['Header Text',       titles.headerText],
+    ['Header Text Align', titles.headerTextAlign],
+    ['Footer Height',     titles.footerHeight],
+    ['Footer Text',       titles.footerText],
+    ['Footer Text Align', titles.footerTextAlign],
   ]);
 
   // ── 11. Style ─────────────────────────────────────────────────────────────────

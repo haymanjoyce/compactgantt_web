@@ -132,6 +132,7 @@ Config sheet key names are confirmed. The `kv*` helpers (`kvStr/kvInt/kvFloat/kv
 - **Render order (painter's algorithm, 15 slots):** (1) chart background → (2) swimlane backgrounds → (3) curtain tinted rectangles → (4) gridlines → (5) scale bands → (6) swimlane dividers → (7) pipes + curtain boundary lines/badges → (8) link bodies → (9) task bars → (10) milestones → (11) link heads → (12) task labels → (13) swimlane labels → (14) notes → (15) header/footer. Header/footer paint last so they frame the chart regardless of unusual layout dimensions.
 - **Color handling:** all color values are passed directly from `projectData` to SVG `fill`/`stroke` attributes without validation. Invalid CSS color names render as SVG's default (black). Validation is moving to a separate module — the renderer trusts its input.
 - **Swimlane labels:** `swimlaneTopAlignmentFactor` for top variants, `swimlaneBottomAlignmentFactor` for bottom variants
+- **Header/footer text alignment:** per-band via `titles.headerTextAlign` / `titles.footerTextAlign` (`left` / `center` / `right`). `left` → `x = paddingLeft + rendering.headerFooterTextPadding`, `text-anchor="start"`; `right` → `x = paddingLeft + bandWidth - rendering.headerFooterTextPadding`, `text-anchor="end"`; `center` → `x = paddingLeft + bandWidth / 2`, `text-anchor="middle"`. Vertical positioning unchanged (`typography.headerFooterAlignmentFactor`). The renderer trusts the parser's normalisation and uses a clean `if/else if/else`.
 - **`daysBetween(a, b)`:** uses `Date.UTC()` — timezone-safe, no `toISOString()`
 - **Milestones:** SVG `<path>` of four cubic Béziers centred on `startDate`; anchors at cardinal tips; `controlOffset = (1 - milestoneCornerSharpness) * milestoneHalf * 0.5523` — sharpness 1.0 degenerates to a straight-line diamond, 0.0 approximates a circle. Bars: `<rect rx="${bars.taskCornerRadius}">`
 - **Task bar pattern fills:** `task.fillPattern` drives SVG `<pattern>` elements in the shared `<defs>` block (see Notes rendering for combined-defs design). `"solid"` (or any unrecognised value) → `fill="${fillColor}"` unchanged. The five named patterns (`hatch`, `cross-hatch`, `horizontal`, `vertical`, `dots`) → `fill="url(#id)"` referencing a deduplicated `<pattern>` keyed by sanitised `(fillPattern, fillColor, patternColor)` triple. Patterns use `patternUnits="userSpaceOnUse"` with no `x`/`y` — tiles anchor at SVG origin so bars on the same row share a continuous-field phase. Milestones are always solid; their `fillPattern` is not consumed by the renderer.
@@ -153,6 +154,19 @@ Driven by the "Bars" Excel config sheet. Parsed via `parseConfigSheet` / `kvFloa
 | `taskCornerRadius` | 2 | `Task Corner Radius` |
 | `milestoneCornerSharpness` | 1.0 | `Milestone Corner Sharpness` |
 
+## config.titles
+
+Driven by the "Titles" Excel config sheet. Parsed via `parseConfigSheet` / `kvStr` / `kvInt`. No old-format fallbacks. Missing sheet or absent key silently falls back to the default. `headerTextAlign` and `footerTextAlign` are normalised via `normalizeTextAlign` (lowercase + trim, coerced to one of `left` / `center` / `right`; anything else → `center`).
+
+| Key | Default | Excel column name |
+|---|---|---|
+| `headerHeight` | 20 | `Header Height` |
+| `headerText` | `""` | `Header Text` |
+| `headerTextAlign` | `"center"` | `Header Text Align` (enum: `left` / `center` / `right`) |
+| `footerHeight` | 20 | `Footer Height` |
+| `footerText` | `""` | `Footer Text` |
+| `footerTextAlign` | `"center"` | `Footer Text Align` (enum: `left` / `center` / `right`) |
+
 ## config.rendering
 
 Not driven by any Excel sheet — hard-coded defaults only. Defined in `createEmptyProjectData()` alongside all other config defaults. `parseWorkbook` does not touch `config.rendering`; every reload gets a fresh object from `createEmptyProjectData()`.
@@ -168,6 +182,7 @@ Not driven by any Excel sheet — hard-coded defaults only. Defined in `createEm
 | `scaleFontToBandHeightFactor` | 2.5 | scale band height multiplier on `typography.scaleFontSize`; used as the second argument to `Math.max(rendering.minScaleBandHeight, scaleFontSize * factor)` |
 | `charWidthFactor` | 0.6 | sans-serif character-width estimate as a fraction of `fontSize`; used wherever the renderer measures text width without real font metrics (truncation, scale days band, pipe/curtain badges, note wrapping) |
 | `monthLetters` | `['J','F','M','A','M','J','J','A','S','O','N','D']` | twelve single-letter month labels for the months scale band, indexed by `month - 1` |
+| `headerFooterTextPadding` | 4 | horizontal inset in px from the header/footer band edge to the text, applied for `left` and `right` alignments only (centered text uses band centre) |
 | `gridlineStrokeWidth` | 0.5 | vertical gridline stroke width |
 | `scaleTickStrokeWidth` | 0.5 | scale band tick and bottom-border stroke width |
 | `taskStrokeWidth` | 0.5 | task bar outline stroke width |

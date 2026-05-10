@@ -407,7 +407,15 @@ function renderChart(projectData) {
     headerSvg += `<rect x="${paddingLeft}" y="${hY}" width="${hW}" height="${titles.headerHeight}" fill="${style.headerFooterBackgroundColor}"/>`;
     if (titles.headerText) {
       const ty = n(hY + titles.headerHeight * typography.headerFooterAlignmentFactor);
-      headerSvg += `<text x="${n(paddingLeft + hW / 2)}" y="${ty}" text-anchor="middle" font-family="'${escapeXml(typography.fontFamily)}'" font-size="${typography.headerFooterFontSize}" fill="${style.headerFooterTextColor}">${escapeXml(titles.headerText)}</text>`;
+      let tx, anchor;
+      if (titles.headerTextAlign === 'left') {
+        tx = paddingLeft + rendering.headerFooterTextPadding;            anchor = 'start';
+      } else if (titles.headerTextAlign === 'right') {
+        tx = paddingLeft + hW - rendering.headerFooterTextPadding;       anchor = 'end';
+      } else {
+        tx = paddingLeft + hW / 2;                                       anchor = 'middle';
+      }
+      headerSvg += `<text x="${n(tx)}" y="${ty}" text-anchor="${anchor}" font-family="'${escapeXml(typography.fontFamily)}'" font-size="${typography.headerFooterFontSize}" fill="${style.headerFooterTextColor}">${escapeXml(titles.headerText)}</text>`;
     }
   }
 
@@ -418,7 +426,15 @@ function renderChart(projectData) {
     footerSvg += `<rect x="${paddingLeft}" y="${fy}" width="${fW}" height="${titles.footerHeight}" fill="${style.headerFooterBackgroundColor}"/>`;
     if (titles.footerText) {
       const ty = n(fy + titles.footerHeight * typography.headerFooterAlignmentFactor);
-      footerSvg += `<text x="${n(paddingLeft + fW / 2)}" y="${ty}" text-anchor="middle" font-family="'${escapeXml(typography.fontFamily)}'" font-size="${typography.headerFooterFontSize}" fill="${style.headerFooterTextColor}">${escapeXml(titles.footerText)}</text>`;
+      let tx, anchor;
+      if (titles.footerTextAlign === 'left') {
+        tx = paddingLeft + rendering.headerFooterTextPadding;            anchor = 'start';
+      } else if (titles.footerTextAlign === 'right') {
+        tx = paddingLeft + fW - rendering.headerFooterTextPadding;       anchor = 'end';
+      } else {
+        tx = paddingLeft + fW / 2;                                       anchor = 'middle';
+      }
+      footerSvg += `<text x="${n(tx)}" y="${ty}" text-anchor="${anchor}" font-family="'${escapeXml(typography.fontFamily)}'" font-size="${typography.headerFooterFontSize}" fill="${style.headerFooterTextColor}">${escapeXml(titles.footerText)}</text>`;
     }
   }
 
