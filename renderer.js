@@ -68,8 +68,8 @@ function renderChart(projectData) {
     { key: 'years',  show: timeline.showYears,  gridline: timeline.gridlineYears  },
     { key: 'months', show: timeline.showMonths, gridline: timeline.gridlineMonths },
     { key: 'weeks',  show: timeline.showWeeks,  gridline: timeline.gridlineWeeks  },
-    { key: 'days',   show: timeline.showDays,   gridline: timeline.gridlineDays   },
     { key: 'dates',  show: timeline.showDates,  gridline: timeline.gridlineDates  },
+    { key: 'days',   show: timeline.showDays,   gridline: timeline.gridlineDays   },
   ].filter(s => s.show);
 
   const bandH       = Math.max(rendering.minScaleBandHeight, typography.scaleFontSize * 2.5);
