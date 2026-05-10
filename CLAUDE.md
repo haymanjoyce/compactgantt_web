@@ -111,7 +111,7 @@ It is initialised at startup by calling `createEmptyProjectData()` (exported fro
 Config sheet key names are confirmed. The `kv*` helpers (`kvStr/kvInt/kvFloat/kvBool/kvDate`) each accept an optional `fallback` key — same try-new-first pattern as entity column fallbacks. Known config key renames (new → old fallback):
 
 - **Layout** — padding keys: `"Padding Top/Right/Bottom/Left"` → `"Margin Top/Right/Bottom/Left"`
-- **Style** — 11 existing keys: `"… Color"` → `"… Colour"` (the newer `insideLabelTextColor` has no old-format fallback). Exception: `outsideLabelLineColor` was renamed to `leaderLineColor`; its Excel column is now `"Leader Line Color"` with fallback `"Outside Label Line Color"` (British-spelling fallback `"Outside Label Line Colour"` dropped — files using it get the `"black"` default).
+- **Style** — 11 existing keys: `"… Color"` → `"… Colour"` (the newer `insideLabelTextColor`, `noteTextColor`, `headerFooterTextColor`, and `scaleLabelTextColor` have no old-format fallback). Exception: `outsideLabelLineColor` was renamed to `leaderLineColor`; its Excel column is now `"Leader Line Color"` with fallback `"Outside Label Line Color"` (British-spelling fallback `"Outside Label Line Colour"` dropped — files using it get the `"black"` default).
 - **Timeline** — gridline keys for years/months/weeks: `"Gridline X"` → `"Vertical Gridline X"`; the four days/dates keys (`"Show Days"`, `"Show Dates"`, `"Gridline Days"`, `"Gridline Dates"`) have no old-format fallback
 - **Typography** — alignment factors: `"X Alignment Factor"` → `"X Vertical Alignment Factor"`; also `"Header Footer Font Size"` → `"Header & Footer Font Size"`; `"Pipe Font Size"` and `"Curtain Font Size"` have no old-format fallback
 
@@ -126,8 +126,9 @@ Config sheet key names are confirmed. The `kv*` helpers (`kvStr/kvInt/kvFloat/kv
 `renderChart(projectData)` returns a raw SVG string. Key design rules:
 
 - **Coordinate areas:** `innerX1 = paddingLeft`; `innerX2 = outerWidth - paddingRight`; `taskRowY1 = paddingTop + headerHeight + scaleTotalHeight`; `taskRowY2 = outerHeight - paddingBottom - footerHeight`
-- **Scale band height:** `max(rendering.minScaleBandHeight, scaleFontSize * 2.5)` per visible scale; total = count × bandHeight
-- **Five scale bands** (top-to-bottom): years, months, weeks (ISO `"W03"`), dates (numeric day-of-month), days (named: Monday/Mon/M). Hidden bands occupy no space. Named-day cells degrade width-adaptively through full→short→letter→empty using `fontSize * 0.6` per character — the standard ≥20 px label gate does not apply to the days band.
+- **Scale band height:** `max(rendering.minScaleBandHeight, scaleFontSize * rendering.scaleFontToBandHeightFactor)` per visible scale; total = count × bandHeight
+- **Five scale bands** (top-to-bottom): years, months, weeks (ISO `"W03"`), dates (numeric day-of-month), days (named: Monday/Mon/M). Hidden bands occupy no space. Months band reads its single-letter labels from `rendering.monthLetters` (12 entries indexed by `month - 1`). Named-day cells degrade width-adaptively through full→short→letter→empty using `fontSize * rendering.charWidthFactor` per character — the standard `rendering.scaleMinLabelWidth` (default 20 px) label gate applies to years/months/weeks/dates only, not to the days band.
+- **Swimlane backgrounds:** `<rect>` fill = `swimlane.backgroundColor` (no renderer-side fallback — the parser supplies the default `"white"`).
 - **Render order (painter's algorithm, 15 slots):** (1) chart background → (2) swimlane backgrounds → (3) curtain tinted rectangles → (4) gridlines → (5) scale bands → (6) swimlane dividers → (7) pipes + curtain boundary lines/badges → (8) link bodies → (9) task bars → (10) milestones → (11) link heads → (12) task labels → (13) swimlane labels → (14) notes → (15) header/footer. Header/footer paint last so they frame the chart regardless of unusual layout dimensions.
 - **Color handling:** all color values are passed directly from `projectData` to SVG `fill`/`stroke` attributes without validation. Invalid CSS color names render as SVG's default (black). Validation is moving to a separate module — the renderer trusts its input.
 - **Swimlane labels:** `swimlaneTopAlignmentFactor` for top variants, `swimlaneBottomAlignmentFactor` for bottom variants
@@ -137,7 +138,7 @@ Config sheet key names are confirmed. The `kv*` helpers (`kvStr/kvInt/kvFloat/kv
 - **Skip rules:** orphaned tasks, `finishDate < startDate`, tasks outside chart date range all silently skipped; out-of-range `row` clamped to 1
 - **Milestone labels:** the renderer's milestone branch always renders labels outside unconditionally, without reading `task.labelPlacement`. The parser does not override the stored placement value — milestones retain whatever placement the user set.
 - **Task labels (slot 12):** built from `task.labelContent` (`none`/`name`/`date`/`name_and_date`) with date-fns formatting. Per-task `task.dateFormat` overrides `config.preferences.chartDateFormat`. Dates parsed timezone-safely: split YYYY-MM-DD on `-` then `new Date(y, m-1, d)`. Inside label fill: `config.style.insideLabelTextColor`; outside label fill: `config.style.outsideLabelTextColor`.
-  - *Inside labels* (bars only): truncated via character-width estimate (`fontSize * 0.6` per character, sans-serif approximation). Prefers word-boundary break; falls back to character truncation; emits nothing if `…` alone exceeds available width. Available width = `barWidth - 2 * rendering.insideLabelPadding`.
+  - *Inside labels* (bars only): truncated via character-width estimate (`fontSize * rendering.charWidthFactor` per character, sans-serif approximation). Prefers word-boundary break; falls back to character truncation; emits nothing if `…` alone exceeds available width. Available width = `barWidth - 2 * rendering.insideLabelPadding`.
   - *Outside labels*: no truncation. `x = rightEdge + outsideLabelKissingGap + task.labelOffset`; right edge = `xFor(finishDate)` for bars, `xFor(startDate) + milestoneHalf` for milestones. The kiss gap keeps labels clear of the bar edge even at zero offset.
   - *Leader lines*: horizontal `<line>` at row centre y, from `rightEdge` to `rightEdge + labelOffset` (spans exactly `labelOffset` px, with `outsideLabelKissingGap` clear between line end and label). Drawn when `labelOffset > 0`; for bars also requires `labelPlacement === 'outside'`. Stroke: `style.leaderLineColor` / `rendering.leaderLineStrokeWidth`. Emitted immediately before each task's `<text>` element inside slot 12 (interleaved per task, no separate pass). No clip — may overflow into right padding.
 
@@ -163,6 +164,10 @@ Not driven by any Excel sheet — hard-coded defaults only. Defined in `createEm
 | `linkArrowheadMilestoneGap` | 2 | gap in px between arrowhead tip and milestone perimeter on milestone successors |
 | `swimlaneLabelPadding` | 4 | label inset from chart edge in px |
 | `minScaleBandHeight` | 20 | floor for scale band height in px |
+| `scaleMinLabelWidth` | 20 | minimum cell width in px for a scale-band label to render (years/months/weeks/dates only — days band is width-adaptive) |
+| `scaleFontToBandHeightFactor` | 2.5 | scale band height multiplier on `typography.scaleFontSize`; used as the second argument to `Math.max(rendering.minScaleBandHeight, scaleFontSize * factor)` |
+| `charWidthFactor` | 0.6 | sans-serif character-width estimate as a fraction of `fontSize`; used wherever the renderer measures text width without real font metrics (truncation, scale days band, pipe/curtain badges, note wrapping) |
+| `monthLetters` | `['J','F','M','A','M','J','J','A','S','O','N','D']` | twelve single-letter month labels for the months scale band, indexed by `month - 1` |
 | `gridlineStrokeWidth` | 0.5 | vertical gridline stroke width |
 | `scaleTickStrokeWidth` | 0.5 | scale band tick and bottom-border stroke width |
 | `taskStrokeWidth` | 0.5 | task bar outline stroke width |
@@ -228,7 +233,7 @@ Pipes are vertical reference lines drawn at a given date with an optional text b
 **Line:** `<line>` from `(x, taskRowY1)` to `(x, taskRowY2)` where `x = xFor(pipe.date)`. stroke-dasharray: solid → none, dashed → `"4 3"`, dotted → `"1 2"`. Stroke color = `pipe.color`, stroke-width = `rendering.pipeStrokeWidth`.
 
 **Badge** (emitted only when `pipe.name` is non-empty):
-- Text width estimated as `typography.pipeFontSize * 0.6 * pipe.name.length`
+- Text width estimated as `typography.pipeFontSize * rendering.charWidthFactor * pipe.name.length`
 - `badgeW = textWidth + 2 * rendering.pipeBadgePaddingX`; `badgeH = pipeFontSize + 2 * rendering.pipeBadgePaddingY`
 - `badgeTopY = taskRowY1 + (1 - pipe.labelPosition) * (taskRowAreaH - badgeH)` — `labelPosition = 1` pins badge to top, `0` to bottom
 - Badge left edge abuts the pipe line at `x`; badge may overflow past `innerX2` (no clipping)
@@ -249,7 +254,7 @@ Curtains are tinted vertical bands over a date range with optional boundary line
 
 **Slot 7 — badge** (emitted only when `curtain.name` is non-empty):
 - Anchor x = `xFor(startDate)` when `curtain.labelAnchor !== 'end'`, else `xFor(endDate)`; badge skipped if anchor x is outside `[innerX1, innerX2]`
-- Text width estimated as `curtainFontSize * 0.6 * curtain.name.length`; `badgeW = textWidth + 2 * curtainBadgePaddingX`; `badgeH = curtainFontSize + 2 * curtainBadgePaddingY`
+- Text width estimated as `curtainFontSize * rendering.charWidthFactor * curtain.name.length`; `badgeW = textWidth + 2 * curtainBadgePaddingX`; `badgeH = curtainFontSize + 2 * curtainBadgePaddingY`
 - `badgeTopY = taskRowY1 + (1 - curtain.labelPosition) * (taskRowAreaH - badgeH)` — `labelPosition = 1` pins to top, `0` to bottom
 - Badge left edge = anchor x, always extends right; overflow past `innerX2` is allowed (no clip)
 - `<rect>` fill = `style.chartBackgroundColor`, stroke = `curtain.color`; `<text>` centred horizontally, vertical position = `badgeTopY + badgeH * typography.scaleAlignmentFactor`; fill = `curtain.color`
@@ -272,7 +277,7 @@ Partial overflow past task row area boundaries renders as-positioned — no clip
 
 **Optional box:** `<rect>` emitted only when `fillColor` is non-empty OR `borderColor` is non-empty. Fill = `fillColor` if non-empty, else `"none"`; stroke = `borderColor` if non-empty, else `"none"`; stroke-width = `rendering.noteBorderStrokeWidth`; `rx` = `rendering.noteCornerRadius`. When both are empty, no rect — note is text-only over a transparent area.
 
-**Text wrapping.** Available width = `noteW - 2 * rendering.notePadding`; if ≤ 0, text is skipped (rect still emits). Character-width estimate: `fontSize * 0.6` per character. Algorithm: split `text` on `\n` into segments; each segment wraps independently. Empty segments (from consecutive `\n`) produce a blank line. Within each segment, greedy line-fill from whitespace-split tokens. Unbreakable tokens (estimated width > availW) are character-truncated with `…` and emitted as their own line.
+**Text wrapping.** Available width = `noteW - 2 * rendering.notePadding`; if ≤ 0, text is skipped (rect still emits). Character-width estimate: `fontSize * rendering.charWidthFactor` per character. Algorithm: split `text` on `\n` into segments; each segment wraps independently. Empty segments (from consecutive `\n`) produce a blank line. Within each segment, greedy line-fill from whitespace-split tokens. Unbreakable tokens (estimated width > availW) are character-truncated with `…` and emitted as their own line.
 
 **Vertical alignment.** `blockHeight = lineCount * lineHeight` where `lineHeight = noteFontSize * noteLineHeightFactor`. First-line baseline:
 - `top` — `noteY + notePadding + fontSize * scaleAlignmentFactor`
@@ -280,6 +285,8 @@ Partial overflow past task row area boundaries renders as-positioned — no clip
 - `bottom` — `noteY + noteH - notePadding - blockHeight + fontSize * scaleAlignmentFactor`
 
 **Horizontal alignment.** Per `<tspan>` (each repeats `x` alongside `dy`): `left` → `x = noteX + notePadding`, `text-anchor="start"`; `center` → `x = noteX + noteW / 2`, `text-anchor="middle"`; `right` → `x = noteX + noteW - notePadding`, `text-anchor="end"`.
+
+The renderer reads `note.verticalAlign` and `note.textAlign` directly with no `|| 'top'` / `|| 'left'` fallback — the parser is the sole source of those defaults (entity colDefs `def: 'top'` and `def: 'left'`).
 
 **Clip path.** Each note that emits text gets a per-note `<clipPath id="note-clip-${id}">` (rect matching note bounds) in `<defs>`. The `<text>` element references it via `clip-path="url(#note-clip-${id})"`. Overflow text is silently hidden.
 

@@ -23,10 +23,10 @@ function buildLabelText(task, defaultFmt) {
   return task.isMilestone ? `${task.name} (${sd})` : `${task.name} (${sd} - ${fd})`;
 }
 
-// Truncate label to fit availWidth using fontSize * 0.6 per character (sans-serif estimate).
+// Truncate label to fit availWidth using fontSize * charWidthFactor per character (sans-serif estimate).
 // Prefers a word-boundary break; falls back to character truncation.
-function truncateLabel(text, availWidth, fontSize) {
-  const charW = fontSize * 0.6;
+function truncateLabel(text, availWidth, fontSize, charWidthFactor) {
+  const charW = fontSize * charWidthFactor;
   if (text.length * charW <= availWidth) return text;
   const ellipsisW = charW;
   if (ellipsisW > availWidth) return '';
@@ -72,7 +72,7 @@ function renderChart(projectData) {
     { key: 'days',   show: timeline.showDays,   gridline: timeline.gridlineDays   },
   ].filter(s => s.show);
 
-  const bandH       = Math.max(rendering.minScaleBandHeight, typography.scaleFontSize * 2.5);
+  const bandH       = Math.max(rendering.minScaleBandHeight, typography.scaleFontSize * rendering.scaleFontToBandHeightFactor);
   const scaleTotalH = visibleScales.length * bandH;
 
   // ── Coordinate areas ─────────────────────────────────────────────────────────
@@ -148,7 +148,7 @@ function renderChart(projectData) {
   for (const s of sorted) {
     const sy = n(taskRowY1 + startRowOf[s.id] * rowH);
     const sh = n(s.rowCount * rowH);
-    bandsSvg += `<rect x="${innerX1}" y="${sy}" width="${innerWidth}" height="${sh}" fill="${s.backgroundColor || 'white'}"/>`;
+    bandsSvg += `<rect x="${innerX1}" y="${sy}" width="${innerWidth}" height="${sh}" fill="${s.backgroundColor}"/>`;
   }
 
   // ── 3. Curtain tinted rectangles ─────────────────────────────────────────────
@@ -225,8 +225,6 @@ function renderChart(projectData) {
   }
 
   // ── 5. Scale bands ───────────────────────────────────────────────────────────
-  const MONTH_LETTERS = ['J','F','M','A','M','J','J','A','S','O','N','D'];
-
   visibleScales.forEach((scale, idx) => {
     const bY  = n(scaleY + idx * bandH);
     const bY2 = n(bY + bandH);
@@ -240,7 +238,7 @@ function renderChart(projectData) {
 
     function label(cx, text) {
       const ly = n(bY + bandH * typography.scaleAlignmentFactor);
-      return `<text x="${n(cx)}" y="${ly}" text-anchor="middle" font-family="'${escapeXml(typography.fontFamily)}'" font-size="${typography.scaleFontSize}" fill="black">${escapeXml(String(text))}</text>`;
+      return `<text x="${n(cx)}" y="${ly}" text-anchor="middle" font-family="'${escapeXml(typography.fontFamily)}'" font-size="${typography.scaleFontSize}" fill="${style.scaleLabelTextColor}">${escapeXml(String(text))}</text>`;
     }
 
     if (scale.key === 'years') {
@@ -248,7 +246,7 @@ function renderChart(projectData) {
         const cx1 = yr === csY ? innerX1 : Math.max(innerX1, xFor(`${yr}-01-01`));
         const cx2 = yr < ceY  ? Math.min(innerX2, xFor(`${yr + 1}-01-01`)) : innerX2;
         if (yr > csY) scaleSvg += tick(Math.max(innerX1, xFor(`${yr}-01-01`)));
-        if (cx2 - cx1 >= 20) scaleSvg += label(cx1 + (cx2 - cx1) / 2, yr);
+        if (cx2 - cx1 >= rendering.scaleMinLabelWidth) scaleSvg += label(cx1 + (cx2 - cx1) / 2, yr);
       }
 
     } else if (scale.key === 'months') {
@@ -262,7 +260,7 @@ function renderChart(projectData) {
         const cx2 = Math.min(innerX2, xFor(nextStr));
         if (cx1 >= innerX2) break;
         if (thisStr > chartStartDate) scaleSvg += tick(Math.max(innerX1, xFor(thisStr)));
-        if (cx2 - cx1 >= 20) scaleSvg += label(cx1 + (cx2 - cx1) / 2, MONTH_LETTERS[mmo - 1]);
+        if (cx2 - cx1 >= rendering.scaleMinLabelWidth) scaleSvg += label(cx1 + (cx2 - cx1) / 2, rendering.monthLetters[mmo - 1]);
         myr = nyr; mmo = nmo;
       }
 
@@ -287,14 +285,14 @@ function renderChart(projectData) {
         const cx2 = Math.min(innerX2, xFor(wEnd));
         if (cx1 >= innerX2) break;
         if (wStart > chartStartDate) scaleSvg += tick(Math.max(innerX1, xFor(wStart)));
-        if (cx2 - cx1 >= 20) scaleSvg += label(cx1 + (cx2 - cx1) / 2, isoWeekLabel(wStart));
+        if (cx2 - cx1 >= rendering.scaleMinLabelWidth) scaleSvg += label(cx1 + (cx2 - cx1) / 2, isoWeekLabel(wStart));
       }
 
     } else if (scale.key === 'days') {
       // Named-day band: Monday/Mon/M/"" — width-adaptive, no fixed width gate
       const [dy0, dm0, dd0] = chartStartDate.split('-').map(Number);
       const ddt = new Date(dy0, dm0 - 1, dd0);
-      const charW = typography.scaleFontSize * 0.6;
+      const charW = typography.scaleFontSize * rendering.charWidthFactor;
       while (true) {
         const dayIso = dtIso(ddt);
         if (dayIso >= chartEndDate) break;
@@ -326,7 +324,7 @@ function renderChart(projectData) {
         if (cx1 >= innerX2) break;
         if (dayIso > chartStartDate) scaleSvg += tick(Math.max(innerX1, xFor(dayIso)));
         const [, , dd] = dayIso.split('-').map(Number);
-        if (cx2 - cx1 >= 20) scaleSvg += label(cx1 + (cx2 - cx1) / 2, dd);
+        if (cx2 - cx1 >= rendering.scaleMinLabelWidth) scaleSvg += label(cx1 + (cx2 - cx1) / 2, dd);
       }
     }
 
@@ -357,7 +355,7 @@ function renderChart(projectData) {
 
     if (pipe.name) {
       const fontSize   = typography.pipeFontSize;
-      const textW      = fontSize * 0.6 * pipe.name.length;
+      const textW      = fontSize * rendering.charWidthFactor * pipe.name.length;
       const badgeW     = textW + 2 * rendering.pipeBadgePaddingX;
       const badgeH     = fontSize + 2 * rendering.pipeBadgePaddingY;
       const areaH      = taskRowY2 - taskRowY1;
@@ -389,7 +387,7 @@ function renderChart(projectData) {
       const anchorX = curtain.labelAnchor === 'end' ? xEnd : xStart;
       if (anchorX >= innerX1 && anchorX <= innerX2) {
         const fontSize  = typography.curtainFontSize;
-        const textW     = fontSize * 0.6 * curtain.name.length;
+        const textW     = fontSize * rendering.charWidthFactor * curtain.name.length;
         const badgeW    = textW + 2 * rendering.curtainBadgePaddingX;
         const badgeH    = fontSize + 2 * rendering.curtainBadgePaddingY;
         const areaH     = taskRowY2 - taskRowY1;
@@ -409,7 +407,7 @@ function renderChart(projectData) {
     headerSvg += `<rect x="${paddingLeft}" y="${hY}" width="${hW}" height="${titles.headerHeight}" fill="${style.headerFooterBackgroundColor}"/>`;
     if (titles.headerText) {
       const ty = n(hY + titles.headerHeight * typography.headerFooterAlignmentFactor);
-      headerSvg += `<text x="${n(paddingLeft + hW / 2)}" y="${ty}" text-anchor="middle" font-family="'${escapeXml(typography.fontFamily)}'" font-size="${typography.headerFooterFontSize}" fill="black">${escapeXml(titles.headerText)}</text>`;
+      headerSvg += `<text x="${n(paddingLeft + hW / 2)}" y="${ty}" text-anchor="middle" font-family="'${escapeXml(typography.fontFamily)}'" font-size="${typography.headerFooterFontSize}" fill="${style.headerFooterTextColor}">${escapeXml(titles.headerText)}</text>`;
     }
   }
 
@@ -420,7 +418,7 @@ function renderChart(projectData) {
     footerSvg += `<rect x="${paddingLeft}" y="${fy}" width="${fW}" height="${titles.footerHeight}" fill="${style.headerFooterBackgroundColor}"/>`;
     if (titles.footerText) {
       const ty = n(fy + titles.footerHeight * typography.headerFooterAlignmentFactor);
-      footerSvg += `<text x="${n(paddingLeft + fW / 2)}" y="${ty}" text-anchor="middle" font-family="'${escapeXml(typography.fontFamily)}'" font-size="${typography.headerFooterFontSize}" fill="black">${escapeXml(titles.footerText)}</text>`;
+      footerSvg += `<text x="${n(paddingLeft + fW / 2)}" y="${ty}" text-anchor="middle" font-family="'${escapeXml(typography.fontFamily)}'" font-size="${typography.headerFooterFontSize}" fill="${style.headerFooterTextColor}">${escapeXml(titles.footerText)}</text>`;
     }
   }
 
@@ -539,7 +537,7 @@ function renderChart(projectData) {
       if (barLabel) {
         if (task.labelPlacement === 'inside') {
           const availW    = bw - 2 * rendering.insideLabelPadding;
-          const truncated = truncateLabel(barLabel, availW, typography.taskFontSize);
+          const truncated = truncateLabel(barLabel, availW, typography.taskFontSize, rendering.charWidthFactor);
           if (truncated) {
             const lx = n(x1 + rendering.insideLabelPadding);
             const ly = n(rowY + rowH * typography.taskAlignmentFactor);
@@ -719,7 +717,7 @@ function renderChart(projectData) {
     if (availW <= 0) continue;
 
     const fontSize   = typography.noteFontSize;
-    const charW      = fontSize * 0.6;
+    const charW      = fontSize * rendering.charWidthFactor;
     const lineHeight = n(fontSize * rendering.noteLineHeightFactor);
 
     const lines = [];
@@ -749,7 +747,7 @@ function renderChart(projectData) {
 
     const blockHeight = lines.length * lineHeight;
     const alignFactor = typography.scaleAlignmentFactor;
-    const vAlign      = (note.verticalAlign || 'top').toLowerCase();
+    const vAlign      = note.verticalAlign.toLowerCase();
     let firstLineY;
     if (vAlign === 'middle') {
       firstLineY = noteY + (noteH - blockHeight) / 2 + fontSize * alignFactor;
@@ -759,7 +757,7 @@ function renderChart(projectData) {
       firstLineY = noteY + rendering.notePadding + fontSize * alignFactor;
     }
 
-    const hAlign = (note.textAlign || 'left').toLowerCase();
+    const hAlign = note.textAlign.toLowerCase();
     let textX, textAnchor;
     if (hAlign === 'center') {
       textX = noteX + noteW / 2;  textAnchor = 'middle';
