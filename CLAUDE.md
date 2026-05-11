@@ -119,7 +119,7 @@ Config sheet key names are confirmed. The `kv*` helpers (`kvStr/kvInt/kvFloat/kv
 
 - `task.isMilestone = startDate !== null && startDate === finishDate` (null-guard prevents false positive when both dates are absent)
 - `swimlane.order` = 1-based sheet-row position (not stored in Excel)
-- `config.timeline.chartStartDate/chartEndDate` derived from `min(task.startDate)` / `max(task.finishDate)` if absent from the Timeline sheet; `chartStartDateExplicit` / `chartEndDateExplicit` (booleans in `config.timeline`) record whether each came from the cell (`true`) or was derived (`false`) — used by the writer to decide whether to emit or leave empty, preserving auto-derive behaviour across save/reload cycles
+- `config.timeline.chartStartDate/chartEndDate` derived from `min(task.startDate)` / `max(task.finishDate)` if absent or unparseable in the Timeline sheet; `chartStartDateExplicit` / `chartEndDateExplicit` (booleans in `config.timeline`) record whether the user wrote any non-empty value in the cell (`true`, derived via `isNoticeableInput` on the raw cell) or left it blank (`false`) — used by the writer to decide whether to emit or leave empty. Note the deliberate asymmetry: a cell containing garbage (`"not a date"`) is `explicit=true` with a `chartStartDate` derived from tasks, so save round-trips the garbage cell to a now-valid derived date
 
 ## Parse notices (`_parseNotices`)
 
@@ -139,7 +139,7 @@ Reason values (closed enum):
 
 | Reason | When emitted |
 |---|---|
-| `'unparseable_date'` | non-empty value that `toISODate` returned `null` for; emitted at parser call sites (`toISODate` in `dates.js` is unchanged) |
+| `'unparseable_date'` | non-empty value that did not produce a valid YYYY-MM-DD result. `parseDate` (entity rows) and `kvDate` (config) both call `toISODate` and validate the result against `/^\d{4}-\d{2}-\d{2}$/` — `toISODate`'s current pass-through for non-slash strings means a raw `"garbage"` is rejected here, not at `toISODate`. `toISODate` in `dates.js` is unchanged |
 | `'unparseable_number'` | non-empty value that `parseInt` / `parseFloat` returned `NaN` for; emitted by `toInt` / `toFloat` / `kvInt` / `kvFloat` |
 | `'unrecognised_boolean'` | non-empty string in a boolean field that, after trim+lowercase, is neither `'yes'` nor `'no'`; emitted by `kvBool`. Native JS booleans (SheetJS `typeof v === 'boolean'`) pass through silently |
 | `'unrecognised_enum'` | non-empty value that a `normalize*` function did not recognise; emitted by each `normalize*` function |

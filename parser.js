@@ -43,9 +43,13 @@ function toFloat(val, def = null, ctx) {
 
 // ── Date helper ────────────────────────────────────────────────────────────────
 // Wraps toISODate (dates.js) and emits 'unparseable_date' when a non-empty
-// meaningful input is rejected. toISODate itself is unchanged.
+// meaningful input does not produce a valid YYYY-MM-DD result. toISODate
+// itself is unchanged — its current contract returns the raw string for
+// non-slash inputs, so we validate the shape here and coerce to null
+// otherwise.
 function parseDate(val, ctx) {
-  const iso = toISODate(val);
+  const raw = toISODate(val);
+  const iso = (typeof raw === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(raw)) ? raw : null;
   if (iso === null && ctx && isNoticeableInput(val)) {
     recordNotice({ ...ctx, rawValue: val, reason: 'unparseable_date' });
   }
@@ -249,7 +253,8 @@ function kvDate(map, key, fallback, ctx) {
   let v = map[key];
   if ((v == null || v === '') && fallback !== undefined) v = map[fallback];
   if (v == null || v === '') return null;
-  const iso = toISODate(v);
+  const raw = toISODate(v);
+  const iso = (typeof raw === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(raw)) ? raw : null;
   if (iso === null && ctx && isNoticeableInput(v)) {
     recordNotice({ ...ctx, rawValue: v, reason: 'unparseable_date' });
   }
@@ -588,8 +593,11 @@ function parseWorkbook(workbook) {
   const timelineKV = parseConfigSheet(workbook.Sheets['Timeline']);
   let chartStartDate = kvDate(timelineKV, 'Chart Start Date', undefined, cfg('chartStartDate'));
   let chartEndDate   = kvDate(timelineKV, 'Chart End Date',   undefined, cfg('chartEndDate'));
-  const chartStartDateExplicit = chartStartDate !== null;
-  const chartEndDateExplicit   = chartEndDate !== null;
+  // Explicit = user wrote something non-empty in the cell, even if it
+  // failed to parse (a 'garbage' Chart Start Date still expresses intent
+  // and should round-trip through save as a now-valid derived value).
+  const chartStartDateExplicit = isNoticeableInput(timelineKV['Chart Start Date']);
+  const chartEndDateExplicit   = isNoticeableInput(timelineKV['Chart End Date']);
   // Derive from task dates if absent or unparseable
   if (!chartStartDate) {
     const dates = projectData.tasks.map(t => t.startDate).filter(Boolean).sort();
