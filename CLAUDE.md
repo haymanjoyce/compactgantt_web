@@ -178,14 +178,14 @@ Reason values (closed enum):
 - **Scale band height:** `max(rendering.minScaleBandHeight, scaleFontSize * rendering.scaleFontToBandHeightFactor)` per visible scale; total = count × bandHeight
 - **Five scale bands** (top-to-bottom): years, months, weeks (ISO `"W03"`), dates (numeric day-of-month), days (named: Monday/Mon/M). Hidden bands occupy no space. Months band reads its single-letter labels from `rendering.monthLetters` (12 entries indexed by `month - 1`). Named-day cells degrade width-adaptively through full→short→letter→empty using `fontSize * rendering.charWidthFactor` per character — the standard `rendering.scaleMinLabelWidth` (default 20 px) label gate applies to years/months/weeks/dates only, not to the days band.
 - **Swimlane backgrounds:** `<rect>` fill = `swimlane.backgroundColor` (no renderer-side fallback — the parser supplies the default `"white"`).
-- **Render order (painter's algorithm, 15 slots):** (1) chart background → (2) swimlane backgrounds → (3) curtain tinted rectangles → (4) gridlines → (5) scale bands → (6) swimlane dividers → (7) pipes + curtain boundary lines/badges → (8) link bodies → (9) task bars → (10) milestones → (11) link heads → (12) task labels → (13) swimlane labels → (14) notes → (15) header/footer. Header/footer paint last so they frame the chart regardless of unusual layout dimensions.
+- **Render order (painter's algorithm, 15 slots):** defined in `renderer.js` (search for the SVG layer accumulators). Header/footer paint last so they frame the chart regardless of unusual layout dimensions. Slot numbers referenced elsewhere in this doc (e.g. "slot 7", "slot 14") correspond to those accumulators in source order.
 - **Color handling:** all color values are passed directly from `projectData` to SVG `fill`/`stroke` attributes without validation. Invalid CSS color names render as SVG's default (black). Validation is moving to a separate module — the renderer trusts its input.
 - **Swimlane labels:** `swimlaneTopAlignmentFactor` for top variants, `swimlaneBottomAlignmentFactor` for bottom variants
-- **Header/footer text alignment:** per-band via `titles.headerTextAlign` / `titles.footerTextAlign` (`left` / `center` / `right`). `left` → `x = paddingLeft + rendering.headerFooterTextPadding`, `text-anchor="start"`; `right` → `x = paddingLeft + bandWidth - rendering.headerFooterTextPadding`, `text-anchor="end"`; `center` → `x = paddingLeft + bandWidth / 2`, `text-anchor="middle"`. Vertical positioning unchanged (`typography.headerFooterAlignmentFactor`). The renderer trusts the parser's normalisation and uses a clean `if/else if/else`. Each band also emits a horizontal border `<line>` at its inside edge (header bottom = `paddingTop + headerHeight`; footer top = `outerHeight - paddingBottom - footerHeight`), stroked with `style.headerFooterBorderColor` / `rendering.headerFooterBorderStrokeWidth`. Border is suppressed together with the band when `headerHeight`/`footerHeight === 0`.
+- **Header/footer text alignment:** per-band via `titles.headerTextAlign` / `titles.footerTextAlign` (`left` / `center` / `right`). Horizontal inset uses `rendering.headerFooterTextPadding` for `left` and `right` only (centred text uses band centre). Vertical positioning via `typography.headerFooterAlignmentFactor`. The renderer trusts the parser's normalisation. Each band also emits a horizontal border `<line>` at its inside edge, stroked with `style.headerFooterBorderColor` / `rendering.headerFooterBorderStrokeWidth`; the border is suppressed together with the band when `headerHeight`/`footerHeight === 0`.
 - **`daysBetween(a, b)`:** uses `Date.UTC()` — timezone-safe, no `toISOString()`
-- **Milestones:** centred on `startDate`; size = `bars.milestoneSizeFactor * rowHeight`, `half = size / 2`. Two shapes selected by `bars.milestoneShape`:
-  - `circle` — emits `<circle cx cy r=half ...>` (circle circumscribing the diamond's anchors). `milestoneCornerRadius` is ignored.
-  - `diamond` (default, also fallback for any other value) — emits `<path>` describing four straight `L` edges joined by four circular `A` arcs at the cardinal corners. Geometry: `d = milestoneCornerRadius * half / √2` (the corner-shortening distance along each edge, expressed as a fraction of the diamond's half-edge length); arc radius `r = d` (the diamond's interior angles are 90°, so `r = d / tan(45°) = d`); each arc spans 90° clockwise (`large-arc-flag=0`, `sweep-flag=1`). At `milestoneCornerRadius=0` the arcs degenerate (zero radius → SVG treats as `lineto`) and the path is a sharp diamond. At `milestoneCornerRadius=1` all four arc centres coincide at the milestone centre and the path renders as a circle inscribed in the diamond at radius `half/√2`, visibly smaller than `shape=circle`. Visible diamond identity is preserved up to roughly `cornerRadius=0.7`; above that, straight edges shrink toward zero. No clamping in the parser — out-of-range values produce visually broken shapes (validation module's responsibility).
+- **Milestones:** centred on `startDate`; size = `bars.milestoneSizeFactor * rowHeight`. Two shapes selected by `bars.milestoneShape`:
+  - `circle` — emits `<circle>` circumscribing the diamond's anchors; `milestoneCornerRadius` ignored.
+  - `diamond` (default) — `<path>` of four straight `L` edges joined by four `A` arcs at the cardinals; rounding controlled by `bars.milestoneCornerRadius` (0..1, fraction of half-edge). `0` = sharp diamond, `1` = inscribed circle (smaller than `shape=circle`). No parser clamping — out-of-range values produce broken shapes (validation module's responsibility).
 - **Bars:** `<rect rx="${bars.taskCornerRadius}">`.
 - **Task bar pattern fills:** `task.fillPattern` drives SVG `<pattern>` elements in the shared `<defs>` block (see Notes rendering for combined-defs design). `"solid"` (or any unrecognised value) → `fill="${fillColor}"` unchanged. The five named patterns (`hatch`, `cross-hatch`, `horizontal`, `vertical`, `dots`) → `fill="url(#id)"` referencing a deduplicated `<pattern>` keyed by sanitised `(fillPattern, fillColor, patternColor)` triple. Patterns use `patternUnits="userSpaceOnUse"` with no `x`/`y` — tiles anchor at SVG origin so bars on the same row share a continuous-field phase. Milestones are always solid; their `fillPattern` is not consumed by the renderer.
 - **Skip rules:** orphaned tasks, `finishDate < startDate`, tasks outside chart date range all silently skipped; out-of-range `row` clamped to 1
@@ -197,69 +197,15 @@ Reason values (closed enum):
 
 ## config.bars
 
-Driven by the "Bars" Excel config sheet. Parsed via `parseConfigSheet` / `kvFloat` / `kvInt`. No old-format fallbacks. Missing sheet or absent key silently falls back to the default.
-
-| Key | Default | Excel column name |
-|---|---|---|
-| `taskBarHeightFactor` | 0.7 | `Task Bar Height Factor` |
-| `milestoneSizeFactor` | 0.7 | `Milestone Size Factor` |
-| `milestoneShape` | `"diamond"` | `Milestone Shape` (enum: `circle` / `diamond`; anything else normalises to `diamond`) |
-| `milestoneCornerRadius` | 0 | `Milestone Corner Radius` (float, intended range 0..1; fraction of half-edge length used as corner-shortening distance — see milestone rendering bullet) |
-| `taskCornerRadius` | 2 | `Task Corner Radius` |
+Driven by the "Bars" Excel sheet → `projectData.config.bars` (`taskBarHeightFactor`, `milestoneSizeFactor`, `milestoneShape`, `milestoneCornerRadius`, `taskCornerRadius`). No old-format fallbacks. `milestoneShape` is the only enum (normalised via `normalizeMilestoneShape`); `milestoneCornerRadius` is unclamped float intended for `0..1` (see milestone rendering note). `parser.js` `createEmptyProjectData()` is authoritative for defaults and Excel column names.
 
 ## config.titles
 
-Driven by the "Titles" Excel config sheet. Parsed via `parseConfigSheet` / `kvStr` / `kvInt`. No old-format fallbacks. Missing sheet or absent key silently falls back to the default. `headerTextAlign` and `footerTextAlign` are normalised via `normalizeTextAlign` (lowercase + trim, coerced to one of `left` / `center` / `right`; anything else → `center`).
-
-| Key | Default | Excel column name |
-|---|---|---|
-| `headerHeight` | 20 | `Header Height` |
-| `headerText` | `""` | `Header Text` |
-| `headerTextAlign` | `"center"` | `Header Text Align` (enum: `left` / `center` / `right`) |
-| `footerHeight` | 20 | `Footer Height` |
-| `footerText` | `""` | `Footer Text` |
-| `footerTextAlign` | `"center"` | `Footer Text Align` (enum: `left` / `center` / `right`) |
+Driven by the "Titles" Excel sheet → `projectData.config.titles` (`headerHeight`, `headerText`, `headerTextAlign`, `footerHeight`, `footerText`, `footerTextAlign`). No old-format fallbacks. `headerTextAlign` / `footerTextAlign` normalised via `normalizeTextAlign` (`left` / `center` / `right`, default `center`). Defaults and Excel column names in `parser.js` `createEmptyProjectData()`.
 
 ## config.rendering
 
-Not driven by any Excel sheet — hard-coded defaults only. Defined in `createEmptyProjectData()` alongside all other config defaults. `parseWorkbook` does not touch `config.rendering`; every reload gets a fresh object from `createEmptyProjectData()`.
-
-| Key | Default | Description |
-|---|---|---|
-| `arrowheadSizeFactor` | 0.3 | link arrowhead triangle size as fraction of rowHeight |
-| `originMarkerSizeFactor` | 0.15 | link origin circle radius as fraction of rowHeight |
-| `linkArrowheadMilestoneGap` | 2 | gap in px between arrowhead tip and milestone perimeter on milestone successors |
-| `swimlaneLabelPadding` | 4 | label inset from chart edge in px |
-| `minScaleBandHeight` | 20 | floor for scale band height in px |
-| `scaleMinLabelWidth` | 20 | minimum cell width in px for a scale-band label to render (years/months/weeks/dates only — days band is width-adaptive) |
-| `scaleFontToBandHeightFactor` | 2.5 | scale band height multiplier on `typography.scaleFontSize`; used as the second argument to `Math.max(rendering.minScaleBandHeight, scaleFontSize * factor)` |
-| `charWidthFactor` | 0.6 | sans-serif character-width estimate as a fraction of `fontSize`; used wherever the renderer measures text width without real font metrics (truncation, scale days band, pipe/curtain badges, note wrapping) |
-| `monthLetters` | `['J','F','M','A','M','J','J','A','S','O','N','D']` | twelve single-letter month labels for the months scale band, indexed by `month - 1` |
-| `headerFooterTextPadding` | 4 | horizontal inset in px from the header/footer band edge to the text, applied for `left` and `right` alignments only (centered text uses band centre) |
-| `headerFooterBorderStrokeWidth` | 0.5 | stroke width in px for the header bottom border and footer top border lines |
-| `gridlineStrokeWidth` | 0.5 | vertical gridline stroke width |
-| `scaleTickStrokeWidth` | 0.5 | scale band tick and bottom-border stroke width |
-| `taskStrokeWidth` | 0.5 | task bar outline stroke width |
-| `milestoneStrokeWidth` | 0.5 | milestone diamond outline stroke width |
-| `swimlaneDividerStrokeWidth` | 1 | swimlane divider stroke width |
-| `linkStrokeWidth` | 1 | link path stroke width |
-| `linkCornerRadius` | 3 | radius in px of the quarter-circle arc inserted at each HV/VH/V-H-V bend |
-| `insideLabelPadding` | 2 | horizontal inset of inside-label text from bar edges, in px |
-| `pipeStrokeWidth` | 1 | pipe line and badge border stroke width |
-| `pipeBadgePaddingX` | 4 | horizontal inset of badge text from badge edges, in px |
-| `pipeBadgePaddingY` | 2 | vertical inset of badge text from badge edges, in px |
-| `curtainStrokeWidth` | 1 | curtain boundary line and badge border stroke width |
-| `curtainBadgePaddingX` | 4 | horizontal inset of curtain badge text from badge edges, in px |
-| `curtainBadgePaddingY` | 2 | vertical inset of curtain badge text from badge edges, in px |
-| `patternTileSize` | 8 | SVG pattern tile size in px (square) |
-| `patternStrokeWidth` | 1 | stroke width for hatch / cross-hatch / horizontal / vertical pattern lines |
-| `patternDotRadius` | 1.5 | radius of the dot in the dots pattern |
-| `leaderLineStrokeWidth` | 0.5 | stroke width for outside-label leader lines |
-| `outsideLabelKissingGap` | 2 | gap in px between bar/milestone right edge and outside label start (applied even when `labelOffset === 0`; leader line spans the `labelOffset` portion only) |
-| `noteBorderStrokeWidth` | 1 | stroke width for note box border |
-| `notePadding` | 4 | horizontal and vertical inset of note text from note box edges, in px |
-| `noteLineHeightFactor` | 1.2 | line height multiplier for note text (`lineHeight = noteFontSize * noteLineHeightFactor`) |
-| `noteCornerRadius` | 2 | corner radius in px applied as `rx` on the note rect |
+All rendering tunables (stroke widths, paddings, factors, gaps, corner radii, the `monthLetters` array, `charWidthFactor`, etc.) live in `config.rendering` in `createEmptyProjectData()`. Hard-coded defaults, not Excel-driven — `parseWorkbook` does not touch this object; every reload starts from `createEmptyProjectData()`. Names follow `<element><attribute>`. The writer deliberately excludes this section. Source is authoritative.
 
 ## Link rendering
 
@@ -283,7 +229,7 @@ Links are Finish-to-Start dependency arrows. Implementation notes:
 - `AUTO` + same row: direct horizontal line, arrowhead right
 - `AUTO` + different rows: V-H-V with midY = mean of origY and termY; arrowhead direction = vertical
 
-**Rounded corners at bends (HV, VH, AUTO V-H-V only):** Each sharp 90° bend is replaced with a quarter-circle SVG arc of effective radius `r = min(linkCornerRadius, segA/2, segB/2)` where segA and segB are the lengths of the two segments meeting at that corner. The incoming segment stops `r` short of the bend point; the arc carries the path to a point `r` along the outgoing segment. Sweep flag is per-bend based on the turn direction: `(right→down)` = 1, `(right→up)` = 0, `(down→right)` = 0, `(up→right)` = 1. For AUTO V-H-V the two bends always carry opposite sweep flags. Same-row AUTO (no bends) and late-recoverable vertical links are unchanged.
+**Rounded corners at bends (HV, VH, AUTO V-H-V only):** Each sharp 90° bend becomes a quarter-circle arc, radius `min(linkCornerRadius, segA/2, segB/2)`. Per-bend sweep flag depends on turn direction — a real gotcha worth keeping explicit: `(right→down)=1`, `(right→up)=0`, `(down→right)=0`, `(up→right)=1`. AUTO V-H-V's two bends always carry opposite sweep flags. Same-row AUTO and late-recoverable vertical links have no bends to round.
 
 **Z-order split:** All renderedLinks are pre-computed into an array. The array is iterated once to emit `<path>` bodies into `linkBodySvg` (slot 8), then iterated again to emit `<circle>` origin markers and `<polygon>` arrowheads into `linkHeadSvg` (slot 11). This two-pass approach keeps task bars and milestones between the two link layers without duplicating classification logic.
 
@@ -301,15 +247,7 @@ Pipes are vertical reference lines drawn at a given date with an optional text b
 
 **Line:** `<line>` from `(x, taskRowY1)` to `(x, taskRowY2)` where `x = xFor(pipe.date)`. stroke-dasharray: solid → none, dashed → `"4 3"`, dotted → `"1 2"`. Stroke color = `pipe.color`, stroke-width = `rendering.pipeStrokeWidth`.
 
-**Badge** (emitted only when `pipe.name` is non-empty):
-- Text width estimated as `typography.pipeFontSize * rendering.charWidthFactor * pipe.name.length`
-- `badgeW = textWidth + 2 * rendering.pipeBadgePaddingX`; `badgeH = pipeFontSize + 2 * rendering.pipeBadgePaddingY`
-- `badgeTopY = taskRowY1 + (1 - pipe.labelPosition) * (taskRowAreaH - badgeH)` — `labelPosition = 1` pins badge to top, `0` to bottom
-- Badge left edge abuts the pipe line at `x`; badge may overflow past `innerX2` (no clipping)
-- `<rect>` fill = `style.chartBackgroundColor`, stroke = `pipe.color`
-- `<text>` centred horizontally in badge; vertical position = `badgeTopY + badgeH * typography.scaleAlignmentFactor`; font from `typography.fontFamily` / `typography.pipeFontSize`; fill = `pipe.color`
-
-**`pipe.labelPosition`** — float, Excel column `"Label Position"`, default `1`. No old-format fallback. `typography.pipeFontSize` — integer, Typography sheet key `"Pipe Font Size"`, default `10`. No old-format fallback.
+**Badge** (emitted only when `pipe.name` is non-empty): rendered as `<rect>` + `<text>` at the pipe x. `pipe.labelPosition` (float, default `1`) pins to top (`1`) or bottom (`0`); badge may overflow past `innerX2` without clipping. `typography.pipeFontSize` (default `10`) drives text height; padding from `rendering.pipeBadgePaddingX/Y`. Renderer source is authoritative for geometry.
 
 ## Curtains rendering
 
@@ -321,14 +259,9 @@ Curtains are tinted vertical bands over a date range with optional boundary line
 
 **Slot 7 — boundary lines:** `xStart = xFor(startDate)`, `xEnd = xFor(endDate)` (unclamped). Each line emitted only if its x is within `[innerX1, innerX2]`. Stroke = `curtain.color`, stroke-width = `rendering.curtainStrokeWidth`, no dasharray.
 
-**Slot 7 — badge** (emitted only when `curtain.name` is non-empty):
-- Anchor x = `xFor(startDate)` when `curtain.labelAnchor !== 'end'`, else `xFor(endDate)`; badge skipped if anchor x is outside `[innerX1, innerX2]`
-- Text width estimated as `curtainFontSize * rendering.charWidthFactor * curtain.name.length`; `badgeW = textWidth + 2 * curtainBadgePaddingX`; `badgeH = curtainFontSize + 2 * curtainBadgePaddingY`
-- `badgeTopY = taskRowY1 + (1 - curtain.labelPosition) * (taskRowAreaH - badgeH)` — `labelPosition = 1` pins to top, `0` to bottom
-- Badge left edge = anchor x, always extends right; overflow past `innerX2` is allowed (no clip)
-- `<rect>` fill = `style.chartBackgroundColor`, stroke = `curtain.color`; `<text>` centred horizontally, vertical position = `badgeTopY + badgeH * typography.scaleAlignmentFactor`; fill = `curtain.color`
+**Slot 7 — badge** (emitted only when `curtain.name` is non-empty): anchor x = `xFor(startDate)` when `curtain.labelAnchor !== 'end'`, else `xFor(endDate)`; badge skipped if anchor x falls outside `[innerX1, innerX2]`. Badge always extends right from the anchor, overflow past `innerX2` allowed. `curtain.labelPosition` (float, default `1`) pins to top/bottom; `typography.curtainFontSize` (default `10`) drives text height. Renderer source is authoritative for geometry.
 
-**Curtains entity columns:** ID, Start Date, End Date, Name, Color, Opacity, Label Position, Label Anchor. `labelPosition` — float, default `1`, no old-format fallback. `labelAnchor` — string (`'start'` or `'end'`), default `'start'`, no old-format fallback; anything other than `'end'` treated as `'start'` by renderer. `typography.curtainFontSize` — integer, Typography sheet key `"Curtain Font Size"`, default `10`, no old-format fallback.
+**Curtains entity columns:** ID, Start Date, End Date, Name, Color, Opacity, Label Position, Label Anchor. `labelAnchor` is normalised in the parser via `normalizeLabelAnchor` (`start` / `end`, default `start`).
 
 ## Notes rendering
 
@@ -348,14 +281,7 @@ Partial overflow past task row area boundaries renders as-positioned — no clip
 
 **Text wrapping.** Available width = `noteW - 2 * rendering.notePadding`; if ≤ 0, text is skipped (rect still emits). Character-width estimate: `fontSize * rendering.charWidthFactor` per character. Algorithm: split `text` on `\n` into segments; each segment wraps independently. Empty segments (from consecutive `\n`) produce a blank line. Within each segment, greedy line-fill from whitespace-split tokens. Unbreakable tokens (estimated width > availW) are character-truncated with `…` and emitted as their own line.
 
-**Vertical alignment.** `blockHeight = lineCount * lineHeight` where `lineHeight = noteFontSize * noteLineHeightFactor`. First-line baseline:
-- `top` — `noteY + notePadding + fontSize * scaleAlignmentFactor`
-- `middle` — `noteY + (noteH - blockHeight) / 2 + fontSize * scaleAlignmentFactor`
-- `bottom` — `noteY + noteH - notePadding - blockHeight + fontSize * scaleAlignmentFactor`
-
-**Horizontal alignment.** Per `<tspan>` (each repeats `x` alongside `dy`): `left` → `x = noteX + notePadding`, `text-anchor="start"`; `center` → `x = noteX + noteW / 2`, `text-anchor="middle"`; `right` → `x = noteX + noteW - notePadding`, `text-anchor="end"`.
-
-The renderer reads `note.verticalAlign` and `note.textAlign` directly with no `|| 'top'` / `|| 'left'` fallback — the parser is the sole source of those defaults (entity colDefs `def: 'top'` and `def: 'left'`).
+**Alignment.** `note.verticalAlign` (`top`/`middle`/`bottom`, default `top`) positions the text block within `noteH`; `note.textAlign` (`left`/`center`/`right`, default `left`) sets each `<tspan>`'s `x` and `text-anchor`. The renderer reads both directly with no `||` fallback — the parser is the sole source of defaults (normalised via `normalizeNoteVerticalAlign` / `normalizeNoteTextAlign`).
 
 **Clip path.** Each note that emits text gets a per-note `<clipPath id="note-clip-${id}">` (rect matching note bounds) in `<defs>`. The `<text>` element references it via `clip-path="url(#note-clip-${id})"`. Overflow text is silently hidden.
 
