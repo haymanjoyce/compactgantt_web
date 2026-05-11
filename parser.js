@@ -1,50 +1,167 @@
 // parser.js — .xlsx parsing logic; exports parseWorkbook and createEmptyProjectData
 
-// ── Numeric helpers ────────────────────────────────────────────────────────────
-function toInt(val, def = null) {
-  if (val == null || val === '') return def;
-  const n = parseInt(val, 10);
-  return Number.isFinite(n) ? n : def;
+// ── Parse-notice side-channel ──────────────────────────────────────────────────
+// Collects records of non-empty source cells that the parser could not
+// interpret. Reset at the start of each parseWorkbook call. Helpers below
+// push to this buffer when they fall back to a default after a non-empty
+// input. Empty/whitespace cells produce no notice.
+let _notices = [];
+
+function recordNotice(notice) {
+  _notices.push(notice);
 }
 
-function toFloat(val, def = null) {
+// True when val is a meaningful user-written input (not null/undefined/''
+// and not whitespace-only). Decides whether a parser-defaulting case
+// warrants a notice.
+function isNoticeableInput(val) {
+  if (val == null || val === '') return false;
+  if (typeof val === 'string' && val.trim() === '') return false;
+  return true;
+}
+
+// ── Numeric helpers ────────────────────────────────────────────────────────────
+function toInt(val, def = null, ctx) {
+  if (val == null || val === '') return def;
+  const n = parseInt(val, 10);
+  if (Number.isFinite(n)) return n;
+  if (ctx && isNoticeableInput(val)) {
+    recordNotice({ ...ctx, rawValue: val, reason: 'unparseable_number' });
+  }
+  return def;
+}
+
+function toFloat(val, def = null, ctx) {
   if (val == null || val === '') return def;
   const n = parseFloat(val);
-  return Number.isFinite(n) ? n : def;
+  if (Number.isFinite(n)) return n;
+  if (ctx && isNoticeableInput(val)) {
+    recordNotice({ ...ctx, rawValue: val, reason: 'unparseable_number' });
+  }
+  return def;
+}
+
+// ── Date helper ────────────────────────────────────────────────────────────────
+// Wraps toISODate (dates.js) and emits 'unparseable_date' when a non-empty
+// meaningful input is rejected. toISODate itself is unchanged.
+function parseDate(val, ctx) {
+  const iso = toISODate(val);
+  if (iso === null && ctx && isNoticeableInput(val)) {
+    recordNotice({ ...ctx, rawValue: val, reason: 'unparseable_date' });
+  }
+  return iso;
 }
 
 // ── Normalizers ────────────────────────────────────────────────────────────────
-function normalizeLabelContent(val) {
+function normalizeLabelContent(val, ctx) {
   if (!val) return 'name';
   const v = String(val).trim().toLowerCase();
+  if (v === '') return 'name';
   if (v === 'name only' || v === 'name') return 'name';
   if (v === 'date only' || v === 'date') return 'date';
   if (v.includes('name') && v.includes('date')) return 'name_and_date';
   if (v === 'none') return 'none';
+  if (ctx) recordNotice({ ...ctx, rawValue: val, reason: 'unrecognised_enum' });
   return 'name';
 }
 
-function normalizeLabelPlacement(val) {
+function normalizeLabelPlacement(val, ctx) {
   if (!val) return 'inside';
-  return String(val).trim().toLowerCase() === 'outside' ? 'outside' : 'inside';
+  const v = String(val).trim().toLowerCase();
+  if (v === '') return 'inside';
+  if (v === 'outside' || v === 'inside') return v;
+  if (ctx) recordNotice({ ...ctx, rawValue: val, reason: 'unrecognised_enum' });
+  return 'inside';
 }
 
-function normalizeLabelPosition(val) {
+function normalizeLabelPosition(val, ctx) {
   if (!val) return 'top-right';
   const v = String(val).trim().toLowerCase().replace(/\s+/g, '-');
-  return ['top-right', 'top-left', 'bottom-right', 'bottom-left'].includes(v) ? v : 'top-right';
+  if (v === '' || v === '-') return 'top-right';
+  if (['top-right', 'top-left', 'bottom-right', 'bottom-left'].includes(v)) return v;
+  if (ctx) recordNotice({ ...ctx, rawValue: val, reason: 'unrecognised_enum' });
+  return 'top-right';
 }
 
-function normalizeTextAlign(val) {
+function normalizeTextAlign(val, ctx) {
   if (!val) return 'center';
   const v = String(val).trim().toLowerCase();
-  return ['left', 'center', 'right'].includes(v) ? v : 'center';
+  if (v === '') return 'center';
+  if (v === 'left' || v === 'center' || v === 'right') return v;
+  if (ctx) recordNotice({ ...ctx, rawValue: val, reason: 'unrecognised_enum' });
+  return 'center';
 }
 
-function normalizeMilestoneShape(val) {
+function normalizeMilestoneShape(val, ctx) {
   if (!val) return 'diamond';
   const v = String(val).trim().toLowerCase();
-  return v === 'circle' ? 'circle' : 'diamond';
+  if (v === '') return 'diamond';
+  if (v === 'circle' || v === 'diamond') return v;
+  if (ctx) recordNotice({ ...ctx, rawValue: val, reason: 'unrecognised_enum' });
+  return 'diamond';
+}
+
+function normalizeLineStyleLink(val, ctx) {
+  if (!val) return 'solid';
+  const v = String(val).trim().toLowerCase();
+  if (v === '') return 'solid';
+  if (v === 'solid' || v === 'dashed') return v;
+  if (ctx) recordNotice({ ...ctx, rawValue: val, reason: 'unrecognised_enum' });
+  return 'solid';
+}
+
+function normalizeLineStylePipe(val, ctx) {
+  if (!val) return 'solid';
+  const v = String(val).trim().toLowerCase();
+  if (v === '') return 'solid';
+  if (v === 'solid' || v === 'dashed' || v === 'dotted') return v;
+  if (ctx) recordNotice({ ...ctx, rawValue: val, reason: 'unrecognised_enum' });
+  return 'solid';
+}
+
+function normalizeFillPattern(val, ctx) {
+  if (!val) return 'solid';
+  const v = String(val).trim().toLowerCase();
+  if (v === '') return 'solid';
+  if (['solid', 'hatch', 'cross-hatch', 'horizontal', 'vertical', 'dots'].includes(v)) return v;
+  if (ctx) recordNotice({ ...ctx, rawValue: val, reason: 'unrecognised_enum' });
+  return 'solid';
+}
+
+function normalizeLabelAnchor(val, ctx) {
+  if (!val) return 'start';
+  const v = String(val).trim().toLowerCase();
+  if (v === '') return 'start';
+  if (v === 'start' || v === 'end') return v;
+  if (ctx) recordNotice({ ...ctx, rawValue: val, reason: 'unrecognised_enum' });
+  return 'start';
+}
+
+function normalizeNoteTextAlign(val, ctx) {
+  if (!val) return 'left';
+  const v = String(val).trim().toLowerCase();
+  if (v === '') return 'left';
+  if (v === 'left' || v === 'center' || v === 'right') return v;
+  if (ctx) recordNotice({ ...ctx, rawValue: val, reason: 'unrecognised_enum' });
+  return 'left';
+}
+
+function normalizeNoteVerticalAlign(val, ctx) {
+  if (!val) return 'top';
+  const v = String(val).trim().toLowerCase();
+  if (v === '') return 'top';
+  if (v === 'top' || v === 'middle' || v === 'bottom') return v;
+  if (ctx) recordNotice({ ...ctx, rawValue: val, reason: 'unrecognised_enum' });
+  return 'top';
+}
+
+function normalizeLinkRouting(val, ctx) {
+  if (!val) return 'auto';
+  const v = String(val).trim().toLowerCase();
+  if (v === '') return 'auto';
+  if (v === 'auto' || v === 'hv' || v === 'vh') return v;
+  if (ctx) recordNotice({ ...ctx, rawValue: val, reason: 'unrecognised_enum' });
+  return 'auto';
 }
 
 // ── Entity sheet parser ────────────────────────────────────────────────────────
@@ -89,35 +206,54 @@ function kvStr(map, key, def, fallback) {
   return String(v);
 }
 
-function kvInt(map, key, def, fallback) {
+function kvInt(map, key, def, fallback, ctx) {
   let v = map[key];
   if ((v == null || v === '') && fallback !== undefined) v = map[fallback];
   if (v == null || v === '') return def;
   const n = parseInt(v, 10);
-  return Number.isFinite(n) ? n : def;
+  if (Number.isFinite(n)) return n;
+  if (ctx && isNoticeableInput(v)) {
+    recordNotice({ ...ctx, rawValue: v, reason: 'unparseable_number' });
+  }
+  return def;
 }
 
-function kvFloat(map, key, def, fallback) {
+function kvFloat(map, key, def, fallback, ctx) {
   let v = map[key];
   if ((v == null || v === '') && fallback !== undefined) v = map[fallback];
   if (v == null || v === '') return def;
   const n = parseFloat(v);
-  return Number.isFinite(n) ? n : def;
+  if (Number.isFinite(n)) return n;
+  if (ctx && isNoticeableInput(v)) {
+    recordNotice({ ...ctx, rawValue: v, reason: 'unparseable_number' });
+  }
+  return def;
 }
 
-function kvBool(map, key, def, fallback) {
+function kvBool(map, key, def, fallback, ctx) {
   let v = map[key];
   if ((v == null || v === '') && fallback !== undefined) v = map[fallback];
   if (v == null || v === '') return def;
   if (typeof v === 'boolean') return v;
-  return String(v).toLowerCase() === 'yes';
+  const coerced = String(v).toLowerCase() === 'yes';
+  if (ctx) {
+    const trimmed = String(v).trim().toLowerCase();
+    if (trimmed !== '' && trimmed !== 'yes' && trimmed !== 'no') {
+      recordNotice({ ...ctx, rawValue: v, reason: 'unrecognised_boolean' });
+    }
+  }
+  return coerced;
 }
 
-function kvDate(map, key, fallback /* reserved — old-format key fallback, unused today */) {
+function kvDate(map, key, fallback, ctx) {
   let v = map[key];
   if ((v == null || v === '') && fallback !== undefined) v = map[fallback];
   if (v == null || v === '') return null;
-  return toISODate(v);
+  const iso = toISODate(v);
+  if (iso === null && ctx && isNoticeableInput(v)) {
+    recordNotice({ ...ctx, rawValue: v, reason: 'unparseable_date' });
+  }
+  return iso;
 }
 
 // ── Default shape ──────────────────────────────────────────────────────────────
@@ -127,6 +263,7 @@ function kvDate(map, key, fallback /* reserved — old-format key fallback, unus
 function createEmptyProjectData() {
   return {
     tasks: [], swimlanes: [], links: [], pipes: [], curtains: [], notes: [],
+    _parseNotices: [],
     config: {
       layout: {
         outerWidth: 1200, outerHeight: 700,
@@ -229,7 +366,9 @@ function createEmptyProjectData() {
 
 // ── Main parse function ────────────────────────────────────────────────────────
 function parseWorkbook(workbook) {
+  _notices = [];
   const projectData = createEmptyProjectData();
+  const cfg = (field) => ({ entity: 'config', id: null, field });
 
   // ── Tasks ──────────────────────────────────────────────────────────────────
   const tasksSheet = workbook.Sheets['Tasks'];
@@ -250,23 +389,24 @@ function parseWorkbook(workbook) {
       'Date Format':     { key: 'dateFormat',      def: null                   },
     });
     projectData.tasks = raw.map(t => {
-      const startDate      = toISODate(t.startDate);
-      const finishDate     = toISODate(t.finishDate);
+      const id             = toInt(t.id, null, { entity: 'task', id: null, field: 'id' });
+      const c              = (field) => ({ entity: 'task', id, field });
+      const swimlaneId     = toInt(t.swimlaneId, null, c('swimlaneId'));
+      const row            = toInt(t.row, 1, c('row'));
+      const startDate      = parseDate(t.startDate, c('startDate'));
+      const finishDate     = parseDate(t.finishDate, c('finishDate'));
+      const labelContent   = normalizeLabelContent(t.labelContent, c('labelContent'));
+      const labelPlacement = normalizeLabelPlacement(t.labelPlacement, c('labelPlacement'));
+      const labelOffset    = toInt(t.labelOffset, 0, c('labelOffset'));
+      const fillPattern    = normalizeFillPattern(t.fillPattern, c('fillPattern'));
       const isMilestone    = startDate !== null && startDate === finishDate;
-      const labelPlacement = normalizeLabelPlacement(t.labelPlacement);
       return {
-        id:             toInt(t.id),
-        swimlaneId:     toInt(t.swimlaneId),
-        row:            toInt(t.row, 1),
+        id, swimlaneId, row,
         name:           t.name,
-        startDate,
-        finishDate,
-        isMilestone,
-        labelContent:   normalizeLabelContent(t.labelContent),
-        labelPlacement,
-        labelOffset:    toInt(t.labelOffset, 0),
+        startDate, finishDate, isMilestone,
+        labelContent, labelPlacement, labelOffset,
         fillColor:      t.fillColor,
-        fillPattern:    t.fillPattern,
+        fillPattern,
         patternColor:   t.patternColor,
         dateFormat:     t.dateFormat,
       };
@@ -283,14 +423,20 @@ function parseWorkbook(workbook) {
       'Label Position':   { key: 'labelPosition',    def: 'top-right' },
       'Background Color': { key: 'backgroundColor',  def: 'white'     },
     });
-    projectData.swimlanes = raw.map((s, i) => ({
-      id:              toInt(s.id),
-      name:            s.name,
-      rowCount:        toInt(s.rowCount, 1),
-      labelPosition:   normalizeLabelPosition(s.labelPosition),
-      backgroundColor: s.backgroundColor,
-      order:           i + 1,
-    }));
+    projectData.swimlanes = raw.map((s, i) => {
+      const id            = toInt(s.id, null, { entity: 'swimlane', id: null, field: 'id' });
+      const c             = (field) => ({ entity: 'swimlane', id, field });
+      const rowCount      = toInt(s.rowCount, 1, c('rowCount'));
+      const labelPosition = normalizeLabelPosition(s.labelPosition, c('labelPosition'));
+      return {
+        id,
+        name:            s.name,
+        rowCount,
+        labelPosition,
+        backgroundColor: s.backgroundColor,
+        order:           i + 1,
+      };
+    });
   }
 
   // ── Links ──────────────────────────────────────────────────────────────────
@@ -304,14 +450,20 @@ function parseWorkbook(workbook) {
       'Line Style':   { key: 'lineStyle',  def: 'solid'           },
       'Routing':      { key: 'routing',    def: 'auto', fallback: 'Link Routing' },
     });
-    projectData.links = raw.map(l => ({
-      id:         toInt(l.id),
-      fromTaskId: toInt(l.fromTaskId),
-      toTaskId:   toInt(l.toTaskId),
-      lineColor:  l.lineColor,
-      lineStyle:  l.lineStyle,
-      routing:    l.routing,
-    }));
+    projectData.links = raw.map(l => {
+      const id         = toInt(l.id, null, { entity: 'link', id: null, field: 'id' });
+      const c          = (field) => ({ entity: 'link', id, field });
+      const fromTaskId = toInt(l.fromTaskId, null, c('fromTaskId'));
+      const toTaskId   = toInt(l.toTaskId, null, c('toTaskId'));
+      const lineStyle  = normalizeLineStyleLink(l.lineStyle, c('lineStyle'));
+      const routing    = normalizeLinkRouting(l.routing, c('routing'));
+      return {
+        id, fromTaskId, toTaskId,
+        lineColor:  l.lineColor,
+        lineStyle,
+        routing,
+      };
+    });
   }
 
   // ── Pipes ──────────────────────────────────────────────────────────────────
@@ -325,14 +477,21 @@ function parseWorkbook(workbook) {
       'Line Style':     { key: 'lineStyle',     def: 'solid' },
       'Label Position': { key: 'labelPosition', def: 1       },
     });
-    projectData.pipes = raw.map(p => ({
-      id:            toInt(p.id),
-      date:          toISODate(p.date),
-      name:          p.name,
-      color:         p.color,
-      lineStyle:     p.lineStyle,
-      labelPosition: toFloat(p.labelPosition, 1),
-    }));
+    projectData.pipes = raw.map(p => {
+      const id            = toInt(p.id, null, { entity: 'pipe', id: null, field: 'id' });
+      const c             = (field) => ({ entity: 'pipe', id, field });
+      const date          = parseDate(p.date, c('date'));
+      const lineStyle     = normalizeLineStylePipe(p.lineStyle, c('lineStyle'));
+      const labelPosition = toFloat(p.labelPosition, 1, c('labelPosition'));
+      return {
+        id,
+        date,
+        name:          p.name,
+        color:         p.color,
+        lineStyle,
+        labelPosition,
+      };
+    });
   }
 
   // ── Curtains ───────────────────────────────────────────────────────────────
@@ -348,16 +507,24 @@ function parseWorkbook(workbook) {
       'Label Position': { key: 'labelPosition', def: 1       },
       'Label Anchor':   { key: 'labelAnchor',   def: 'start' },
     });
-    projectData.curtains = raw.map(c => ({
-      id:            toInt(c.id),
-      startDate:     toISODate(c.startDate),
-      endDate:       toISODate(c.endDate),
-      name:          c.name,
-      color:         c.color,
-      opacity:       toFloat(c.opacity, 0.2),
-      labelPosition: toFloat(c.labelPosition, 1),
-      labelAnchor:   c.labelAnchor,
-    }));
+    projectData.curtains = raw.map(cu => {
+      const id            = toInt(cu.id, null, { entity: 'curtain', id: null, field: 'id' });
+      const c             = (field) => ({ entity: 'curtain', id, field });
+      const startDate     = parseDate(cu.startDate, c('startDate'));
+      const endDate       = parseDate(cu.endDate, c('endDate'));
+      const opacity       = toFloat(cu.opacity, 0.2, c('opacity'));
+      const labelPosition = toFloat(cu.labelPosition, 1, c('labelPosition'));
+      const labelAnchor   = normalizeLabelAnchor(cu.labelAnchor, c('labelAnchor'));
+      return {
+        id,
+        startDate, endDate,
+        name:          cu.name,
+        color:         cu.color,
+        opacity,
+        labelPosition,
+        labelAnchor,
+      };
+    });
   }
 
   // ── Notes ──────────────────────────────────────────────────────────────────
@@ -375,46 +542,52 @@ function parseWorkbook(workbook) {
       'Fill Color':     { key: 'fillColor',      def: ''     },
       'Text':           { key: 'text',           def: ''     },
     });
-    projectData.notes = raw.map(n => ({
-      id:            toInt(n.id),
-      xPct:          toFloat(n.xPct, 0),
-      yPct:          toFloat(n.yPct, 0),
-      widthPct:      toFloat(n.widthPct, 0),
-      heightPct:     toFloat(n.heightPct, 0),
-      textAlign:     n.textAlign,
-      verticalAlign: n.verticalAlign,
-      borderColor:   n.borderColor,
-      fillColor:     n.fillColor,
-      text:          n.text,
-    }));
+    projectData.notes = raw.map(n => {
+      const id            = toInt(n.id, null, { entity: 'note', id: null, field: 'id' });
+      const c             = (field) => ({ entity: 'note', id, field });
+      const xPct          = toFloat(n.xPct, 0, c('xPct'));
+      const yPct          = toFloat(n.yPct, 0, c('yPct'));
+      const widthPct      = toFloat(n.widthPct, 0, c('widthPct'));
+      const heightPct     = toFloat(n.heightPct, 0, c('heightPct'));
+      const textAlign     = normalizeNoteTextAlign(n.textAlign, c('textAlign'));
+      const verticalAlign = normalizeNoteVerticalAlign(n.verticalAlign, c('verticalAlign'));
+      return {
+        id,
+        xPct, yPct, widthPct, heightPct,
+        textAlign, verticalAlign,
+        borderColor:   n.borderColor,
+        fillColor:     n.fillColor,
+        text:          n.text,
+      };
+    });
   }
 
   // ── Config: Layout ─────────────────────────────────────────────────────────
   const layoutKV = parseConfigSheet(workbook.Sheets['Layout']);
   projectData.config.layout = {
-    outerWidth:      kvInt(layoutKV,  'Outer Width',    1200),
-    outerHeight:     kvInt(layoutKV,  'Outer Height',   700),
-    paddingTop:      kvInt(layoutKV,  'Padding Top',    20, 'Margin Top'),
-    paddingRight:    kvInt(layoutKV,  'Padding Right',  20, 'Margin Right'),
-    paddingBottom:   kvInt(layoutKV,  'Padding Bottom', 20, 'Margin Bottom'),
-    paddingLeft:     kvInt(layoutKV,  'Padding Left',   20, 'Margin Left'),
-    showRowDividers: kvBool(layoutKV, 'Row Dividers',   true),
+    outerWidth:      kvInt(layoutKV,  'Outer Width',    1200, undefined,       cfg('outerWidth')),
+    outerHeight:     kvInt(layoutKV,  'Outer Height',   700,  undefined,       cfg('outerHeight')),
+    paddingTop:      kvInt(layoutKV,  'Padding Top',    20,   'Margin Top',    cfg('paddingTop')),
+    paddingRight:    kvInt(layoutKV,  'Padding Right',  20,   'Margin Right',  cfg('paddingRight')),
+    paddingBottom:   kvInt(layoutKV,  'Padding Bottom', 20,   'Margin Bottom', cfg('paddingBottom')),
+    paddingLeft:     kvInt(layoutKV,  'Padding Left',   20,   'Margin Left',   cfg('paddingLeft')),
+    showRowDividers: kvBool(layoutKV, 'Row Dividers',   true, undefined,       cfg('showRowDividers')),
   };
 
   // ── Config: Bars ───────────────────────────────────────────────────────────
   const barsKV = parseConfigSheet(workbook.Sheets['Bars']);
   projectData.config.bars = {
-    taskBarHeightFactor:       kvFloat(barsKV, 'Task Bar Height Factor',     0.7),
-    milestoneSizeFactor:       kvFloat(barsKV, 'Milestone Size Factor',      0.7),
-    milestoneShape:            normalizeMilestoneShape(kvStr(barsKV, 'Milestone Shape', 'diamond')),
-    milestoneCornerRadius:     kvFloat(barsKV, 'Milestone Corner Radius',    0),
-    taskCornerRadius:          kvInt(barsKV,   'Task Corner Radius',          2),
+    taskBarHeightFactor:       kvFloat(barsKV, 'Task Bar Height Factor',     0.7, undefined, cfg('taskBarHeightFactor')),
+    milestoneSizeFactor:       kvFloat(barsKV, 'Milestone Size Factor',      0.7, undefined, cfg('milestoneSizeFactor')),
+    milestoneShape:            normalizeMilestoneShape(barsKV['Milestone Shape'], cfg('milestoneShape')),
+    milestoneCornerRadius:     kvFloat(barsKV, 'Milestone Corner Radius',    0,   undefined, cfg('milestoneCornerRadius')),
+    taskCornerRadius:          kvInt(barsKV,   'Task Corner Radius',          2,  undefined, cfg('taskCornerRadius')),
   };
 
   // ── Config: Timeline ───────────────────────────────────────────────────────
   const timelineKV = parseConfigSheet(workbook.Sheets['Timeline']);
-  let chartStartDate = kvDate(timelineKV, 'Chart Start Date');
-  let chartEndDate   = kvDate(timelineKV, 'Chart End Date');
+  let chartStartDate = kvDate(timelineKV, 'Chart Start Date', undefined, cfg('chartStartDate'));
+  let chartEndDate   = kvDate(timelineKV, 'Chart End Date',   undefined, cfg('chartEndDate'));
   const chartStartDateExplicit = chartStartDate !== null;
   const chartEndDateExplicit   = chartEndDate !== null;
   // Derive from task dates if absent or unparseable
@@ -431,26 +604,26 @@ function parseWorkbook(workbook) {
     chartEndDate,
     chartStartDateExplicit,
     chartEndDateExplicit,
-    showYears:      kvBool(timelineKV, 'Show Years',      true),
-    showMonths:     kvBool(timelineKV, 'Show Months',     true),
-    showWeeks:      kvBool(timelineKV, 'Show Weeks',      false),
-    showDays:       kvBool(timelineKV, 'Show Days',       false),
-    showDates:      kvBool(timelineKV, 'Show Dates',      false),
-    gridlineYears:  kvBool(timelineKV, 'Gridline Years',  true,  'Vertical Gridline Years'),
-    gridlineMonths: kvBool(timelineKV, 'Gridline Months', true,  'Vertical Gridline Months'),
-    gridlineWeeks:  kvBool(timelineKV, 'Gridline Weeks',  false, 'Vertical Gridline Weeks'),
-    gridlineDays:   kvBool(timelineKV, 'Gridline Days',   false),
+    showYears:      kvBool(timelineKV, 'Show Years',      true,  undefined,                  cfg('showYears')),
+    showMonths:     kvBool(timelineKV, 'Show Months',     true,  undefined,                  cfg('showMonths')),
+    showWeeks:      kvBool(timelineKV, 'Show Weeks',      false, undefined,                  cfg('showWeeks')),
+    showDays:       kvBool(timelineKV, 'Show Days',       false, undefined,                  cfg('showDays')),
+    showDates:      kvBool(timelineKV, 'Show Dates',      false, undefined,                  cfg('showDates')),
+    gridlineYears:  kvBool(timelineKV, 'Gridline Years',  true,  'Vertical Gridline Years',  cfg('gridlineYears')),
+    gridlineMonths: kvBool(timelineKV, 'Gridline Months', true,  'Vertical Gridline Months', cfg('gridlineMonths')),
+    gridlineWeeks:  kvBool(timelineKV, 'Gridline Weeks',  false, 'Vertical Gridline Weeks',  cfg('gridlineWeeks')),
+    gridlineDays:   kvBool(timelineKV, 'Gridline Days',   false, undefined,                  cfg('gridlineDays')),
   };
 
   // ── Config: Titles ─────────────────────────────────────────────────────────
   const titlesKV = parseConfigSheet(workbook.Sheets['Titles']);
   projectData.config.titles = {
-    headerHeight:    kvInt(titlesKV, 'Header Height',     20),
+    headerHeight:    kvInt(titlesKV, 'Header Height',     20, undefined, cfg('headerHeight')),
     headerText:      kvStr(titlesKV, 'Header Text',       ''),
-    headerTextAlign: normalizeTextAlign(kvStr(titlesKV, 'Header Text Align', 'center')),
-    footerHeight:    kvInt(titlesKV, 'Footer Height',     20),
+    headerTextAlign: normalizeTextAlign(titlesKV['Header Text Align'], cfg('headerTextAlign')),
+    footerHeight:    kvInt(titlesKV, 'Footer Height',     20, undefined, cfg('footerHeight')),
     footerText:      kvStr(titlesKV, 'Footer Text',       ''),
-    footerTextAlign: normalizeTextAlign(kvStr(titlesKV, 'Footer Text Align', 'center')),
+    footerTextAlign: normalizeTextAlign(titlesKV['Footer Text Align'], cfg('footerTextAlign')),
   };
 
   // ── Config: Style ──────────────────────────────────────────────────────────
@@ -478,18 +651,18 @@ function parseWorkbook(workbook) {
   const typographyKV = parseConfigSheet(workbook.Sheets['Typography']);
   projectData.config.typography = {
     fontFamily:                   kvStr(typographyKV,   'Font Family',                     'Arial'),
-    taskFontSize:                 kvInt(typographyKV,   'Task Font Size',                  10),
-    scaleFontSize:                kvInt(typographyKV,   'Scale Font Size',                 10),
-    headerFooterFontSize:         kvInt(typographyKV,   'Header Footer Font Size',          10,  'Header & Footer Font Size'),
-    noteFontSize:                 kvInt(typographyKV,   'Note Font Size',                  10),
-    swimlaneFontSize:             kvInt(typographyKV,   'Swimlane Font Size',               10),
-    pipeFontSize:                 kvInt(typographyKV,   'Pipe Font Size',                   10),
-    curtainFontSize:              kvInt(typographyKV,   'Curtain Font Size',                10),
-    scaleAlignmentFactor:         kvFloat(typographyKV, 'Scale Alignment Factor',           0.7, 'Scale Vertical Alignment Factor'),
-    taskAlignmentFactor:          kvFloat(typographyKV, 'Task Alignment Factor',            0.7, 'Task Vertical Alignment Factor'),
-    headerFooterAlignmentFactor:  kvFloat(typographyKV, 'Header Footer Alignment Factor',   0.7, 'Header & Footer Vertical Alignment Factor'),
-    swimlaneTopAlignmentFactor:   kvFloat(typographyKV, 'Swimlane Top Alignment Factor',    0.7, 'Swimlane Top Vertical Alignment Factor'),
-    swimlaneBottomAlignmentFactor:kvFloat(typographyKV, 'Swimlane Bottom Alignment Factor', 0.7, 'Swimlane Bottom Vertical Alignment Factor'),
+    taskFontSize:                 kvInt(typographyKV,   'Task Font Size',                  10,  undefined,                                   cfg('taskFontSize')),
+    scaleFontSize:                kvInt(typographyKV,   'Scale Font Size',                 10,  undefined,                                   cfg('scaleFontSize')),
+    headerFooterFontSize:         kvInt(typographyKV,   'Header Footer Font Size',          10, 'Header & Footer Font Size',                 cfg('headerFooterFontSize')),
+    noteFontSize:                 kvInt(typographyKV,   'Note Font Size',                  10,  undefined,                                   cfg('noteFontSize')),
+    swimlaneFontSize:             kvInt(typographyKV,   'Swimlane Font Size',               10, undefined,                                   cfg('swimlaneFontSize')),
+    pipeFontSize:                 kvInt(typographyKV,   'Pipe Font Size',                   10, undefined,                                   cfg('pipeFontSize')),
+    curtainFontSize:              kvInt(typographyKV,   'Curtain Font Size',                10, undefined,                                   cfg('curtainFontSize')),
+    scaleAlignmentFactor:         kvFloat(typographyKV, 'Scale Alignment Factor',           0.7, 'Scale Vertical Alignment Factor',           cfg('scaleAlignmentFactor')),
+    taskAlignmentFactor:          kvFloat(typographyKV, 'Task Alignment Factor',            0.7, 'Task Vertical Alignment Factor',            cfg('taskAlignmentFactor')),
+    headerFooterAlignmentFactor:  kvFloat(typographyKV, 'Header Footer Alignment Factor',   0.7, 'Header & Footer Vertical Alignment Factor', cfg('headerFooterAlignmentFactor')),
+    swimlaneTopAlignmentFactor:   kvFloat(typographyKV, 'Swimlane Top Alignment Factor',    0.7, 'Swimlane Top Vertical Alignment Factor',    cfg('swimlaneTopAlignmentFactor')),
+    swimlaneBottomAlignmentFactor:kvFloat(typographyKV, 'Swimlane Bottom Alignment Factor', 0.7, 'Swimlane Bottom Vertical Alignment Factor', cfg('swimlaneBottomAlignmentFactor')),
   };
 
   // ── Config: Preferences ────────────────────────────────────────────────────
@@ -500,5 +673,6 @@ function parseWorkbook(workbook) {
     chartDateFormat: kvStr(prefsKV, 'Chart Date Format', 'dd MMM'),
   };
 
+  projectData._parseNotices = _notices;
   return projectData;
 }

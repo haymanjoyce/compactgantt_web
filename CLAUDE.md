@@ -121,6 +121,55 @@ Config sheet key names are confirmed. The `kv*` helpers (`kvStr/kvInt/kvFloat/kv
 - `swimlane.order` = 1-based sheet-row position (not stored in Excel)
 - `config.timeline.chartStartDate/chartEndDate` derived from `min(task.startDate)` / `max(task.finishDate)` if absent from the Timeline sheet; `chartStartDateExplicit` / `chartEndDateExplicit` (booleans in `config.timeline`) record whether each came from the cell (`true`) or was derived (`false`) — used by the writer to decide whether to emit or leave empty, preserving auto-derive behaviour across save/reload cycles
 
+## Parse notices (`_parseNotices`)
+
+`projectData._parseNotices` is an array side-channel populated by `parseWorkbook` and seeded to `[]` by `createEmptyProjectData()`. Sits alongside `tasks`, `swimlanes`, `links`, `pipes`, `curtains`, `notes`, and `config`. Each notice records a non-empty source cell that the parser could not interpret and silently defaulted:
+
+```
+{ entity, id, field, rawValue, reason }
+```
+
+- `entity` — singular lowercase: `'task'` / `'swimlane'` / `'link'` / `'pipe'` / `'curtain'` / `'note'` / `'config'`
+- `id` — entity row id (integer for parsed ids, `null` for config rows or when the row's own id cell was missing/unparseable)
+- `field` — JS property name (e.g. `'startDate'`, `'paddingTop'`), never the Excel header
+- `rawValue` — original cell value as it appeared in `row[header]` / `map[key]`, unmodified (no stringify, no trim)
+- `reason` — one of four values emitted by the parser, plus a fifth reserved for the validation module
+
+Reason values (closed enum):
+
+| Reason | When emitted |
+|---|---|
+| `'unparseable_date'` | non-empty value that `toISODate` returned `null` for; emitted at parser call sites (`toISODate` in `dates.js` is unchanged) |
+| `'unparseable_number'` | non-empty value that `parseInt` / `parseFloat` returned `NaN` for; emitted by `toInt` / `toFloat` / `kvInt` / `kvFloat` |
+| `'unrecognised_boolean'` | non-empty string in a boolean field that, after trim+lowercase, is neither `'yes'` nor `'no'`; emitted by `kvBool`. Native JS booleans (SheetJS `typeof v === 'boolean'`) pass through silently |
+| `'unrecognised_enum'` | non-empty value that a `normalize*` function did not recognise; emitted by each `normalize*` function |
+| `'absent_required'` | **reserved** for the validation module — never emitted by the parser |
+
+**Empty vs unparseable distinction.** Empty cells (`null` / `undefined` / `''`) and whitespace-only strings (`'   '`) NEVER produce a notice — they take the default silently. Notices fire only when the user wrote something meaningful that the parser ignored. This is the entire point of the side-channel: it separates "user wrote nothing" from "user wrote something the parser couldn't use."
+
+**Notice order.** Parser-traversal order: entity sheets first (tasks, swimlanes, links, pipes, curtains, notes), then config sheets (layout, bars, timeline, titles, style, typography, preferences). Within a sheet, top-to-bottom row order. Within a row, left-to-right field order.
+
+**Not emitted from:** `createEmptyProjectData()` (defaults are not user input); column-name fallbacks (`Row`/`Swimlane Row`, `Name`/`Title`, `Routing`/`Link Routing`); config key-name fallbacks (`Margin`→`Padding`, British-spelling `Colour` fallbacks, etc.).
+
+**Enum recognition lives in the parser.** All twelve `normalize*` functions are in `parser.js` and emit `unrecognised_enum` notices when given a non-empty unrecognised value. Renderer-side fallbacks for unrecognised enum values are no longer reachable in normal flow — the parser supplies a canonical default before the value leaves `parseWorkbook`. The validation module does not need to re-encode any enum membership lists.
+
+| Normalizer | Field(s) | Allowed values | Default |
+|---|---|---|---|
+| `normalizeLabelContent` | `task.labelContent` | `none` / `name` / `date` / `name_and_date` | `name` |
+| `normalizeLabelPlacement` | `task.labelPlacement` | `inside` / `outside` | `inside` |
+| `normalizeLabelPosition` | `swimlane.labelPosition` | `top-right` / `top-left` / `bottom-right` / `bottom-left` | `top-right` |
+| `normalizeTextAlign` | `titles.headerTextAlign` / `titles.footerTextAlign` | `left` / `center` / `right` | `center` |
+| `normalizeMilestoneShape` | `bars.milestoneShape` | `circle` / `diamond` | `diamond` |
+| `normalizeLineStyleLink` | `link.lineStyle` | `solid` / `dashed` | `solid` |
+| `normalizeLineStylePipe` | `pipe.lineStyle` | `solid` / `dashed` / `dotted` | `solid` |
+| `normalizeFillPattern` | `task.fillPattern` | `solid` / `hatch` / `cross-hatch` / `horizontal` / `vertical` / `dots` | `solid` |
+| `normalizeLabelAnchor` | `curtain.labelAnchor` | `start` / `end` | `start` |
+| `normalizeNoteTextAlign` | `note.textAlign` | `left` / `center` / `right` | `left` |
+| `normalizeNoteVerticalAlign` | `note.verticalAlign` | `top` / `middle` / `bottom` | `top` |
+| `normalizeLinkRouting` | `link.routing` | `auto` / `hv` / `vh` (case-insensitive on input, stored lowercase) | `auto` |
+
+**Surfaced by the Inspector.** Because `_parseNotices` is not one of the seven fixed top-level keys (`tasks`, `swimlanes`, `links`, `pipes`, `curtains`, `notes`, `config`), the Inspector's dynamic walk picks it up as a diagnostic section and renders it via `renderEntityTable` — no UI code changes needed. A clean file produces an empty array.
+
 ## Renderer (renderer.js)
 
 `renderChart(projectData)` returns a raw SVG string. Key design rules:
