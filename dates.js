@@ -6,6 +6,7 @@
 function toISODate(val) {
   if (val == null || val === '') return null;
   if (val instanceof Date) {
+    if (isNaN(val.getTime())) return null;
     const y = val.getFullYear();
     const m = String(val.getMonth() + 1).padStart(2, '0');
     const d = String(val.getDate()).padStart(2, '0');

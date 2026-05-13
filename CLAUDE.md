@@ -50,9 +50,10 @@ Ignores:
 | `parser.js` | Exports `parseWorkbook(workbook)` and `createEmptyProjectData()` |
 | `renderer.js` | Exports `renderChart(projectData)` → SVG string; no DOM dependency, no side effects |
 | `writer.js` | Exports `writeWorkbook(projectData)` → `Uint8Array`; no DOM dependency, no side effects |
+| `validation.js` | Exports `validateProject(projectData)` → `ValidationReport`; pure, no DOM, no side effects |
 | `ui.js` | UI entry point; owns the live `projectData` reference; exports `initUI()` |
 
-Script loading order: SheetJS CDN → date-fns CDN (`3.6.0`, global `dateFns`) → `dates.js` → `parser.js` → `renderer.js` → `writer.js` → `ui.js` → inline script.
+Script loading order: SheetJS CDN → date-fns CDN (`3.6.0`, global `dateFns`) → `dates.js` → `parser.js` → `renderer.js` → `writer.js` → `validation.js` → `ui.js` → inline script.
 
 ## Date helpers (dates.js)
 
@@ -60,7 +61,7 @@ Script loading order: SheetJS CDN → date-fns CDN (`3.6.0`, global `dateFns`) �
 
 | Function | Signature | Description |
 |---|---|---|
-| `toISODate` | `(val) → string\|null` | Accepts a JS `Date`, DD/MM/YYYY string, or YYYY-MM-DD string; returns YYYY-MM-DD or `null`. Timezone-safe. |
+| `toISODate` | `(val) → string\|null` | Accepts a JS `Date`, DD/MM/YYYY string, or YYYY-MM-DD string; returns YYYY-MM-DD or `null`. Timezone-safe. Invalid `Date` objects (`isNaN(getTime())`) return `null` — guards against SheetJS surfacing Invalid Date on round-tripped empty cells. |
 | `toJsDate` | `(iso) → Date\|null` | Takes a YYYY-MM-DD string; returns a JS `Date` via `new Date(y, m-1, d)`. Returns `null` for absent input. |
 | `daysBetween` | `(a, b) → number` | Calendar days between two YYYY-MM-DD strings (`b − a`), computed via `Date.UTC`. |
 | `formatDate` | `(iso, formatStr) → string` | Formats a YYYY-MM-DD string using a date-fns format string. Timezone-safe via local-Date construction. Requires `dateFns` global. |
@@ -97,23 +98,9 @@ It is initialised at startup by calling `createEmptyProjectData()` (exported fro
 
 **Date parsing** (`toISODate`): handles both `instanceof Date` (uses `getFullYear/getMonth/getDate` — never `toISOString`, timezone-safe) and DD/MM/YYYY strings (split on `/`, never passed to `new Date()`).
 
-**Confirmed Excel column headers** (from real project file):
+**Excel column headers and config keys** are confirmed against a real project file; `parser.js` is the authoritative list (`colDefs` blocks + `kv*` calls cover every header/key, default, and old-name fallback).
 
-| Sheet | Headers |
-|---|---|
-| Tasks | ID, Swimlane ID, Swimlane Row\*, Name, Start Date, Finish Date, Label Content, Label Placement, Label Offset, Fill Color, Fill Pattern, Pattern Color, Date Format |
-| Swimlanes | ID, Title\*, Row Count, Label Position, Background Color |
-| Links | ID, From Task ID, To Task ID, Line Color, Line Style, Link Routing\* |
-| Notes | ID, X %, Y %, Width %, Height %, Text Align, Vertical Align, Border Color, Fill Color, Text |
-
-\* Old-format name; new name is "Row" / "Name" / "Routing". Fallback handles both.
-
-Config sheet key names are confirmed. The `kv*` helpers (`kvStr/kvInt/kvFloat/kvBool/kvDate`) each accept an optional `fallback` key — same try-new-first pattern as entity column fallbacks. Known config key renames (new → old fallback):
-
-- **Layout** — padding keys: `"Padding Top/Right/Bottom/Left"` → `"Margin Top/Right/Bottom/Left"`
-- **Style** — 11 existing keys: `"… Color"` → `"… Colour"` (the newer `insideLabelTextColor`, `noteTextColor`, `headerFooterTextColor`, `scaleLabelTextColor`, and `headerFooterBorderColor` have no old-format fallback). Exception: `outsideLabelLineColor` was renamed to `leaderLineColor`; its Excel column is now `"Leader Line Color"` with fallback `"Outside Label Line Color"` (British-spelling fallback `"Outside Label Line Colour"` dropped — files using it get the `"black"` default).
-- **Timeline** — gridline keys for years/months/weeks: `"Gridline X"` → `"Vertical Gridline X"`; the three days/dates keys (`"Show Days"`, `"Show Dates"`, `"Gridline Days"`) have no old-format fallback. Note schema asymmetry: five `show*` fields (years, months, weeks, days, dates) but only four `gridline*` fields (years, months, weeks, days) — days and dates share calendar-day boundary granularity, so a single `gridlineDays` covers both.
-- **Typography** — alignment factors: `"X Alignment Factor"` → `"X Vertical Alignment Factor"`; also `"Header Footer Font Size"` → `"Header & Footer Font Size"`; `"Pipe Font Size"` and `"Curtain Font Size"` have no old-format fallback
+Config sheet key names are confirmed. The `kv*` helpers (`kvStr/kvInt/kvFloat/kvBool/kvDate`) each accept an optional `fallback` key for old-name compatibility — same try-new-first pattern as entity column fallbacks. The new/old name pairs are listed at every call site in `parser.js`; the authoritative list lives there. Schema asymmetry worth knowing: Timeline has five `show*` fields (years/months/weeks/days/dates) but only four `gridline*` fields — days and dates share calendar-day boundary granularity, so a single `gridlineDays` covers both.
 
 ## Derived fields
 
@@ -139,13 +126,13 @@ Reason values (closed enum):
 
 | Reason | When emitted |
 |---|---|
-| `'unparseable_date'` | non-empty value that did not produce a valid YYYY-MM-DD result. `parseDate` (entity rows) and `kvDate` (config) both call `toISODate` and validate the result against `/^\d{4}-\d{2}-\d{2}$/` — `toISODate`'s current pass-through for non-slash strings means a raw `"garbage"` is rejected here, not at `toISODate`. `toISODate` in `dates.js` is unchanged |
+| `'unparseable_date'` | non-empty value that did not produce a valid YYYY-MM-DD result. `parseDate` (entity rows) and `kvDate` (config) both call `toISODate` and validate the result against `/^\d{4}-\d{2}-\d{2}$/` — `toISODate`'s current pass-through for non-slash strings means a raw `"garbage"` is rejected here, not at `toISODate`. Invalid `Date` objects are filtered at `isNoticeableInput` so a writer-emitted empty cell round-trips clean. |
 | `'unparseable_number'` | non-empty value that `parseInt` / `parseFloat` returned `NaN` for; emitted by `toInt` / `toFloat` / `kvInt` / `kvFloat` |
 | `'unrecognised_boolean'` | non-empty string in a boolean field that, after trim+lowercase, is neither `'yes'` nor `'no'`; emitted by `kvBool`. Native JS booleans (SheetJS `typeof v === 'boolean'`) pass through silently |
 | `'unrecognised_enum'` | non-empty value that a `normalize*` function did not recognise; emitted by each `normalize*` function |
 | `'absent_required'` | **reserved** for the validation module — never emitted by the parser |
 
-**Empty vs unparseable distinction.** Empty cells (`null` / `undefined` / `''`) and whitespace-only strings (`'   '`) NEVER produce a notice — they take the default silently. Notices fire only when the user wrote something meaningful that the parser ignored. This is the entire point of the side-channel: it separates "user wrote nothing" from "user wrote something the parser couldn't use."
+**Empty vs unparseable distinction.** Empty cells (`null` / `undefined` / `''`), whitespace-only strings (`'   '`), and Invalid `Date` objects (`isNaN(getTime())`, as SheetJS produces when reading an empty date-typed cell after a round trip) NEVER produce a notice — they take the default silently. Notices fire only when the user wrote something meaningful that the parser ignored. This is the entire point of the side-channel: it separates "user wrote nothing" from "user wrote something the parser couldn't use."
 
 **Notice order.** Parser-traversal order: entity sheets first (tasks, swimlanes, links, pipes, curtains, notes), then config sheets (layout, bars, timeline, titles, style, typography, preferences). Within a sheet, top-to-bottom row order. Within a row, left-to-right field order.
 
@@ -168,7 +155,25 @@ Reason values (closed enum):
 | `normalizeNoteVerticalAlign` | `note.verticalAlign` | `top` / `middle` / `bottom` | `top` |
 | `normalizeLinkRouting` | `link.routing` | `auto` / `hv` / `vh` (case-insensitive on input, stored lowercase) | `auto` |
 
-**Surfaced by the Inspector.** Because `_parseNotices` is not one of the seven fixed top-level keys (`tasks`, `swimlanes`, `links`, `pipes`, `curtains`, `notes`, `config`), the Inspector's dynamic walk picks it up as a diagnostic section and renders it via `renderEntityTable` — no UI code changes needed. A clean file produces an empty array.
+**Surfaced by the Inspector.** `_parseNotices` is not one of the seven fixed top-level keys, so the Inspector's dynamic walk picks it up as a diagnostic section and renders it via `renderEntityTable`. A clean file produces an empty array.
+
+## Validation (`validation.js`)
+
+`validateProject(projectData)` returns `{ errors: [Issue], warnings: [Issue], notices: [Issue] }` — all three keys always present. Pure: no DOM, no side effects, never mutates `projectData`, never throws.
+
+Each `Issue` is `{ entity, id, field, message, value }`. `entity` is singular lowercase (same enum as `_parseNotices`). `id` is the entity row id, `null` for config issues and rows whose id cell was missing/unparseable. `field` is a JS property name. `value` is `null` for "missing field" rules, `rawValue` from `_parseNotices` for parse-derived rules, the current field value otherwise.
+
+**Structure.** A thin `validateProject` coordinator calls 14 per-block validators (six entity + eight config, in parse traversal order) and concatenates results. Shared helpers: `isValidCssColor`, `isInteger`, `isFiniteNumber`, `findDuplicateIds`, `isMissingField`, `consumeNotice`.
+
+**`_parseNotices` consumption.** Entity validators filter notices by entity tag; config validators filter by an explicit field-ownership Set at the top of each function. Matching notices emit Issues into the bucket dictated by the locked rule list — the same `reason` maps to different buckets depending on the field. The array stays in place on `projectData`.
+
+**"Missing X" guard** fires only when (a) the field is `null` AND (b) no `_parseNotices` entry for `(entity, id, field)` with reason `unparseable_number` / `unparseable_date`. Prevents double-emission. **Foreign-key validity Sets** (`Swimlane.id` for tasks; `Task.id` for links) filter `null` ids out, so a row with a missing id does not silently satisfy a reference.
+
+**CSS color recognition.** Inline allowlist (148 CSS Color Level 4 names + `transparent` + `currentcolor`) plus hex/rgb/rgba/hsl/hsla shape regexes. `isValidCssColor("")` is `false`; per-field rules decide whether empty is legal (e.g. Notes colors) or an error (e.g. all 16 Style colors).
+
+**Link classification (R1/R2/R3)** duplicates the renderer's invalid-link logic (see Link rendering) by design — neither module imports from the other. The absRow lookup is built inside `validateLinks` from `swimlane.order` + cumulative `rowCount` + `task.row`. Self-links (`fromTaskId === toTaskId`) skip the R1/R2/R3 block entirely — they would trip R1 trivially (`x >= x`) and R3 for self-linked milestones; the dedicated Self-link error above is the sole issue emitted for them.
+
+**Call site.** `ui.js` file-load handler sets `projectData._validation = validateProject(projectData)` after `parseWorkbook` and before the UI table refresh. The renderer never consults `_validation` — validation is non-gating in v1. The Inspector surfaces it via the dynamic walk's "plain object of arrays" shape handling (see Current UI).
 
 ## Renderer (renderer.js)
 
@@ -295,7 +300,7 @@ Three-tab layout: **Data** tab shows curated debug tables (one per entity type +
 
 **ui.js helpers:** `renderEntityTable(container, data, derivedKeys = [])` — the optional third argument lists keys whose column headers should be suffixed with ` (derived)` in the Inspector. Currently `['isMilestone']` for tasks and `['order']` for swimlanes; extend this list when new derived fields are added. `renderConfigTable(container, config)` renders a two-column key/value table. Both helpers are shared by the Data tab (no `derivedKeys` passed) and the Inspector.
 
-**Inspector dynamic walk:** `renderInspector` skips the seven fixed top-level keys (`tasks`, `swimlanes`, `links`, `pipes`, `curtains`, `notes`, `config`) and renders any remaining keys (e.g. future `_parseNotices`) as "diagnostic" sections. Array-of-objects → entity table; plain object → key-value table; primitive → single-cell table; anything else → `JSON.stringify` fallback.
+**Inspector dynamic walk:** `renderInspector` skips the seven fixed top-level keys and renders remaining keys (e.g. `_parseNotices`, `_validation`) as "diagnostic" sections. Plain object whose every value is an array → one sub-section per sub-key via `renderEntityTable` (this is how `_validation`'s `{errors, warnings, notices}` buckets render); array → entity table; plain object → key-value table; primitive → single-cell table; else `JSON.stringify` fallback.
 
 Toolbar buttons (left to right): file input → **Save** (xlsx) → **Save SVG**. Both Save buttons share the same disabled gate (`tasks.length === 0 && swimlanes.length === 0`) toggled in the file-load handler. The Save SVG button calls `renderChart(projectData)` directly regardless of which tab is active, wraps the result in a `Blob('image/svg+xml')`, and downloads via `URL.createObjectURL`. Filename: loaded filename with last extension replaced by `.svg` (e.g. `report.final.xlsx` → `report.final.svg`); defaults to `"compactgantt_chart.svg"` if no file is loaded.
 

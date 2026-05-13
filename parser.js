@@ -17,6 +17,7 @@ function recordNotice(notice) {
 function isNoticeableInput(val) {
   if (val == null || val === '') return false;
   if (typeof val === 'string' && val.trim() === '') return false;
+  if (val instanceof Date && isNaN(val.getTime())) return false;
   return true;
 }
 

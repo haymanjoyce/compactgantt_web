@@ -95,6 +95,17 @@ function renderInspector(panel) {
   Object.keys(d).forEach(key => {
     if (FIXED.has(key)) return;
     const val = d[key];
+    // Plain object whose every value is an array → render one section per sub-key.
+    // Generalises e.g. _validation's { errors, warnings, notices } buckets.
+    if (val !== null && typeof val === 'object' && !Array.isArray(val)) {
+      const entries = Object.entries(val);
+      if (entries.length > 0 && entries.every(([, v]) => Array.isArray(v))) {
+        entries.forEach(([subKey, subVal]) => {
+          appendSection(`${key}.${subKey}`, 'diagnostic', div => renderEntityTable(div, subVal));
+        });
+        return;
+      }
+    }
     appendSection(key, 'diagnostic', div => {
       if (Array.isArray(val)) {
         renderEntityTable(div, val);
@@ -123,6 +134,7 @@ function initUI() {
     reader.onload = function(ev) {
       const workbook = XLSX.read(new Uint8Array(ev.target.result), { type: 'array', cellDates: true });
       projectData = parseWorkbook(workbook);
+      projectData._validation = validateProject(projectData);
       loadedFilename = file.name;
 
       const d = projectData;
