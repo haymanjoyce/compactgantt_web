@@ -57,16 +57,11 @@ Script loading order: SheetJS CDN → date-fns CDN (`3.6.0`, global `dateFns`) �
 
 ## Date helpers (dates.js)
 
-`dates.js` is a shared module loaded before all four consuming files. All date conversion and arithmetic is centralised here; no local copies exist in `parser.js`, `renderer.js`, `writer.js`, or `ui.js`.
+`dates.js` is loaded before `parser.js`, `renderer.js`, `writer.js`, and `ui.js`. All date conversion and arithmetic is centralised here; no local copies exist in those files. (`validation.js` does only string comparison on YYYY-MM-DD and does not import.) Signatures and bodies are in `dates.js` — exports: `toISODate`, `toJsDate`, `daysBetween`, `formatDate`, `isoWeekLabel`, `weekdayName(iso, length)` where `length` is `'full'` / `'short'` / `'letter'`. Non-obvious invariants:
 
-| Function | Signature | Description |
-|---|---|---|
-| `toISODate` | `(val) → string\|null` | Accepts a JS `Date`, DD/MM/YYYY string, or YYYY-MM-DD string; returns YYYY-MM-DD or `null`. Timezone-safe. Invalid `Date` objects (`isNaN(getTime())`) return `null` — guards against SheetJS surfacing Invalid Date on round-tripped empty cells. |
-| `toJsDate` | `(iso) → Date\|null` | Takes a YYYY-MM-DD string; returns a JS `Date` via `new Date(y, m-1, d)`. Returns `null` for absent input. |
-| `daysBetween` | `(a, b) → number` | Calendar days between two YYYY-MM-DD strings (`b − a`), computed via `Date.UTC`. |
-| `formatDate` | `(iso, formatStr) → string` | Formats a YYYY-MM-DD string using a date-fns format string. Timezone-safe via local-Date construction. Requires `dateFns` global. |
-| `isoWeekLabel` | `(iso) → string` | Returns ISO week label, e.g. `"W03"`. Monday is the first day of the ISO week. Requires `dateFns` global. |
-| `weekdayName` | `(iso, length) → string` | Returns weekday name. `length`: `'full'`→`"Monday"`, `'short'`→`"Mon"`, `'letter'`→`"M"`. Requires `dateFns` global. |
+- `toISODate` is timezone-safe (`getFullYear/getMonth/getDate`, never `toISOString`) and filters Invalid `Date` objects (`isNaN(getTime())`) — guards against SheetJS surfacing Invalid Date on round-tripped empty cells. Non-slash strings pass through as-is (assumes already YYYY-MM-DD); shape validation happens at `parseDate` / `kvDate` in `parser.js`.
+- `toJsDate` constructs via `new Date(y, m-1, d)` (timezone-safe). `daysBetween` uses `Date.UTC` arithmetic.
+- `formatDate` / `isoWeekLabel` / `weekdayName` require the `dateFns` global. ISO week semantics — Monday is first day.
 
 ## Top-level state
 
@@ -90,7 +85,7 @@ It is initialised at startup by calling `createEmptyProjectData()` (exported fro
 - Tasks, Swimlanes, Links, Pipes, Curtains, Notes
 - Parsed via `parseEntitySheet(worksheet, colDefs)` — header-based, never positional
 - Missing columns silently receive their declared default (backward-compatibility requirement)
-- Column-name fallbacks handle old-format files: `"Row"→"Swimlane Row"`, `"Name"→"Title"`, `"Routing"→"Link Routing"`
+- Column-name fallbacks for old-format files are listed at each `parseEntitySheet` call site in `parser.js` (`fallback` property in `colDefs`)
 
 **Config sheets** (key-value: col A = field name, col B = value):
 - Layout, Bars, Timeline, Titles, Style, Typography, Preferences
@@ -137,22 +132,7 @@ Reason values:
 
 **Not emitted from:** `createEmptyProjectData()` (defaults are not user input); column-name fallbacks (`Row`/`Swimlane Row`, `Name`/`Title`, `Routing`/`Link Routing`); config key-name fallbacks (`Margin`→`Padding`, British-spelling `Colour` fallbacks, etc.).
 
-**Enum recognition lives in the parser.** All twelve `normalize*` functions are in `parser.js` and emit `unrecognised_enum` notices when given a non-empty unrecognised value. Renderer-side fallbacks for unrecognised enum values are no longer reachable in normal flow — the parser supplies a canonical default before the value leaves `parseWorkbook`. The validation module does not need to re-encode any enum membership lists.
-
-| Normalizer | Field(s) | Allowed values | Default |
-|---|---|---|---|
-| `normalizeLabelContent` | `task.labelContent` | `none` / `name` / `date` / `name_and_date` | `name` |
-| `normalizeLabelPlacement` | `task.labelPlacement` | `inside` / `outside` | `inside` |
-| `normalizeLabelPosition` | `swimlane.labelPosition` | `top-right` / `top-left` / `bottom-right` / `bottom-left` | `top-right` |
-| `normalizeTextAlign` | `titles.headerTextAlign` / `titles.footerTextAlign` | `left` / `center` / `right` | `center` |
-| `normalizeMilestoneShape` | `bars.milestoneShape` | `circle` / `diamond` | `diamond` |
-| `normalizeLineStyleLink` | `link.lineStyle` | `solid` / `dashed` | `solid` |
-| `normalizeLineStylePipe` | `pipe.lineStyle` | `solid` / `dashed` / `dotted` | `solid` |
-| `normalizeFillPattern` | `task.fillPattern` | `solid` / `hatch` / `cross-hatch` / `horizontal` / `vertical` / `dots` | `solid` |
-| `normalizeLabelAnchor` | `curtain.labelAnchor` | `start` / `end` | `start` |
-| `normalizeNoteTextAlign` | `note.textAlign` | `left` / `center` / `right` | `left` |
-| `normalizeNoteVerticalAlign` | `note.verticalAlign` | `top` / `middle` / `bottom` | `top` |
-| `normalizeLinkRouting` | `link.routing` | `auto` / `hv` / `vh` (case-insensitive on input, stored lowercase) | `auto` |
+**Enum recognition lives in the parser.** All twelve `normalize*` functions are in `parser.js` (search `normalize`) and emit `unrecognised_enum` notices when given a non-empty unrecognised value. Allowed values, defaults, and the field each covers are colocated at each function. Renderer-side fallbacks for unrecognised enums are no longer reachable in normal flow — the parser supplies a canonical default before the value leaves `parseWorkbook`, and the validation module does not re-encode any enum membership lists.
 
 **Surfaced by the Inspector.** `_parseNotices` is not one of the seven fixed top-level keys, so the Inspector's dynamic walk picks it up as a diagnostic section and renders it via `renderEntityTable`. A clean file produces an empty array.
 
@@ -162,7 +142,7 @@ Reason values:
 
 Each `Issue` is `{ entity, id, field, message, value }`. `entity` is singular lowercase (same enum as `_parseNotices`). `id` is the entity row id, `null` for config issues and rows whose id cell was missing/unparseable. `field` is a JS property name. `value` is `null` for "missing field" rules, `rawValue` from `_parseNotices` for parse-derived rules, the current field value otherwise.
 
-**Structure.** A thin `validateProject` coordinator calls 14 per-block validators (six entity + eight config, in parse traversal order) and concatenates results. Shared helpers: `isValidCssColor`, `isInteger`, `isFiniteNumber`, `findDuplicateIds`, `isMissingField`, `consumeNotice`.
+**Structure.** A thin `validateProject` coordinator calls 14 per-block validators (six entity + eight config, in parse traversal order) and concatenates results. Shared helpers at top of `validation.js`.
 
 **`_parseNotices` consumption.** Entity validators filter notices by entity tag; config validators filter by an explicit field-ownership Set at the top of each function. Matching notices emit Issues into the bucket dictated by the locked rule list — the same `reason` maps to different buckets depending on the field. The array stays in place on `projectData`.
 
@@ -189,12 +169,12 @@ Each `Issue` is `{ entity, id, field, message, value }`. `entity` is singular lo
 - **`daysBetween(a, b)`:** uses `Date.UTC()` — timezone-safe, no `toISOString()`
 - **Milestones:** centred on `startDate`; size = `bars.milestoneSizeFactor * rowHeight`. Two shapes selected by `bars.milestoneShape`:
   - `circle` — emits `<circle>` circumscribing the diamond's anchors; `milestoneCornerRadius` ignored.
-  - `diamond` (default) — `<path>` of four straight `L` edges joined by four `A` arcs at the cardinals; rounding controlled by `bars.milestoneCornerRadius` (0..1, fraction of half-edge). `0` = sharp diamond, `1` = inscribed circle (smaller than `shape=circle`). No parser clamping — out-of-range values produce broken shapes (validation module's responsibility).
+  - `diamond` (default) — `<path>` with rounded corners controlled by `bars.milestoneCornerRadius` (0..1, fraction of half-edge): `0` sharp, `1` inscribed circle (smaller than `shape=circle`). No parser clamping — validation flags out-of-range values.
 - **Bars:** `<rect rx="${bars.taskCornerRadius}">`.
 - **Task bar pattern fills:** `task.fillPattern` drives SVG `<pattern>` elements in the shared `<defs>` block (see Notes rendering for combined-defs design). `"solid"` (or any unrecognised value) → `fill="${fillColor}"` unchanged. The five named patterns (`hatch`, `cross-hatch`, `horizontal`, `vertical`, `dots`) → `fill="url(#id)"` referencing a deduplicated `<pattern>` keyed by sanitised `(fillPattern, fillColor, patternColor)` triple. Patterns use `patternUnits="userSpaceOnUse"` with no `x`/`y` — tiles anchor at SVG origin so bars on the same row share a continuous-field phase. Milestones are always solid; their `fillPattern` is not consumed by the renderer.
 - **Skip rules:** orphaned tasks, `finishDate < startDate`, tasks outside chart date range all silently skipped; out-of-range `row` clamped to 1
 - **Milestone labels:** the renderer's milestone branch always renders labels outside unconditionally, without reading `task.labelPlacement`. The parser does not override the stored placement value — milestones retain whatever placement the user set.
-- **Task labels (slot 12):** built from `task.labelContent` (`none`/`name`/`date`/`name_and_date`) with date-fns formatting. Per-task `task.dateFormat` overrides `config.preferences.chartDateFormat`. Dates parsed timezone-safely: split YYYY-MM-DD on `-` then `new Date(y, m-1, d)`. Inside label fill: `config.style.insideLabelTextColor`; outside label fill: `config.style.outsideLabelTextColor`.
+- **Task labels (slot 12):** built from `task.labelContent` with date-fns formatting. Per-task `task.dateFormat` overrides `config.preferences.chartDateFormat`. Dates parsed timezone-safely (`new Date(y, m-1, d)` from split). Inside fill: `style.insideLabelTextColor`; outside fill: `style.outsideLabelTextColor`.
   - *Inside labels* (bars only): truncated via character-width estimate (`fontSize * rendering.charWidthFactor` per character, sans-serif approximation). Prefers word-boundary break; falls back to character truncation; emits nothing if `…` alone exceeds available width. Available width = `barWidth - 2 * rendering.insideLabelPadding`.
   - *Outside labels*: no truncation. `x = rightEdge + outsideLabelKissingGap + task.labelOffset`; right edge = `xFor(finishDate)` for bars, `xFor(startDate) + milestoneHalf` for milestones. The kiss gap keeps labels clear of the bar edge even at zero offset.
   - *Leader lines*: horizontal `<line>` at row centre y, from `rightEdge` to `rightEdge + labelOffset` (spans exactly `labelOffset` px, with `outsideLabelKissingGap` clear between line end and label). Drawn when `labelOffset > 0`; for bars also requires `labelPlacement === 'outside'`. Stroke: `style.leaderLineColor` / `rendering.leaderLineStrokeWidth`. Emitted immediately before each task's `<text>` element inside slot 12 (interleaved per task, no separate pass). No clip — may overflow into right padding.
@@ -237,7 +217,7 @@ Links are Finish-to-Start dependency arrows. Implementation notes:
 
 **Z-order split:** All renderedLinks are pre-computed into an array. The array is iterated once to emit `<path>` bodies into `linkBodySvg` (slot 8), then iterated again to emit `<circle>` origin markers and `<polygon>` arrowheads into `linkHeadSvg` (slot 11). This two-pass approach keeps task bars and milestones between the two link layers without duplicating classification logic.
 
-**Arrowheads:** Per-link `<polygon>` triangles (not SVG `<marker>` in `<defs>`). Per-link polygons are simpler, have no browser-consistency issues with `context-fill`/`context-stroke`, and are trivially sized by `arrowheadSizeFactor * rowH` per link. The SVG `<marker>` approach would save bytes on charts with many links but introduces marker-scaling and color-inheritance complexity that outweighs the benefit at this scale.
+**Arrowheads:** Per-link `<polygon>` triangles sized by `arrowheadSizeFactor * rowH`, not SVG `<marker>` defs — avoids browser inconsistency with `context-fill`/`context-stroke` at the cost of bytes per link.
 
 **Milestone predecessor/successor special cases (forward links only):**
 - *Origin marker suppressed* when `pred.isMilestone` — the link path still starts at the milestone centre but no filled circle is drawn over the shape.
@@ -265,7 +245,7 @@ Curtains are tinted vertical bands over a date range with optional boundary line
 
 **Slot 7 — badge** (emitted only when `curtain.name` is non-empty): anchor x = `xFor(startDate)` when `curtain.labelAnchor !== 'end'`, else `xFor(endDate)`; badge skipped if anchor x falls outside `[innerX1, innerX2]`. Badge always extends right from the anchor, overflow past `innerX2` allowed. `curtain.labelPosition` (float, default `1`) pins to top/bottom; `typography.curtainFontSize` (default `10`) drives text height. Renderer source is authoritative for geometry.
 
-**Curtains entity columns:** ID, Start Date, End Date, Name, Color, Opacity, Label Position, Label Anchor. `labelAnchor` is normalised in the parser via `normalizeLabelAnchor` (`start` / `end`, default `start`).
+**Curtains entity columns:** parsed and written by `colDefs` for Curtains in `parser.js` / `writer.js`. `labelAnchor` is the only enum (`normalizeLabelAnchor`).
 
 ## Notes rendering
 
@@ -291,7 +271,7 @@ Partial overflow past task row area boundaries renders as-positioned — no clip
 
 **`<defs>` block (combined).** Pattern-fill defs and note clip paths share one `<defs>` block placed between the `<svg>` open tag and slot 1. Pattern content is collected first but assembly is deferred until after the notes pass so both kinds of content can be combined. `<defs>` is omitted entirely when neither patterns nor note clip paths are needed.
 
-**Notes entity columns:** ID, X %, Y %, Width %, Height %, Text Align, Vertical Align, Border Color, Fill Color, Text. No old-format fallbacks on any column. `borderColor` — string, default `""` (no border). `fillColor` — string, default `""` (transparent/no fill). `typography.noteFontSize` — integer, Typography sheet key `"Note Font Size"`, default `10`, no old-format fallback. `style.noteTextColor` — string, Style sheet key `"Note Text Color"`, default `"black"`, no old-format fallback.
+**Notes columns / typography / style keys:** see Notes `colDefs` in `parser.js` plus the Note Font Size / Note Text Color entries. Non-obvious defaults: `borderColor` / `fillColor` default to `""` (no border / transparent) — empty is the "skip the rect" signal, not an error.
 
 ## Current UI
 
@@ -299,19 +279,13 @@ Four-tab layout (left to right): Data → Issues → Chart → Inspector.
 
 **Data** tab shows curated debug tables (one per entity type + eight config KV tables), updated on file load. **Chart** tab calls `renderChart(projectData)` on every activation and injects the SVG into a horizontally-scrollable container ("No project loaded" shown if tasks array is empty). **Inspector** tab renders every field of `projectData` as flat tables on every activation — exhaustive, read-only, developer-facing, always reflects current state including defaults before any file is loaded.
 
-**Issues tab** (user-facing surface for `projectData._validation`). Renders on tab activation from the existing `_validation` — no re-validation, no re-run pathway. Four mutually exclusive panel states: (1) `_validation` undefined → neutral "Load a project…" panel; (2) all three buckets empty → green "No issues found." panel; (3) filters leave zero matches → controls + summary stay visible above a neutral "no match" panel; (4) table renders. Controls row: free-text search, three severity checkboxes (Errors/Warnings/Notices, all checked by default), grouping toggle (on by default). Two-line summary: line 1 always shows `N errors, M warnings, K notices` (unfiltered totals); line 2 shows `Showing X of Y` (Y = unfiltered grand total) only when filters are active. Search is case-insensitive substring match across `issue.message` and the string-coerced `issue.value`, applied live with no debouncing.
+**Issues tab** is a read-only, user-facing surface for `projectData._validation` — renders on tab activation, never re-validates. Four panel states (undefined / clean / no-match / table), controls (search, three severity checkboxes, grouping toggle), six-column table, severity-then-entity grouping, and three-state sort header cycle all live in `renderIssuesPanel` and friends in `ui.js`. Non-obvious bits worth keeping in mind:
 
-Six columns in order: Severity (coloured pill), Entity (capitalised), ID (numeric, em-dash for null), Field (JS property name as-is), Message, Value. Value rendering: `null` → em-dash; `""` → em-dash; `false`/`0`/other primitives → string-coerced as-is; arrays → comma-joined; truncated at ~40 chars with full text in `title` attribute.
+- Sort is stable, tie-broken to parser-emission order — implemented by always sorting from a canonical emission-ordered list (`flattenIssues`), never from the current view. ID and value place nulls/placeholders last regardless of direction.
+- Filter/sort/group state lives in module-scope `issuesFilterState`, persists across tab switches, resets on every file load. No `localStorage`. Search input keeps focus while typing because only `#issuesBody` re-renders on filter changes — the controls DOM is built once per `renderIssuesPanel` call.
+- Tab label: plain `Issues` when no issues, else `Issues (E/W/N)` with a single severity tint chosen by the highest non-zero bucket. Active-tab styling overrides the tint via CSS specificity.
 
-Grouping on (default): primary by severity (errors → warnings → notices), secondary by entity (task → swimlane → link → pipe → curtain → note → config), filtered counts on each band/sub-header, empty groups suppressed, not collapsible. Grouping off: single flat list.
-
-Sort: three-state column-header cycle (asc → desc → parser-emission default), `▲`/`▼` indicator on the active column. Stable, tie-broken to parser-emission order (achieved by always sorting from a canonical emission-ordered list, never from the current view). Severity sort uses rank order (matches grouping); entity sort uses semantic order (matches grouping). ID sort numeric ascending with nulls last; field/message/value case-insensitive locale compare; value/id place nulls/placeholders last regardless of direction. With grouping on, sort applies within entity sub-groups (groups themselves stay in fixed order).
-
-Persistent UI state: filter checkbox states, search content, grouping toggle, sort column + direction live in module-scope `issuesFilterState` and persist across tab switches within the session. Reset to defaults on every file load. No `localStorage`. The controls DOM is built once per `renderIssuesPanel` call; only the `#issuesBody` sub-element re-renders on filter/sort/group changes — search input keeps focus while typing.
-
-Tab label: plain `Issues` while `_validation` is undefined or all three buckets are empty. Otherwise `Issues (E/W/N)` (compact, no internal spaces) with a severity tint class — `.tab-tint-error` (red) if errors > 0, else `.tab-tint-warning` (amber) if warnings > 0, else `.tab-tint-notice` (grey) if notices > 0. The active-tab styling overrides the tint via CSS specificity (`.tab.active.tab-tint-* { color: inherit }`). Updated by `updateIssuesTabLabel()` at the end of the file-load handler.
-
-Validation is non-gating: Save xlsx and Save SVG buttons remain enabled regardless of `_validation` content; the Issues tab is the only surface that visually responds to errors. The Inspector still surfaces `_validation` raw via its dynamic walk — Inspector is developer-facing, Issues is user-facing, and the duplication is intentional.
+Validation is non-gating: Save xlsx and Save SVG remain enabled regardless of `_validation` content. The Inspector also surfaces `_validation` raw via its dynamic walk (developer-facing); duplication with the Issues tab (user-facing) is intentional.
 
 **ui.js helpers:** `renderEntityTable(container, data, derivedKeys = [])` — the optional third argument lists keys whose column headers should be suffixed with ` (derived)` in the Inspector. Currently `['isMilestone']` for tasks and `['order']` for swimlanes; extend this list when new derived fields are added. `renderConfigTable(container, config)` renders a two-column key/value table. Both helpers are shared by the Data tab (no `derivedKeys` passed) and the Inspector. The Issues tab does not reuse these helpers — `renderIssuesPanel` and friends are dedicated, with their own column model, sortable headers, pill rendering, and truncation rules.
 
@@ -325,7 +299,7 @@ Toolbar buttons (left to right): file input → **Save** (xlsx) → **Save SVG**
 
 **Named-column policy:** columns are identified by header name, not index. The writer emits named headers; column order within each sheet is presentation-only and not load-bearing for the schema.
 
-**Sheet order:** Tasks → Swimlanes → Links → Pipes → Curtains → Notes → Layout → Bars → Timeline → Titles → Style → Typography → Preferences. `config.rendering` is deliberately excluded (hard-coded defaults; not a user-configurable concern at this stage).
+**Sheet order:** matches the `addSheet` call sequence in `writer.js`. `config.rendering` is deliberately excluded (hard-coded defaults; not user-configurable at this stage).
 
 **Entity sheets:** header row + one data row per entity; always emitted even if the array is empty. Derived fields (`task.isMilestone`, `swimlane.order`) are not written. `task.dateFormat` and null date fields write as empty cells (`null` in the AOA → empty cell in SheetJS).
 
