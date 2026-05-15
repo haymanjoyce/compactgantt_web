@@ -250,7 +250,7 @@ Pipes are vertical reference lines drawn at a given date with an optional text b
 
 **Skip rules:** pipe skipped silently if `pipe.date` is null, `pipe.date < chartStartDate`, or `pipe.date > chartEndDate`.
 
-**Line:** `<line>` from `(x, taskRowY1)` to `(x, taskRowY2)` where `x = xFor(pipe.date)`. stroke-dasharray: solid → none, dashed → `"4 3"`, dotted → `"1 2"`. Stroke color = `pipe.color`, stroke-width = `rendering.pipeStrokeWidth`.
+**Line:** `<line>` from `(x, taskRowY1)` to `(x, taskRowY2)` where `x = xFor(pipe.date)`. stroke-dasharray: solid → none, dashed → `rendering.pipeStrokeDasharrayDashed`, dotted → `rendering.pipeStrokeDasharrayDotted`. Stroke color = `pipe.color`, stroke-width = `rendering.pipeStrokeWidth`.
 
 **Badge** (emitted only when `pipe.name` is non-empty): rendered as `<rect>` + `<text>` at the pipe x. `pipe.labelPosition` (float, default `1`) pins to top (`1`) or bottom (`0`); badge may overflow past `innerX2` without clipping. `typography.pipeFontSize` (default `10`) drives text height; padding from `rendering.pipeBadgePaddingX/Y`. Renderer source is authoritative for geometry.
 

@@ -788,6 +788,7 @@ const TYPOGRAPHY_FONT_SIZE_FIELDS = [
 ];
 const TYPOGRAPHY_FACTOR_FIELDS = [
   'scaleAlignmentFactor','taskAlignmentFactor','headerFooterAlignmentFactor',
+  'pipeAlignmentFactor','curtainAlignmentFactor','noteAlignmentFactor',
   'swimlaneTopAlignmentFactor','swimlaneBottomAlignmentFactor',
 ];
 

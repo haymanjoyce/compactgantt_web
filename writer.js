@@ -154,6 +154,9 @@ function writeWorkbook(projectData) {
     ['Scale Alignment Factor',           typography.scaleAlignmentFactor],
     ['Task Alignment Factor',            typography.taskAlignmentFactor],
     ['Header Footer Alignment Factor',   typography.headerFooterAlignmentFactor],
+    ['Pipe Alignment Factor',            typography.pipeAlignmentFactor],
+    ['Curtain Alignment Factor',         typography.curtainAlignmentFactor],
+    ['Note Alignment Factor',            typography.noteAlignmentFactor],
     ['Swimlane Top Alignment Factor',    typography.swimlaneTopAlignmentFactor],
     ['Swimlane Bottom Alignment Factor', typography.swimlaneBottomAlignmentFactor],
   ]);

@@ -336,8 +336,8 @@ function renderChart(projectData) {
     if (pipe.date < chartStartDate || pipe.date > chartEndDate) continue;
 
     const px = xFor(pipe.date);
-    const dashAttr = pipe.lineStyle === 'dashed' ? ' stroke-dasharray="4 3"'
-                   : pipe.lineStyle === 'dotted'  ? ' stroke-dasharray="1 2"'
+    const dashAttr = pipe.lineStyle === 'dashed' ? ` stroke-dasharray="${rendering.pipeStrokeDasharrayDashed}"`
+                   : pipe.lineStyle === 'dotted'  ? ` stroke-dasharray="${rendering.pipeStrokeDasharrayDotted}"`
                    : '';
     pipesSvg += `<line x1="${n(px)}" y1="${n(taskRowY1)}" x2="${n(px)}" y2="${n(taskRowY2)}" stroke="${pipe.color}" stroke-width="${rendering.pipeStrokeWidth}"${dashAttr}/>`;
 
@@ -349,7 +349,7 @@ function renderChart(projectData) {
       const areaH      = taskRowY2 - taskRowY1;
       const badgeTopY  = taskRowY1 + (1 - pipe.labelPosition) * (areaH - badgeH);
       const textCX     = px + badgeW / 2;
-      const textY      = n(badgeTopY + badgeH * typography.scaleAlignmentFactor);
+      const textY      = n(badgeTopY + badgeH * typography.pipeAlignmentFactor);
       pipesSvg += `<rect x="${n(px)}" y="${n(badgeTopY)}" width="${n(badgeW)}" height="${n(badgeH)}" fill="${style.chartBackgroundColor}" stroke="${pipe.color}" stroke-width="${rendering.pipeStrokeWidth}"/>`;
       pipesSvg += `<text x="${n(textCX)}" y="${textY}" text-anchor="middle" font-family="'${escapeXml(typography.fontFamily)}'" font-size="${fontSize}" fill="${pipe.color}">${escapeXml(pipe.name)}</text>`;
     }
@@ -381,7 +381,7 @@ function renderChart(projectData) {
         const areaH     = taskRowY2 - taskRowY1;
         const badgeTopY = taskRowY1 + (1 - curtain.labelPosition) * (areaH - badgeH);
         const textCX    = anchorX + badgeW / 2;
-        const textY     = n(badgeTopY + badgeH * typography.scaleAlignmentFactor);
+        const textY     = n(badgeTopY + badgeH * typography.curtainAlignmentFactor);
         curtainEdgesSvg += `<rect x="${n(anchorX)}" y="${n(badgeTopY)}" width="${n(badgeW)}" height="${n(badgeH)}" fill="${style.chartBackgroundColor}" stroke="${curtain.color}" stroke-width="${rendering.curtainStrokeWidth}"/>`;
         curtainEdgesSvg += `<text x="${n(textCX)}" y="${textY}" text-anchor="middle" font-family="'${escapeXml(typography.fontFamily)}'" font-size="${fontSize}" fill="${curtain.color}">${escapeXml(curtain.name)}</text>`;
       }
@@ -589,7 +589,7 @@ function renderChart(projectData) {
     if (!pred || !succ) continue; // orphaned — one or both tasks not rendered
 
     const color = link.lineColor;
-    const dashAttr = link.lineStyle === 'dashed' ? ' stroke-dasharray="4 3"' : '';
+    const dashAttr = link.lineStyle === 'dashed' ? ` stroke-dasharray="${rendering.linkStrokeDasharrayDashed}"` : '';
 
     const origX = pred.originX;
     const origY = pred.rowCenterY;
@@ -615,15 +615,13 @@ function renderChart(projectData) {
       pathD    = `M ${n(origX)},${n(origY)} L ${n(termX)},${n(termY)}`;
       arrowDir = succ.absRow > pred.absRow ? 'down' : 'up';
     } else {
-      const rawR    = (link.routing || '').trim().toUpperCase();
-      const routing = ['HV', 'VH'].includes(rawR) ? rawR : 'AUTO';
       const sameRow = pred.absRow === succ.absRow;
 
-      if (routing === 'AUTO' && sameRow) {
+      if (link.routing === 'auto' && sameRow) {
         // Direct horizontal line — no bends, unchanged
         pathD    = `M ${n(origX)},${n(origY)} L ${n(termX)},${n(termY)}`;
         arrowDir = 'right';
-      } else if (routing === 'HV') {
+      } else if (link.routing === 'hv') {
         const segA  = termX - origX;
         const segB  = Math.abs(termY - origY);
         const r     = Math.min(rendering.linkCornerRadius, segA / 2, segB / 2);
@@ -631,7 +629,7 @@ function renderChart(projectData) {
         const arcEndY = termY >= origY ? origY + r : origY - r;
         pathD    = `M ${n(origX)},${n(origY)} L ${n(termX - r)},${n(origY)} A ${n(r)} ${n(r)} 0 0 ${sweep} ${n(termX)},${n(arcEndY)} L ${n(termX)},${n(termY)}`;
         arrowDir = (origY === termY) ? 'right' : (termY > origY ? 'down' : 'up');
-      } else if (routing === 'VH') {
+      } else if (link.routing === 'vh') {
         const segA      = Math.abs(termY - origY);
         const segB      = termX - origX;
         const r         = Math.min(rendering.linkCornerRadius, segA / 2, segB / 2);
@@ -766,8 +764,8 @@ function renderChart(projectData) {
     if (lines.length === 0) continue;
 
     const blockHeight = lines.length * lineHeight;
-    const alignFactor = typography.scaleAlignmentFactor;
-    const vAlign      = note.verticalAlign.toLowerCase();
+    const alignFactor = typography.noteAlignmentFactor;
+    const vAlign      = note.verticalAlign;
     let firstLineY;
     if (vAlign === 'middle') {
       firstLineY = noteY + (noteH - blockHeight) / 2 + fontSize * alignFactor;
@@ -777,7 +775,7 @@ function renderChart(projectData) {
       firstLineY = noteY + rendering.notePadding + fontSize * alignFactor;
     }
 
-    const hAlign = note.textAlign.toLowerCase();
+    const hAlign = note.textAlign;
     let textX, textAnchor;
     if (hAlign === 'center') {
       textX = noteX + noteW / 2;  textAnchor = 'middle';
