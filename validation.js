@@ -263,7 +263,7 @@ function validateLinks(projectData) {
   const taskIds = new Set(projectData.tasks.filter(t => t.id != null).map(t => t.id));
   const taskById = new Map(projectData.tasks.filter(t => t.id != null).map(t => [t.id, t]));
 
-  // Build absRow lookup — duplicates renderer logic (see PROJECT.md §14.1).
+  // Build absRow lookup — duplicates renderer logic (see CLAUDE.md "Link rendering").
   const swimlanesByOrder = projectData.swimlanes
     .filter(s => s.id != null)
     .slice()

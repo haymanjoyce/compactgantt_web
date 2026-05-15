@@ -120,9 +120,9 @@ Config sheet key names are confirmed. The `kv*` helpers (`kvStr/kvInt/kvFloat/kv
 - `id` — entity row id (integer for parsed ids, `null` for config rows or when the row's own id cell was missing/unparseable)
 - `field` — JS property name (e.g. `'startDate'`, `'paddingTop'`), never the Excel header
 - `rawValue` — original cell value as it appeared in `row[header]` / `map[key]`, unmodified (no stringify, no trim)
-- `reason` — one of four values emitted by the parser, plus a fifth reserved for the validation module
+- `reason` — closed enum, four values, all emitted by the parser. `validation.js` reads these via `consumeNotice` and emits `Issue` objects with human-readable `message` fields; it does not emit notices itself.
 
-Reason values (closed enum):
+Reason values:
 
 | Reason | When emitted |
 |---|---|
@@ -130,7 +130,6 @@ Reason values (closed enum):
 | `'unparseable_number'` | non-empty value that `parseInt` / `parseFloat` returned `NaN` for; emitted by `toInt` / `toFloat` / `kvInt` / `kvFloat` |
 | `'unrecognised_boolean'` | non-empty string in a boolean field that, after trim+lowercase, is neither `'yes'` nor `'no'`; emitted by `kvBool`. Native JS booleans (SheetJS `typeof v === 'boolean'`) pass through silently |
 | `'unrecognised_enum'` | non-empty value that a `normalize*` function did not recognise; emitted by each `normalize*` function |
-| `'absent_required'` | **reserved** for the validation module — never emitted by the parser |
 
 **Empty vs unparseable distinction.** Empty cells (`null` / `undefined` / `''`), whitespace-only strings (`'   '`), and Invalid `Date` objects (`isNaN(getTime())`, as SheetJS produces when reading an empty date-typed cell after a round trip) NEVER produce a notice — they take the default silently. Notices fire only when the user wrote something meaningful that the parser ignored. This is the entire point of the side-channel: it separates "user wrote nothing" from "user wrote something the parser couldn't use."
 
