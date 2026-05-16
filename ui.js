@@ -135,7 +135,7 @@ function renderDataPanel() {
   // so renderTasksForm can decide whether to rebuild it.
   if (area.dataset.tab !== activeEntityTab) {
     area.dataset.tab = activeEntityTab;
-    if (activeEntityTab === 'tasks') {
+    if (activeEntityTab === 'tasks' || activeEntityTab === 'swimlanes') {
       area.innerHTML = '<div class="entity-panel"><div class="entity-left"></div><div class="entity-right"></div></div>';
       formRenderedForId = null;  // right pane is a fresh element — force form rebuild
     } else {
@@ -144,7 +144,8 @@ function renderDataPanel() {
     }
   }
 
-  if (activeEntityTab === 'tasks') renderTasksPanel(area);
+  if (activeEntityTab === 'tasks')     renderTasksPanel(area);
+  if (activeEntityTab === 'swimlanes') renderSwimlanesPanel(area);
 }
 
 function buildEntityTabStrip(strip) {
@@ -452,6 +453,7 @@ function addReadonlyRow(form, fieldName, value, suffix) {
   label.textContent = fieldName + (suffix || '');
   const div = document.createElement('div');
   div.className = 'readonly';
+  div.dataset.field = fieldName;
   div.textContent = (value === null || value === undefined) ? '' : String(value);
   form.appendChild(label);
   form.appendChild(div);
@@ -529,6 +531,193 @@ function syncTaskRowInput(taskId) {
   const input = document.querySelector('.entity-form input[data-field="row"]');
   if (!input) return;
   input.value = task.row == null ? '' : String(task.row);
+}
+
+// ── Swimlanes entity panel ─────────────────────────────────────────────────────
+
+function renderSwimlanesPanel(area) {
+  const swimlanes = projectData.swimlanes;
+  let selectedId = entitySelections.swimlanes;
+  if (selectedId !== null && !swimlanes.some(s => s.id === selectedId)) selectedId = null;
+  if (selectedId === null && swimlanes.length > 0) selectedId = swimlanes[0].id;
+  entitySelections.swimlanes = selectedId;
+
+  const left  = area.querySelector('.entity-left');
+  const right = area.querySelector('.entity-right');
+
+  left.innerHTML = '';
+  left.appendChild(renderSwimlanesToolbar(selectedId));
+  left.appendChild(renderSwimlanesNavTable(selectedId));
+
+  renderSwimlanesForm(right, selectedId);
+}
+
+function renderSwimlanesToolbar(selectedId) {
+  const toolbar = document.createElement('div');
+  toolbar.className = 'entity-toolbar';
+
+  const swimlanes = projectData.swimlanes;
+  const idx = selectedId == null ? -1 : swimlanes.findIndex(s => s.id === selectedId);
+
+  function mkBtn(label) {
+    const b = document.createElement('button');
+    b.textContent = label;
+    return b;
+  }
+
+  const btnAdd       = mkBtn('Add');
+  const btnDelete    = mkBtn('Delete');
+  const btnDuplicate = mkBtn('Duplicate');
+  const btnMoveUp    = mkBtn('Move Up');
+  const btnMoveDown  = mkBtn('Move Down');
+
+  if (idx === -1) {
+    btnDelete.disabled = btnDuplicate.disabled = btnMoveUp.disabled = btnMoveDown.disabled = true;
+  } else {
+    if (idx === 0)                    btnMoveUp.disabled   = true;
+    if (idx === swimlanes.length - 1) btnMoveDown.disabled = true;
+  }
+
+  btnAdd.addEventListener('click', () => {
+    const newId = nextIdFor(swimlanes);
+    nextSelectionIntent = { entity: 'swimlanes', id: newId };
+    dispatch({ entity: 'swimlane', action: 'add' });
+  });
+  btnDelete.addEventListener('click', () => {
+    const i = swimlanes.findIndex(s => s.id === selectedId);
+    let nextId = null;
+    if (i !== -1) {
+      if (i + 1 < swimlanes.length) nextId = swimlanes[i + 1].id;
+      else if (i - 1 >= 0)          nextId = swimlanes[i - 1].id;
+    }
+    nextSelectionIntent = { entity: 'swimlanes', id: nextId };
+    dispatch({ entity: 'swimlane', action: 'delete', id: selectedId });
+  });
+  btnDuplicate.addEventListener('click', () => {
+    const newId = nextIdFor(swimlanes);
+    nextSelectionIntent = { entity: 'swimlanes', id: newId };
+    dispatch({ entity: 'swimlane', action: 'duplicate', id: selectedId });
+  });
+  // Move Up / Down dispatch array reorders. swimlane.order is derived from
+  // array index, so the moved row's form `order` cell would display the stale
+  // pre-click value (renderSwimlanesForm no-ops on same-id) without an
+  // explicit DOM sync — same pattern as syncTaskRowInput on the Tasks tab.
+  btnMoveUp.addEventListener('click', () => {
+    nextSelectionIntent = { entity: 'swimlanes', id: selectedId };
+    dispatch({ entity: 'swimlane', action: 'moveUp', id: selectedId });
+    syncSwimlaneOrderCell(selectedId);
+  });
+  btnMoveDown.addEventListener('click', () => {
+    nextSelectionIntent = { entity: 'swimlanes', id: selectedId };
+    dispatch({ entity: 'swimlane', action: 'moveDown', id: selectedId });
+    syncSwimlaneOrderCell(selectedId);
+  });
+
+  toolbar.appendChild(btnAdd);
+  toolbar.appendChild(btnDelete);
+  toolbar.appendChild(btnDuplicate);
+  toolbar.appendChild(btnMoveUp);
+  toolbar.appendChild(btnMoveDown);
+  return toolbar;
+}
+
+function renderSwimlanesNavTable(selectedId) {
+  const swimlanes = projectData.swimlanes;
+  const table = document.createElement('table');
+  table.className = 'entity-nav-table';
+  const COLS = [
+    { key: 'id',       label: 'id'              },
+    { key: 'order',    label: 'order (derived)' },
+    { key: 'name',     label: 'name'            },
+    { key: 'rowCount', label: 'rowCount'        },
+  ];
+
+  let html = '<thead><tr>';
+  COLS.forEach(c => { html += `<th>${c.label}</th>`; });
+  html += '</tr></thead><tbody>';
+
+  if (swimlanes.length === 0) {
+    html += `<tr><td colspan="${COLS.length}" class="entity-empty">No swimlanes. Click Add to create one.</td></tr>`;
+  } else {
+    swimlanes.forEach(s => {
+      const isSelected = s.id === selectedId;
+      html += `<tr data-id="${s.id}"${isSelected ? ' class="selected"' : ''}>`;
+      COLS.forEach(c => {
+        const v = s[c.key] == null ? '' : s[c.key];
+        html += `<td>${escapeHtml(String(v))}</td>`;
+      });
+      html += '</tr>';
+    });
+  }
+  html += '</tbody></table>';
+  table.innerHTML = html;
+
+  table.querySelectorAll('tbody tr[data-id]').forEach(tr => {
+    tr.addEventListener('mousedown', () => {
+      const swId = parseInt(tr.dataset.id, 10);
+      if (!Number.isFinite(swId)) return;
+      if (swId === entitySelections.swimlanes) return;
+      nextSelectionIntent = { entity: 'swimlanes', id: swId };
+      const active = document.activeElement;
+      const inForm = active && active.closest && active.closest('.entity-form');
+      if (inForm) {
+        active.blur();
+      } else {
+        renderDataPanel();
+      }
+    });
+  });
+
+  return table;
+}
+
+const LABEL_POSITION_OPTIONS = ['top-right', 'top-left', 'bottom-right', 'bottom-left'];
+
+function renderSwimlanesForm(container, selectedId) {
+  if (selectedId === formRenderedForId && container.childElementCount > 0) return;
+  formRenderedForId = selectedId;
+  container.innerHTML = '';
+
+  if (selectedId === null) {
+    const empty = document.createElement('div');
+    empty.className = 'entity-form-empty';
+    empty.textContent = 'Select a row to edit.';
+    container.appendChild(empty);
+    return;
+  }
+
+  const sw = projectData.swimlanes.find(s => s.id === selectedId);
+  if (!sw) { formRenderedForId = null; return; }
+
+  const form = document.createElement('div');
+  form.className = 'entity-form';
+  container.appendChild(form);
+
+  const upd = (field, value) => dispatch({ entity: 'swimlane', action: 'update', id: sw.id, field, value });
+
+  addReadonlyRow(form, 'id',    sw.id);
+  addReadonlyRow(form, 'order', sw.order, ' (derived)');
+  addTextRow(form, 'name', sw.name, val => upd('name', val));
+  addNumberRow(form, 'rowCount', sw.rowCount, val => {
+    const n = parseInt(val, 10);
+    if (Number.isFinite(n)) upd('rowCount', n);
+  });
+  addSelectRow(form, 'labelPosition', sw.labelPosition,
+    LABEL_POSITION_OPTIONS.map(o => ({ value: o, label: o })),
+    val => upd('labelPosition', val));
+  addTextRow(form, 'backgroundColor', sw.backgroundColor, val => upd('backgroundColor', val));
+}
+
+// Targeted in-place sync of the form's order readonly cell after a Move Up /
+// Move Down dispatch. renderSwimlanesForm no-ops on same-id, so without this
+// the cell continues to display the pre-click order value. Same pattern as
+// syncTaskRowInput on the Tasks tab.
+function syncSwimlaneOrderCell(swimlaneId) {
+  const sw = projectData.swimlanes.find(s => s.id === swimlaneId);
+  if (!sw) return;
+  const cell = document.querySelector('.entity-form .readonly[data-field="order"]');
+  if (!cell) return;
+  cell.textContent = sw.order == null ? '' : String(sw.order);
 }
 
 function attachCommitHandlers(control, getValue, commitFn) {
