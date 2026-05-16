@@ -376,6 +376,91 @@ function createEmptyProjectData() {
   };
 }
 
+// ── Per-entity factories ───────────────────────────────────────────────────────
+// Each returns a fresh record with the parser's empty-cell defaults and id: null.
+// The dispatcher in ui.js assigns id (max + 1) before appending.
+// Derived fields (task.isMilestone, swimlane.order) start as if computed from the
+// other defaults; the dispatcher recomputes them after mutations that affect them.
+function createEmptyTask() {
+  return {
+    id:             null,
+    swimlaneId:     null,
+    row:            1,
+    name:           '',
+    startDate:      null,
+    finishDate:     null,
+    isMilestone:    false,
+    labelContent:   'name',
+    labelPlacement: 'inside',
+    labelOffset:    0,
+    fillColor:      'blue',
+    fillPattern:    'solid',
+    patternColor:   'white',
+    dateFormat:     null,
+  };
+}
+
+function createEmptySwimlane() {
+  return {
+    id:              null,
+    name:            '',
+    rowCount:        1,
+    labelPosition:   'top-right',
+    backgroundColor: 'white',
+    order:           null,
+  };
+}
+
+function createEmptyLink() {
+  return {
+    id:         null,
+    fromTaskId: null,
+    toTaskId:   null,
+    lineColor:  'black',
+    lineStyle:  'solid',
+    routing:    'auto',
+  };
+}
+
+function createEmptyPipe() {
+  return {
+    id:            null,
+    date:          null,
+    name:          '',
+    color:         'black',
+    lineStyle:     'solid',
+    labelPosition: 1,
+  };
+}
+
+function createEmptyCurtain() {
+  return {
+    id:            null,
+    startDate:     null,
+    endDate:       null,
+    name:          '',
+    color:         'grey',
+    opacity:       0.2,
+    labelPosition: 1,
+    labelAnchor:   'start',
+  };
+}
+
+function createEmptyNote() {
+  return {
+    id:            null,
+    xPct:          0,
+    yPct:          0,
+    widthPct:      0,
+    heightPct:     0,
+    textAlign:     'left',
+    verticalAlign: 'top',
+    borderColor:   '',
+    fillColor:     '',
+    text:          '',
+  };
+}
+
 // ── Main parse function ────────────────────────────────────────────────────────
 function parseWorkbook(workbook) {
   _notices = [];

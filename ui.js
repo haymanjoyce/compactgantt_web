@@ -2,6 +2,9 @@
 
 let projectData = createEmptyProjectData();
 let loadedFilename = null;
+// Active top-level tab. Single source of truth — set by activateTab, read by the
+// dispatcher's post-mutation hook to know which panel to re-render.
+let activeTab = 'data';
 
 // ── Table renderers ────────────────────────────────────────────────────────────
 function renderEntityTable(container, data, derivedKeys = []) {
@@ -44,10 +47,16 @@ function renderConfigTable(container, config) {
 
 // ── Tab switching ──────────────────────────────────────────────────────────────
 function activateTab(name) {
+  activeTab = name;
+
   ['data', 'issues', 'chart', 'inspector'].forEach(n => {
     document.getElementById(n + 'Panel').style.display = n === name ? '' : 'none';
     document.getElementById('tab' + n.charAt(0).toUpperCase() + n.slice(1)).classList.toggle('active', n === name);
   });
+
+  if (name === 'data') {
+    renderDataPanel();
+  }
 
   if (name === 'issues') {
     renderIssuesPanel(document.getElementById('issuesPanel'));
@@ -63,6 +72,94 @@ function activateTab(name) {
   if (name === 'inspector') {
     renderInspector(document.getElementById('inspectorPanel'));
   }
+}
+
+// ── Data panel renderer ────────────────────────────────────────────────────────
+// Populates the eight entity/config containers in the Data panel from the current
+// projectData. Called on Data-tab activation (including dispatcher re-renders)
+// and from the file-load handler.
+function renderDataPanel() {
+  const d = projectData;
+  renderDataTasksTable(document.getElementById('tasksContainer'), d.tasks);
+  renderEntityTable(document.getElementById('swimlanesContainer'), d.swimlanes);
+  renderEntityTable(document.getElementById('linksContainer'),     d.links);
+  renderEntityTable(document.getElementById('pipesContainer'),     d.pipes);
+  renderEntityTable(document.getElementById('curtainsContainer'),  d.curtains);
+  renderEntityTable(document.getElementById('notesContainer'),     d.notes);
+  renderConfigTable(document.getElementById('configLayoutContainer'),      d.config.layout);
+  renderConfigTable(document.getElementById('configBarsContainer'),        d.config.bars);
+  renderConfigTable(document.getElementById('configTimelineContainer'),    d.config.timeline);
+  renderConfigTable(document.getElementById('configTitlesContainer'),      d.config.titles);
+  renderConfigTable(document.getElementById('configStyleContainer'),       d.config.style);
+  renderConfigTable(document.getElementById('configTypographyContainer'),  d.config.typography);
+  renderConfigTable(document.getElementById('configPreferencesContainer'), d.config.preferences);
+  renderConfigTable(document.getElementById('configRenderingContainer'),   d.config.rendering);
+}
+
+// Variant of renderEntityTable for the Data tab's Tasks table: the Name column
+// is inline-editable as the slice-1 proof case. Other columns render read-only.
+function renderDataTasksTable(container, tasks) {
+  if (!tasks || !tasks.length) {
+    container.innerHTML = '<p><em>No data</em></p>';
+    return;
+  }
+  const keys = Object.keys(tasks[0]);
+  let html = '<table><thead><tr>';
+  keys.forEach(k => { html += `<th>${k}</th>`; });
+  html += '</tr></thead><tbody>';
+  tasks.forEach(row => {
+    html += `<tr data-id="${row.id}">`;
+    keys.forEach(k => {
+      const v = row[k];
+      if (k === 'name') {
+        html += `<td class="editable-name" title="Click to edit">${v != null ? escapeHtml(String(v)) : ''}</td>`;
+      } else {
+        html += `<td>${v != null ? escapeHtml(String(v)) : ''}</td>`;
+      }
+    });
+    html += '</tr>';
+  });
+  html += '</tbody></table>';
+  container.innerHTML = html;
+
+  container.querySelectorAll('td.editable-name').forEach(td => {
+    td.addEventListener('click', () => beginEditTaskNameCell(td));
+  });
+}
+
+function beginEditTaskNameCell(td) {
+  if (td.querySelector('input')) return;
+  const originalText = td.textContent;
+  const id = parseInt(td.parentElement.dataset.id, 10);
+  if (!Number.isFinite(id)) return;
+
+  const input = document.createElement('input');
+  input.type  = 'text';
+  input.value = originalText;
+  td.textContent = '';
+  td.appendChild(input);
+  input.focus();
+  input.select();
+
+  let cancelled = false;
+  function commit() {
+    if (cancelled) {
+      td.textContent = originalText;
+      return;
+    }
+    const newValue = input.value;
+    if (newValue === originalText) {
+      td.textContent = originalText;
+      return;
+    }
+    dispatch({ entity: 'task', action: 'update', id, field: 'name', value: newValue });
+    // dispatch's post-mutation hook re-renders the Data tab; this <td> is gone.
+  }
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Escape')      { cancelled = true; input.blur(); }
+    else if (e.key === 'Enter')  { input.blur(); }
+  });
+  input.addEventListener('blur', commit);
 }
 
 // ── Inspector renderer ─────────────────────────────────────────────────────────
@@ -452,6 +549,149 @@ function updateIssuesTabLabel() {
   else if (n > 0) tab.classList.add('tab-tint-notice');
 }
 
+// ── Dispatcher (single-writer entry point) ────────────────────────────────────
+// All UI-driven mutations to projectData route through dispatch(). Validation
+// re-run, active-tab re-render, and Issues-tab-label refresh hook here so they
+// can never be bypassed. Malformed calls and rule-blocked deletions silently
+// no-op (with console.warn for unknown values, missing required fields, and
+// id misses — slice 2 will surface block reasons via disabled toolbar buttons).
+const ENTITY_ARRAY_KEY = {
+  task: 'tasks', swimlane: 'swimlanes', link: 'links',
+  pipe: 'pipes', curtain: 'curtains', note: 'notes',
+};
+const ENTITY_FACTORY = {
+  task:     createEmptyTask,
+  swimlane: createEmptySwimlane,
+  link:     createEmptyLink,
+  pipe:     createEmptyPipe,
+  curtain:  createEmptyCurtain,
+  note:     createEmptyNote,
+};
+const VALID_ENTITIES = new Set([...Object.keys(ENTITY_ARRAY_KEY), 'config']);
+const VALID_ACTIONS  = new Set(['update', 'add', 'delete', 'duplicate', 'moveUp', 'moveDown']);
+
+function dispatch({ entity, action, id, block, field, value, index } = {}) {
+  if (!VALID_ENTITIES.has(entity)) { console.warn('[dispatch] unknown entity:', entity); return; }
+  if (!VALID_ACTIONS.has(action))  { console.warn('[dispatch] unknown action:', action); return; }
+
+  // ── Config ────────────────────────────────────────────────────────────────
+  if (entity === 'config') {
+    if (action !== 'update')          { console.warn('[dispatch] action not supported for config:', action); return; }
+    if (!block)                       { console.warn('[dispatch] config update missing block'); return; }
+    if (!field)                       { console.warn('[dispatch] config update missing field'); return; }
+    if (!(block in projectData.config)) { console.warn('[dispatch] unknown config block:', block); return; }
+    projectData.config[block][field] = value;
+    runPostMutationHook();
+    return;
+  }
+
+  // ── Entity dispatch ───────────────────────────────────────────────────────
+  const arr = projectData[ENTITY_ARRAY_KEY[entity]];
+
+  if (action === 'update') {
+    if (id == null) { console.warn('[dispatch] update missing id'); return; }
+    if (!field)     { console.warn('[dispatch] update missing field'); return; }
+    const rec = arr.find(r => r.id === id);
+    if (!rec) { console.warn('[dispatch] update: no', entity, 'with id', id); return; }
+    rec[field] = value;
+    if (entity === 'task') recomputeTaskDerived(rec);
+    runPostMutationHook();
+    return;
+  }
+
+  if (action === 'add') {
+    const rec = ENTITY_FACTORY[entity]();
+    rec.id = nextIdFor(arr);
+    const insertAt = (typeof index === 'number' && index >= 0 && index <= arr.length) ? index : arr.length;
+    arr.splice(insertAt, 0, rec);
+    if (entity === 'swimlane') recomputeSwimlaneOrders();
+    runPostMutationHook();
+    return;
+  }
+
+  if (action === 'delete') {
+    if (id == null) { console.warn('[dispatch] delete missing id'); return; }
+    const idx = arr.findIndex(r => r.id === id);
+    if (idx === -1) { console.warn('[dispatch] delete: no', entity, 'with id', id); return; }
+    if (entity === 'task'     && !canDeleteTask(id))     return;  // referential-integrity no-op
+    if (entity === 'swimlane' && !canDeleteSwimlane(id)) return;  // referential-integrity no-op
+    arr.splice(idx, 1);
+    if (entity === 'swimlane') recomputeSwimlaneOrders();
+    runPostMutationHook();
+    return;
+  }
+
+  if (action === 'duplicate') {
+    if (id == null) { console.warn('[dispatch] duplicate missing id'); return; }
+    const rec = arr.find(r => r.id === id);
+    if (!rec) { console.warn('[dispatch] duplicate: no', entity, 'with id', id); return; }
+    const clone = { ...rec };
+    clone.id = nextIdFor(arr);
+    arr.push(clone);
+    if (entity === 'swimlane') recomputeSwimlaneOrders();
+    runPostMutationHook();
+    return;
+  }
+
+  if (action === 'moveUp' || action === 'moveDown') {
+    if (id == null) { console.warn('[dispatch]', action, 'missing id'); return; }
+    const idx = arr.findIndex(r => r.id === id);
+    if (idx === -1) { console.warn('[dispatch]', action, 'no', entity, 'with id', id); return; }
+    if (action === 'moveUp'   && idx === 0)              return;  // edge no-op
+    if (action === 'moveDown' && idx === arr.length - 1) return;  // edge no-op
+    const swap = action === 'moveUp' ? idx - 1 : idx + 1;
+    [arr[idx], arr[swap]] = [arr[swap], arr[idx]];
+    if (entity === 'swimlane') recomputeSwimlaneOrders();
+    runPostMutationHook();
+    return;
+  }
+}
+
+function nextIdFor(arr) {
+  const ids = arr.map(r => r.id).filter(n => typeof n === 'number');
+  return ids.length === 0 ? 1 : Math.max(...ids) + 1;
+}
+
+// Derived-field maintenance. Task.isMilestone and Swimlane.order are computed
+// in the parser; the dispatcher keeps them consistent after mutations so
+// validation and re-render see correct state.
+function recomputeTaskDerived(task) {
+  task.isMilestone = task.startDate !== null && task.startDate === task.finishDate;
+}
+
+function recomputeSwimlaneOrders() {
+  projectData.swimlanes.forEach((s, i) => { s.order = i + 1; });
+}
+
+// Deletion blocking rules. Each returns false to signal "block" (silent no-op).
+function canDeleteTask(id) {
+  const task = projectData.tasks.find(t => t.id === id);
+  if (!task) return true;
+  // A link pointing to or from this task blocks delete.
+  if (projectData.links.some(l => l.fromTaskId === id || l.toTaskId === id)) return false;
+  // Deleting would leave this task's swimlane with zero tasks. Only applies
+  // when the swimlane actually exists — orphan-swimlaneId tasks aren't
+  // keeping anything alive.
+  if (task.swimlaneId != null) {
+    const swimlaneExists = projectData.swimlanes.some(s => s.id === task.swimlaneId);
+    if (swimlaneExists) {
+      const otherInSwimlane = projectData.tasks.some(t => t.id !== id && t.swimlaneId === task.swimlaneId);
+      if (!otherInSwimlane) return false;
+    }
+  }
+  return true;
+}
+
+function canDeleteSwimlane(id) {
+  return !projectData.tasks.some(t => t.swimlaneId === id);
+}
+
+function runPostMutationHook() {
+  projectData._validation = validateProject(projectData);
+  activateTab(activeTab);
+  updateIssuesTabLabel();
+}
+
 // ── Public entry point ─────────────────────────────────────────────────────────
 function initUI() {
   document.getElementById('tabData').addEventListener('click',      () => activateTab('data'));
@@ -490,21 +730,7 @@ function initUI() {
         `${cnt(d.curtains.length,  'curtain')}, `     +
         `${cnt(d.notes.length,     'note')}`;
 
-      renderEntityTable(document.getElementById('tasksContainer'),    d.tasks);
-      renderEntityTable(document.getElementById('swimlanesContainer'), d.swimlanes);
-      renderEntityTable(document.getElementById('linksContainer'),     d.links);
-      renderEntityTable(document.getElementById('pipesContainer'),     d.pipes);
-      renderEntityTable(document.getElementById('curtainsContainer'),  d.curtains);
-      renderEntityTable(document.getElementById('notesContainer'),     d.notes);
-
-      renderConfigTable(document.getElementById('configLayoutContainer'),      d.config.layout);
-      renderConfigTable(document.getElementById('configBarsContainer'),        d.config.bars);
-      renderConfigTable(document.getElementById('configTimelineContainer'),    d.config.timeline);
-      renderConfigTable(document.getElementById('configTitlesContainer'),      d.config.titles);
-      renderConfigTable(document.getElementById('configStyleContainer'),       d.config.style);
-      renderConfigTable(document.getElementById('configTypographyContainer'),  d.config.typography);
-      renderConfigTable(document.getElementById('configPreferencesContainer'), d.config.preferences);
-      renderConfigTable(document.getElementById('configRenderingContainer'),   d.config.rendering);
+      renderDataPanel();
     };
     reader.readAsArrayBuffer(file);
   });

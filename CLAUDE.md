@@ -47,7 +47,7 @@ Ignores:
 |---|---|
 | `index.html` | Script tags, single `initUI()` call to boot the UI |
 | `dates.js` | Date helpers — single source of truth for all date conversion and arithmetic |
-| `parser.js` | Exports `parseWorkbook(workbook)` and `createEmptyProjectData()` |
+| `parser.js` | Exports `parseWorkbook(workbook)`, `createEmptyProjectData()`, and per-entity factories `createEmpty<Entity>()` |
 | `renderer.js` | Exports `renderChart(projectData)` → SVG string; no DOM dependency, no side effects |
 | `writer.js` | Exports `writeWorkbook(projectData)` → `Uint8Array`; no DOM dependency, no side effects |
 | `validation.js` | Exports `validateProject(projectData)` → `ValidationReport`; pure, no DOM, no side effects |
@@ -76,6 +76,24 @@ It is initialised at startup by calling `createEmptyProjectData()` (exported fro
 `parseWorkbook(workbook)` is a pure function: it builds a fresh `projectData` object locally and returns it. `ui.js` assigns the return value to its `projectData` on every file load. `renderer.js` and `writer.js` take `projectData` as a parameter and have no dependency on the global.
 
 `createEmptyProjectData()` is the single source of truth for the `projectData` shape and all default config values. `parseWorkbook` calls it to get a clean starting object, then overwrites entity arrays and config sections from the workbook.
+
+After parse, all in-app mutations route through `dispatch()` in `ui.js` (see Mutation dispatcher). The file-load handler is the only other write site, and it replaces `projectData` wholesale.
+
+## Mutation dispatcher (ui.js)
+
+`dispatch({ entity, action, id, block, field, value, index })` is the single-writer entry point for all in-app mutations to `projectData`. Centralising mutation here is what makes the post-mutation hook (validation re-run + active-tab re-render + Issues-tab-label refresh) unbypassable.
+
+`entity` ∈ `task` / `swimlane` / `link` / `pipe` / `curtain` / `note` / `config`. `action` ∈ `update` / `add` / `delete` / `duplicate` / `moveUp` / `moveDown`. Config supports `update` only (with `block` naming the section); other actions on config silently no-op with `console.warn`. Unknown entity/action, missing required field, or id miss → same: `console.warn` + no-op (never throws).
+
+`add` uses per-entity factories in `parser.js` (`createEmptyTask`, etc.) for the empty record, then assigns `id = max(existing) + 1` or `1` if empty. `duplicate` clones via shallow spread and assigns a fresh id the same way.
+
+**Deletion blocking** (silent no-op, no hook fires):
+- Task delete blocked if a link points to/from it, or if removing it would leave its (still-existing) swimlane with zero tasks.
+- Swimlane delete blocked if any task references it.
+
+**Derived-field maintenance.** `task.isMilestone` is recomputed on task `update`; `swimlane.order` is recomputed (1-based array index) after any swimlane array mutation. Factory records start with `isMilestone: false` / `order: null` and the dispatcher fills in.
+
+**Post-mutation hook** runs in order: `validateProject` → `activateTab(activeTab)` → `updateIssuesTabLabel`. Active tab is tracked in module-scope `activeTab`, set by `activateTab` itself; the dispatcher reads it to know which panel to re-render. `update` runs the hook unconditionally even if `value` equals the existing field value — equality check at the call site if it's cheap, dispatcher doesn't bother (Dates, string-numeric mismatches make a robust check not worth it).
 
 ## Excel file format
 
@@ -277,7 +295,7 @@ Partial overflow past task row area boundaries renders as-positioned — no clip
 
 Four-tab layout (left to right): Data → Issues → Chart → Inspector.
 
-**Data** tab shows curated debug tables (one per entity type + eight config KV tables), updated on file load. **Chart** tab calls `renderChart(projectData)` on every activation and injects the SVG into a horizontally-scrollable container ("No project loaded" shown if tasks array is empty). **Inspector** tab renders every field of `projectData` as flat tables on every activation — exhaustive, read-only, developer-facing, always reflects current state including defaults before any file is loaded.
+**Data** tab shows curated debug tables (one per entity type + eight config KV tables). Re-rendered on tab activation, on file load, and after any `dispatch()` mutation via the post-mutation hook — `renderDataPanel()` is the single render entry point. **Chart** tab calls `renderChart(projectData)` on every activation and injects the SVG into a horizontally-scrollable container ("No project loaded" shown if tasks array is empty). **Inspector** tab renders every field of `projectData` as flat tables on every activation — exhaustive, read-only, developer-facing, always reflects current state including defaults before any file is loaded.
 
 **Issues tab** is a read-only, user-facing surface for `projectData._validation` — renders on tab activation, never re-validates. Four panel states (undefined / clean / no-match / table), controls (search, three severity checkboxes, grouping toggle), six-column table, severity-then-entity grouping, and three-state sort header cycle all live in `renderIssuesPanel` and friends in `ui.js`. Non-obvious bits worth keeping in mind:
 
@@ -287,7 +305,7 @@ Four-tab layout (left to right): Data → Issues → Chart → Inspector.
 
 Validation is non-gating: Save xlsx and Save SVG remain enabled regardless of `_validation` content. The Inspector also surfaces `_validation` raw via its dynamic walk (developer-facing); duplication with the Issues tab (user-facing) is intentional.
 
-**ui.js helpers:** `renderEntityTable(container, data, derivedKeys = [])` — the optional third argument lists keys whose column headers should be suffixed with ` (derived)` in the Inspector. Currently `['isMilestone']` for tasks and `['order']` for swimlanes; extend this list when new derived fields are added. `renderConfigTable(container, config)` renders a two-column key/value table. Both helpers are shared by the Data tab (no `derivedKeys` passed) and the Inspector. The Issues tab does not reuse these helpers — `renderIssuesPanel` and friends are dedicated, with their own column model, sortable headers, pill rendering, and truncation rules.
+**ui.js helpers:** `renderEntityTable(container, data, derivedKeys = [])` — the optional third argument lists keys whose column headers should be suffixed with ` (derived)` in the Inspector. Currently `['isMilestone']` for tasks and `['order']` for swimlanes; extend this list when new derived fields are added. `renderConfigTable(container, config)` renders a two-column key/value table. Both helpers are shared by the Data tab (no `derivedKeys` passed) and the Inspector. The Data tab's Tasks table uses a dedicated variant `renderDataTasksTable` whose `name` cells are inline-editable (click → input, Enter/blur commits via `dispatch`, Escape cancels) — currently the only inline-editable surface, and slated to be replaced when the data-entry UI lands. The Issues tab does not reuse these helpers — `renderIssuesPanel` and friends are dedicated, with their own column model, sortable headers, pill rendering, and truncation rules.
 
 **Inspector dynamic walk:** `renderInspector` skips the seven fixed top-level keys and renders remaining keys (e.g. `_parseNotices`, `_validation`) as "diagnostic" sections. Plain object whose every value is an array → one sub-section per sub-key via `renderEntityTable` (this is how `_validation`'s `{errors, warnings, notices}` buckets render); array → entity table; plain object → key-value table; primitive → single-cell table; else `JSON.stringify` fallback.
 
