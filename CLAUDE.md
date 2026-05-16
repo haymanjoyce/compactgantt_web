@@ -77,7 +77,7 @@ It is initialised at startup by calling `createEmptyProjectData()` (exported fro
 
 `createEmptyProjectData()` is the single source of truth for the `projectData` shape and all default config values. `parseWorkbook` calls it to get a clean starting object, then overwrites entity arrays and config sections from the workbook.
 
-After parse, all in-app mutations route through `dispatch()` in `ui.js` (see Mutation dispatcher). The file-load handler is the only other write site, and it replaces `projectData` wholesale.
+After parse, all in-app mutations route through `dispatch()` in `ui.js` (see Mutation dispatcher). The file-load and New Project handlers are the only other write sites; both replace `projectData` wholesale (New Project seeds a default swimlane via post-replacement dispatches).
 
 ## Mutation dispatcher (ui.js)
 
@@ -170,7 +170,7 @@ Each `Issue` is `{ entity, id, field, message, value }`. `entity` is singular lo
 
 **Link classification (R1/R2/R3)** duplicates the renderer's invalid-link logic (see Link rendering) by design — neither module imports from the other. The absRow lookup is built inside `validateLinks` from `swimlane.order` + cumulative `rowCount` + `task.row`. Self-links (`fromTaskId === toTaskId`) skip the R1/R2/R3 block entirely — they would trip R1 trivially (`x >= x`) and R3 for self-linked milestones; the dedicated Self-link error above is the sole issue emitted for them.
 
-**Call site.** `ui.js` file-load handler sets `projectData._validation = validateProject(projectData)` after `parseWorkbook` and before the UI table refresh. The renderer never consults `_validation` — validation is non-gating in v1. The Inspector surfaces it via the dynamic walk's "plain object of arrays" shape handling (see Current UI).
+**Call site.** `projectData._validation` is written in two places in `ui.js`: the file-load handler (immediately after `parseWorkbook`) and `runPostMutationHook` (after every dispatched mutation). New Project relies on the latter — its seeding dispatches populate `_validation` indirectly. The renderer never consults `_validation` — validation is non-gating in v1. The Inspector surfaces it via the dynamic walk's "plain object of arrays" shape handling (see Current UI).
 
 ## Renderer (renderer.js)
 
@@ -181,10 +181,9 @@ Each `Issue` is `{ entity, id, field, message, value }`. `entity` is singular lo
 - **Five scale bands** (top-to-bottom): years, months, weeks (ISO `"W03"`), dates (numeric day-of-month), days (named: Monday/Mon/M). Hidden bands occupy no space. Months band reads its single-letter labels from `rendering.monthLetters` (12 entries indexed by `month - 1`). Named-day cells degrade width-adaptively through full→short→letter→empty using `fontSize * rendering.charWidthFactor` per character — the standard `rendering.scaleMinLabelWidth` (default 20 px) label gate applies to years/months/weeks/dates only, not to the days band.
 - **Swimlane backgrounds:** `<rect>` fill = `swimlane.backgroundColor` (no renderer-side fallback — the parser supplies the default `"white"`).
 - **Render order (painter's algorithm, 15 slots):** defined in `renderer.js` (search for the SVG layer accumulators). Header/footer paint last so they frame the chart regardless of unusual layout dimensions. Slot numbers referenced elsewhere in this doc (e.g. "slot 7", "slot 14") correspond to those accumulators in source order.
-- **Color handling:** all color values are passed directly from `projectData` to SVG `fill`/`stroke` attributes without validation. Invalid CSS color names render as SVG's default (black). Validation is moving to a separate module — the renderer trusts its input.
+- **Color handling:** color values are passed directly from `projectData` to SVG `fill`/`stroke` attributes without renderer-side validation; invalid CSS color names render as SVG's default (black). Validation lives in `validation.js`.
 - **Swimlane labels:** `swimlaneTopAlignmentFactor` for top variants, `swimlaneBottomAlignmentFactor` for bottom variants
 - **Header/footer text alignment:** per-band via `titles.headerTextAlign` / `titles.footerTextAlign` (`left` / `center` / `right`). Horizontal inset uses `rendering.headerFooterTextPadding` for `left` and `right` only (centred text uses band centre). Vertical positioning via `typography.headerFooterAlignmentFactor`. The renderer trusts the parser's normalisation. Each band also emits a horizontal border `<line>` at its inside edge, stroked with `style.headerFooterBorderColor` / `rendering.headerFooterBorderStrokeWidth`; the border is suppressed together with the band when `headerHeight`/`footerHeight === 0`.
-- **`daysBetween(a, b)`:** uses `Date.UTC()` — timezone-safe, no `toISOString()`
 - **Milestones:** centred on `startDate`; size = `bars.milestoneSizeFactor * rowHeight`. Two shapes selected by `bars.milestoneShape`:
   - `circle` — emits `<circle>` circumscribing the diamond's anchors; `milestoneCornerRadius` ignored.
   - `diamond` (default) — `<path>` with rounded corners controlled by `bars.milestoneCornerRadius` (0..1, fraction of half-edge): `0` sharp, `1` inscribed circle (smaller than `shape=circle`). No parser clamping — validation flags out-of-range values.
@@ -311,7 +310,9 @@ Validation is non-gating: Save xlsx and Save SVG remain enabled regardless of `_
 
 **Inspector dynamic walk:** `renderInspector` skips the seven fixed top-level keys and renders remaining keys (e.g. `_parseNotices`, `_validation`) as "diagnostic" sections. Plain object whose every value is an array → one sub-section per sub-key via `renderEntityTable` (this is how `_validation`'s `{errors, warnings, notices}` buckets render); array → entity table; plain object → key-value table; primitive → single-cell table; else `JSON.stringify` fallback.
 
-Toolbar buttons (left to right): file input → **Save** (xlsx) → **Save SVG**. Both Save buttons share the same disabled gate (`tasks.length === 0 && swimlanes.length === 0`) toggled in the file-load handler. The Save SVG button calls `renderChart(projectData)` directly regardless of which tab is active, wraps the result in a `Blob('image/svg+xml')`, and downloads via `URL.createObjectURL`. Filename: loaded filename with last extension replaced by `.svg` (e.g. `report.final.xlsx` → `report.final.svg`); defaults to `"compactgantt_chart.svg"` if no file is loaded.
+Toolbar buttons (left to right): **New Project** → file input → **Save** (xlsx) → **Save SVG**. New Project replaces `projectData` with `createEmptyProjectData()`, clears `loadedFilename`, resets data-panel and issues-filter state, activates the Data tab, then dispatches two swimlane mutations to seed a default `"Swimlane 1"`. Both Save buttons share the same disabled gate (`tasks.length === 0 && swimlanes.length === 0`), toggled by `refreshStatusAndButtons` — the shared status/button helper called by both the file-load and New Project handlers. The Save SVG button calls `renderChart(projectData)` directly regardless of which tab is active, wraps the result in a `Blob('image/svg+xml')`, and downloads via `URL.createObjectURL`. Filename: loaded filename with last extension replaced by `.svg` (e.g. `report.final.xlsx` → `report.final.svg`); defaults to `"compactgantt_chart.svg"` if no file is loaded.
+
+`initUI()` finishes with a `renderDataPanel()` call so the empty entity tab strip + empty Tasks panel are present on page load, before any file load or New Project click.
 
 ## Excel export (writer.js)
 
