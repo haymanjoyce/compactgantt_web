@@ -285,22 +285,14 @@ function renderTasksToolbar(selectedId) {
   return toolbar;
 }
 
-// UI-only message for the disabled Delete button. Links checked first — the
-// more common case and the more actionable next step. canDeleteTask is the
-// pure boolean the dispatcher consults; this returns the human-readable reason
-// (or null when delete is allowed).
+// UI-only message for the disabled Delete button. canDeleteTask is the pure
+// boolean the dispatcher consults; this returns the human-readable reason (or
+// null when delete is allowed).
 function whyCannotDeleteTask(id) {
   const task = projectData.tasks.find(t => t.id === id);
   if (!task) return null;
   if (projectData.links.some(l => l.fromTaskId === id || l.toTaskId === id)) {
     return 'Cannot delete: task has links pointing to or from it';
-  }
-  if (task.swimlaneId != null) {
-    const swimlaneExists = projectData.swimlanes.some(s => s.id === task.swimlaneId);
-    if (swimlaneExists) {
-      const otherInSwimlane = projectData.tasks.some(t => t.id !== id && t.swimlaneId === task.swimlaneId);
-      if (!otherInSwimlane) return 'Cannot delete: would leave swimlane with no tasks';
-    }
   }
   return null;
 }
@@ -1012,8 +1004,7 @@ function dispatch({ entity, action, id, block, field, value, index } = {}) {
     if (id == null) { console.warn('[dispatch] delete missing id'); return; }
     const idx = arr.findIndex(r => r.id === id);
     if (idx === -1) { console.warn('[dispatch] delete: no', entity, 'with id', id); return; }
-    if (entity === 'task'     && !canDeleteTask(id))     return;  // referential-integrity no-op
-    if (entity === 'swimlane' && !canDeleteSwimlane(id)) return;  // referential-integrity no-op
+    if (entity === 'task' && !canDeleteTask(id)) return;  // referential-integrity no-op
     arr.splice(idx, 1);
     if (entity === 'swimlane') recomputeSwimlaneOrders();
     runPostMutationHook();
@@ -1062,27 +1053,13 @@ function recomputeSwimlaneOrders() {
   projectData.swimlanes.forEach((s, i) => { s.order = i + 1; });
 }
 
-// Deletion blocking rules. Each returns false to signal "block" (silent no-op).
+// Deletion blocking rule. Returns false to signal "block" (silent no-op): a
+// task with a link pointing to or from it cannot be deleted.
 function canDeleteTask(id) {
   const task = projectData.tasks.find(t => t.id === id);
   if (!task) return true;
-  // A link pointing to or from this task blocks delete.
   if (projectData.links.some(l => l.fromTaskId === id || l.toTaskId === id)) return false;
-  // Deleting would leave this task's swimlane with zero tasks. Only applies
-  // when the swimlane actually exists — orphan-swimlaneId tasks aren't
-  // keeping anything alive.
-  if (task.swimlaneId != null) {
-    const swimlaneExists = projectData.swimlanes.some(s => s.id === task.swimlaneId);
-    if (swimlaneExists) {
-      const otherInSwimlane = projectData.tasks.some(t => t.id !== id && t.swimlaneId === task.swimlaneId);
-      if (!otherInSwimlane) return false;
-    }
-  }
   return true;
-}
-
-function canDeleteSwimlane(id) {
-  return !projectData.tasks.some(t => t.swimlaneId === id);
 }
 
 function runPostMutationHook() {

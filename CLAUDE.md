@@ -87,9 +87,7 @@ After parse, all in-app mutations route through `dispatch()` in `ui.js` (see Mut
 
 `add` uses per-entity factories in `parser.js` (`createEmptyTask`, etc.) for the empty record, then assigns `id = max(existing) + 1` or `1` if empty. `duplicate` clones via shallow spread and assigns a fresh id the same way.
 
-**Deletion blocking** (silent no-op, no hook fires):
-- Task delete blocked if a link points to/from it, or if removing it would leave its (still-existing) swimlane with zero tasks.
-- Swimlane delete blocked if any task references it.
+**Deletion blocking** (silent no-op, no hook fires): a task delete is blocked if a link points to or from it. No other delete is blocked — deleting the last task in a swimlane is allowed (Issues surfaces the empty swimlane as a warning), and deleting a swimlane that still has tasks is allowed (those tasks remain in `projectData` with their original `swimlaneId`; validation flags them as orphans and the renderer skips them).
 
 **Derived-field maintenance.** `task.isMilestone` is recomputed on task `update`; `swimlane.order` is recomputed (1-based array index) after any swimlane array mutation. Factory records start with `isMilestone: false` / `order: null` and the dispatcher fills in.
 
