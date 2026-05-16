@@ -6,6 +6,23 @@ let loadedFilename = null;
 // dispatcher's post-mutation hook to know which panel to re-render.
 let activeTab = 'data';
 
+// Data-panel state — second-tier entity tab, per-entity selection, and the
+// transient next-selection-intent used by toolbar actions and row clicks to
+// communicate the intended post-mutation selection to renderDataPanel.
+// formRenderedForId is the id the edit form was last built from; the form is
+// only rebuilt when this changes, so commit-on-blur preserves user focus.
+let activeEntityTab = 'tasks';
+let entitySelections = { tasks: null, swimlanes: null, links: null, pipes: null, curtains: null, notes: null };
+let nextSelectionIntent = null;
+let formRenderedForId = null;
+
+function resetDataPanelState() {
+  activeEntityTab    = 'tasks';
+  entitySelections   = { tasks: null, swimlanes: null, links: null, pipes: null, curtains: null, notes: null };
+  nextSelectionIntent = null;
+  formRenderedForId  = null;
+}
+
 // ── Table renderers ────────────────────────────────────────────────────────────
 function renderEntityTable(container, data, derivedKeys = []) {
   if (!data || !data.length) {
@@ -75,91 +92,473 @@ function activateTab(name) {
 }
 
 // ── Data panel renderer ────────────────────────────────────────────────────────
-// Populates the eight entity/config containers in the Data panel from the current
-// projectData. Called on Data-tab activation (including dispatcher re-renders)
-// and from the file-load handler.
+// Renders the second-tier entity tab strip and the active entity tab's panel.
+// Called on Data-tab activation (including dispatcher-triggered re-renders via
+// runPostMutationHook) and from the file-load / New-Project handlers.
+// Tasks tab is fully implemented in slice 2a; other five tabs are stubs.
+
+const ENTITY_TABS = [
+  { key: 'tasks',     label: 'Tasks'     },
+  { key: 'swimlanes', label: 'Swimlanes' },
+  { key: 'links',     label: 'Links'     },
+  { key: 'pipes',     label: 'Pipes'     },
+  { key: 'curtains',  label: 'Curtains'  },
+  { key: 'notes',     label: 'Notes'     },
+];
+
 function renderDataPanel() {
-  const d = projectData;
-  renderDataTasksTable(document.getElementById('tasksContainer'), d.tasks);
-  renderEntityTable(document.getElementById('swimlanesContainer'), d.swimlanes);
-  renderEntityTable(document.getElementById('linksContainer'),     d.links);
-  renderEntityTable(document.getElementById('pipesContainer'),     d.pipes);
-  renderEntityTable(document.getElementById('curtainsContainer'),  d.curtains);
-  renderEntityTable(document.getElementById('notesContainer'),     d.notes);
-  renderConfigTable(document.getElementById('configLayoutContainer'),      d.config.layout);
-  renderConfigTable(document.getElementById('configBarsContainer'),        d.config.bars);
-  renderConfigTable(document.getElementById('configTimelineContainer'),    d.config.timeline);
-  renderConfigTable(document.getElementById('configTitlesContainer'),      d.config.titles);
-  renderConfigTable(document.getElementById('configStyleContainer'),       d.config.style);
-  renderConfigTable(document.getElementById('configTypographyContainer'),  d.config.typography);
-  renderConfigTable(document.getElementById('configPreferencesContainer'), d.config.preferences);
-  renderConfigTable(document.getElementById('configRenderingContainer'),   d.config.rendering);
+  // Always clear the transient intent at the top of every render, even before
+  // we read its value. Guards against silent dispatch no-ops leaving stale
+  // intent that would mis-target a later mutation.
+  const intent = nextSelectionIntent;
+  nextSelectionIntent = null;
+  if (intent && intent.entity in entitySelections) {
+    entitySelections[intent.entity] = intent.id;
+  }
+
+  // Build the persistent skeleton on first render. Stable child elements let
+  // us update parts of the panel without recreating the form DOM, which is
+  // how commit-on-blur preserves user focus on the surviving inputs.
+  const panel = document.getElementById('dataPanel');
+  let strip = document.getElementById('entityTabStrip');
+  let area  = document.getElementById('entityArea');
+  if (!strip || !area) {
+    panel.innerHTML = '<div id="entityTabStrip" class="entity-tabs"></div><div id="entityArea"></div>';
+    strip = document.getElementById('entityTabStrip');
+    area  = document.getElementById('entityArea');
+  }
+
+  buildEntityTabStrip(strip);
+
+  // Rebuild the entity-area sub-tree only when switching tabs, not on every
+  // mutation. Inside the Tasks tree, the form's container survives untouched
+  // so renderTasksForm can decide whether to rebuild it.
+  if (area.dataset.tab !== activeEntityTab) {
+    area.dataset.tab = activeEntityTab;
+    if (activeEntityTab === 'tasks') {
+      area.innerHTML = '<div class="entity-panel"><div class="entity-left"></div><div class="entity-right"></div></div>';
+      formRenderedForId = null;  // right pane is a fresh element — force form rebuild
+    } else {
+      const label = ENTITY_TABS.find(t => t.key === activeEntityTab).label;
+      area.innerHTML = `<div class="entity-stub">${escapeHtml(label)} tab — coming in slice 2b</div>`;
+    }
+  }
+
+  if (activeEntityTab === 'tasks') renderTasksPanel(area);
 }
 
-// Variant of renderEntityTable for the Data tab's Tasks table: the Name column
-// is inline-editable as the slice-1 proof case. Other columns render read-only.
-function renderDataTasksTable(container, tasks) {
-  if (!tasks || !tasks.length) {
-    container.innerHTML = '<p><em>No data</em></p>';
-    return;
+function buildEntityTabStrip(strip) {
+  strip.innerHTML = '';
+  ENTITY_TABS.forEach(t => {
+    const btn = document.createElement('button');
+    btn.className = 'entity-tab' + (t.key === activeEntityTab ? ' active' : '');
+    btn.textContent = t.label;
+    btn.addEventListener('click', () => {
+      if (activeEntityTab === t.key) return;
+      activeEntityTab = t.key;
+      renderDataPanel();
+    });
+    strip.appendChild(btn);
+  });
+}
+
+// ── Tasks entity panel ─────────────────────────────────────────────────────────
+
+function renderTasksPanel(area) {
+  // Normalise selection: clear stale id, apply default-first-row rule.
+  const tasks = projectData.tasks;
+  let selectedId = entitySelections.tasks;
+  if (selectedId !== null && !tasks.some(t => t.id === selectedId)) selectedId = null;
+  if (selectedId === null && tasks.length > 0) selectedId = tasks[0].id;
+  entitySelections.tasks = selectedId;
+
+  const left  = area.querySelector('.entity-left');
+  const right = area.querySelector('.entity-right');
+
+  // Left pane (toolbar + nav table) is rebuilt every render — no focusable
+  // controls inside, so this has no UX cost.
+  left.innerHTML = '';
+  left.appendChild(renderTasksToolbar(selectedId));
+  left.appendChild(renderTasksNavTable(selectedId));
+
+  // Right pane (form) is rebuilt only when selectedId changes — see policy
+  // note inside renderTasksForm.
+  renderTasksForm(right, selectedId);
+}
+
+function renderTasksToolbar(selectedId) {
+  const toolbar = document.createElement('div');
+  toolbar.className = 'entity-toolbar';
+
+  const tasks = projectData.tasks;
+  const swimlaneCount = projectData.swimlanes.length;
+  const idx = selectedId == null ? -1 : tasks.findIndex(t => t.id === selectedId);
+
+  function mkBtn(label) {
+    const b = document.createElement('button');
+    b.textContent = label;
+    return b;
   }
-  const keys = Object.keys(tasks[0]);
-  let html = '<table><thead><tr>';
-  keys.forEach(k => { html += `<th>${k}</th>`; });
+
+  const btnAdd       = mkBtn('Add');
+  const btnDelete    = mkBtn('Delete');
+  const btnDuplicate = mkBtn('Duplicate');
+  const btnMoveUp    = mkBtn('Move Up');
+  const btnMoveDown  = mkBtn('Move Down');
+
+  if (swimlaneCount === 0) {
+    btnAdd.disabled = true;
+    btnAdd.title = 'Add a swimlane first';
+  }
+  if (idx === -1) {
+    btnDelete.disabled = btnDuplicate.disabled = btnMoveUp.disabled = btnMoveDown.disabled = true;
+  } else {
+    const blockReason = whyCannotDeleteTask(selectedId);
+    if (blockReason !== null) {
+      btnDelete.disabled = true;
+      btnDelete.title = blockReason;
+    }
+    // Move Up / Down operate on task.row, not array order — see §2 of the
+    // slice-2a patch. Enablement is row-vs-rowCount, with orphan tasks
+    // (swimlaneId pointing to a missing swimlane, or null) explicitly tooltipped.
+    const task = tasks[idx];
+    const swimlane = task.swimlaneId == null
+      ? null
+      : (projectData.swimlanes.find(s => s.id === task.swimlaneId) || null);
+    if (!swimlane) {
+      btnMoveUp.disabled = btnMoveDown.disabled = true;
+      btnMoveUp.title = btnMoveDown.title = 'Task has no swimlane';
+    } else {
+      if (!(typeof task.row === 'number' && task.row > 1))                 btnMoveUp.disabled   = true;
+      if (!(typeof task.row === 'number' && task.row < swimlane.rowCount)) btnMoveDown.disabled = true;
+    }
+  }
+
+  btnAdd.addEventListener('click', () => {
+    const newId = nextIdFor(tasks);
+    nextSelectionIntent = { entity: 'tasks', id: newId };
+    dispatch({ entity: 'task', action: 'add' });
+  });
+  btnDelete.addEventListener('click', () => {
+    // Post-delete selection follows the sorted display order — the array
+    // order no longer matches the visible table order after sort lands.
+    const sorted = buildTasksDisplayOrder();
+    const i = sorted.findIndex(t => t.id === selectedId);
+    let nextId = null;
+    if (i !== -1) {
+      if (i + 1 < sorted.length) nextId = sorted[i + 1].id;
+      else if (i - 1 >= 0)       nextId = sorted[i - 1].id;
+    }
+    nextSelectionIntent = { entity: 'tasks', id: nextId };
+    dispatch({ entity: 'task', action: 'delete', id: selectedId });
+  });
+  btnDuplicate.addEventListener('click', () => {
+    const newId = nextIdFor(tasks);
+    nextSelectionIntent = { entity: 'tasks', id: newId };
+    dispatch({ entity: 'task', action: 'duplicate', id: selectedId });
+  });
+  // Move Up / Down on the Tasks tab dispatch row-field updates rather than
+  // array reorders — see §2 of the slice-2a patch. The dispatcher's moveUp /
+  // moveDown actions remain in use by other entity types (Swimlanes in 2b).
+  // After dispatch returns the form's row input still shows the stale
+  // pre-click value (renderTasksForm no-ops on same-id), so we sync it here.
+  btnMoveUp.addEventListener('click', () => {
+    const task = projectData.tasks.find(t => t.id === selectedId);
+    if (!task) return;
+    nextSelectionIntent = { entity: 'tasks', id: task.id };
+    dispatch({ entity: 'task', action: 'update', id: task.id, field: 'row', value: task.row - 1 });
+    syncTaskRowInput(task.id);
+  });
+  btnMoveDown.addEventListener('click', () => {
+    const task = projectData.tasks.find(t => t.id === selectedId);
+    if (!task) return;
+    nextSelectionIntent = { entity: 'tasks', id: task.id };
+    dispatch({ entity: 'task', action: 'update', id: task.id, field: 'row', value: task.row + 1 });
+    syncTaskRowInput(task.id);
+  });
+
+  toolbar.appendChild(btnAdd);
+  toolbar.appendChild(btnDelete);
+  toolbar.appendChild(btnDuplicate);
+  toolbar.appendChild(btnMoveUp);
+  toolbar.appendChild(btnMoveDown);
+  return toolbar;
+}
+
+// UI-only message for the disabled Delete button. Links checked first — the
+// more common case and the more actionable next step. canDeleteTask is the
+// pure boolean the dispatcher consults; this returns the human-readable reason
+// (or null when delete is allowed).
+function whyCannotDeleteTask(id) {
+  const task = projectData.tasks.find(t => t.id === id);
+  if (!task) return null;
+  if (projectData.links.some(l => l.fromTaskId === id || l.toTaskId === id)) {
+    return 'Cannot delete: task has links pointing to or from it';
+  }
+  if (task.swimlaneId != null) {
+    const swimlaneExists = projectData.swimlanes.some(s => s.id === task.swimlaneId);
+    if (swimlaneExists) {
+      const otherInSwimlane = projectData.tasks.some(t => t.id !== id && t.swimlaneId === task.swimlaneId);
+      if (!otherInSwimlane) return 'Cannot delete: would leave swimlane with no tasks';
+    }
+  }
+  return null;
+}
+
+// Sorted display order for the Tasks navigation table. Returns a shallow copy
+// of projectData.tasks; the array itself is never mutated (array order remains
+// under user control via the Excel sheet / writer round-trip).
+// Key: (swimlane.order, task.row, originalIndex). Orphan tasks (no matching
+// swimlane) sort to the end; within any group, null/undefined task.row sorts
+// after numeric rows. Infinity sentinels make the comparator straightforward
+// without tripping JS's null/undefined-vs-number quirks.
+function buildTasksDisplayOrder() {
+  const tasks = projectData.tasks;
+  const swimlaneOrderById = new Map();
+  projectData.swimlanes.forEach(s => swimlaneOrderById.set(s.id, s.order));
+  const decorated = tasks.map((t, i) => ({
+    task:    t,
+    swOrder: swimlaneOrderById.has(t.swimlaneId) ? swimlaneOrderById.get(t.swimlaneId) : Infinity,
+    rowKey:  (typeof t.row === 'number' && Number.isFinite(t.row)) ? t.row : Infinity,
+    index:   i,
+  }));
+  decorated.sort((a, b) => {
+    if (a.swOrder !== b.swOrder) return a.swOrder - b.swOrder;
+    if (a.rowKey  !== b.rowKey)  return a.rowKey  - b.rowKey;
+    return a.index - b.index;
+  });
+  return decorated.map(d => d.task);
+}
+
+function formatSwimlaneIdCell(swimlaneId) {
+  if (swimlaneId == null) return '—';
+  const sw = projectData.swimlanes.find(s => s.id === swimlaneId);
+  return swimlaneId + ' — ' + (sw ? sw.name : '<unknown>');
+}
+
+function renderTasksNavTable(selectedId) {
+  const sortedTasks = buildTasksDisplayOrder();
+  const table = document.createElement('table');
+  table.className = 'entity-nav-table';
+  const COLS = ['id', 'name', 'swimlaneId', 'row', 'startDate', 'finishDate'];
+
+  let html = '<thead><tr>';
+  COLS.forEach(c => { html += `<th>${c}</th>`; });
   html += '</tr></thead><tbody>';
-  tasks.forEach(row => {
-    html += `<tr data-id="${row.id}">`;
-    keys.forEach(k => {
-      const v = row[k];
-      if (k === 'name') {
-        html += `<td class="editable-name" title="Click to edit">${v != null ? escapeHtml(String(v)) : ''}</td>`;
+
+  if (sortedTasks.length === 0) {
+    html += `<tr><td colspan="${COLS.length}" class="entity-empty">No tasks. Click Add to create one.</td></tr>`;
+  } else {
+    sortedTasks.forEach(t => {
+      const isSelected = t.id === selectedId;
+      html += `<tr data-id="${t.id}"${isSelected ? ' class="selected"' : ''}>`;
+      COLS.forEach(c => {
+        let v;
+        if (c === 'swimlaneId') v = formatSwimlaneIdCell(t.swimlaneId);
+        else                    v = t[c] == null ? '' : t[c];
+        html += `<td>${escapeHtml(String(v))}</td>`;
+      });
+      html += '</tr>';
+    });
+  }
+  html += '</tbody></table>';
+  table.innerHTML = html;
+
+  // mousedown (not click) so selection updates BEFORE the natural focus shift
+  // tears down the current focused form input via blur — the active.blur()
+  // call below dispatches the in-progress edit and triggers the consume-intent
+  // re-render that lands selection on the new row.
+  table.querySelectorAll('tbody tr[data-id]').forEach(tr => {
+    tr.addEventListener('mousedown', () => {
+      const taskId = parseInt(tr.dataset.id, 10);
+      if (!Number.isFinite(taskId)) return;
+      if (taskId === entitySelections.tasks) return;
+      nextSelectionIntent = { entity: 'tasks', id: taskId };
+      const active = document.activeElement;
+      const inForm = active && active.closest && active.closest('.entity-form');
+      if (inForm) {
+        active.blur();   // commit-on-blur → dispatch → renderDataPanel consumes intent
       } else {
-        html += `<td>${v != null ? escapeHtml(String(v)) : ''}</td>`;
+        renderDataPanel();
       }
     });
-    html += '</tr>';
   });
-  html += '</tbody></table>';
-  container.innerHTML = html;
 
-  container.querySelectorAll('td.editable-name').forEach(td => {
-    td.addEventListener('click', () => beginEditTaskNameCell(td));
-  });
+  return table;
 }
 
-function beginEditTaskNameCell(td) {
-  if (td.querySelector('input')) return;
-  const originalText = td.textContent;
-  const id = parseInt(td.parentElement.dataset.id, 10);
-  if (!Number.isFinite(id)) return;
+// ── Tasks edit form ────────────────────────────────────────────────────────────
 
+const LABEL_CONTENT_OPTIONS   = ['name', 'date', 'name_and_date', 'none'];
+const LABEL_PLACEMENT_OPTIONS = ['inside', 'outside'];
+const FILL_PATTERN_OPTIONS    = ['solid', 'hatch', 'cross-hatch', 'horizontal', 'vertical', 'dots'];
+
+function renderTasksForm(container, selectedId) {
+  // Re-render policy: only rebuild form when selected id changes. Same-id
+  // commits (the common auto-commit-on-blur case) leave the form DOM intact
+  // so the user's tab destination keeps focus.
+  if (selectedId === formRenderedForId && container.childElementCount > 0) return;
+  formRenderedForId = selectedId;
+  container.innerHTML = '';
+
+  if (selectedId === null) {
+    const empty = document.createElement('div');
+    empty.className = 'entity-form-empty';
+    empty.textContent = 'Select a row to edit.';
+    container.appendChild(empty);
+    return;
+  }
+
+  const task = projectData.tasks.find(t => t.id === selectedId);
+  if (!task) { formRenderedForId = null; return; }
+
+  const form = document.createElement('div');
+  form.className = 'entity-form';
+  container.appendChild(form);
+
+  const upd = (field, value) => dispatch({ entity: 'task', action: 'update', id: task.id, field, value });
+
+  addReadonlyRow(form, 'id', task.id);
+
+  const swimlaneOptions = projectData.swimlanes.map(s => ({ value: String(s.id), label: `${s.id} — ${s.name}` }));
+  addSelectRow(form, 'swimlaneId', task.swimlaneId, swimlaneOptions, val => {
+    if (val === '') return;
+    const n = parseInt(val, 10);
+    if (Number.isFinite(n)) upd('swimlaneId', n);
+  });
+
+  addNumberRow(form, 'row', task.row, val => {
+    const n = parseInt(val, 10);
+    if (Number.isFinite(n)) upd('row', n);
+  });
+  addTextRow(form, 'name', task.name, val => upd('name', val));
+  addDateRow(form, 'startDate',  task.startDate,  val => upd('startDate',  val === '' ? null : val));
+  addDateRow(form, 'finishDate', task.finishDate, val => upd('finishDate', val === '' ? null : val));
+  addReadonlyRow(form, 'isMilestone', task.isMilestone, ' (derived)');
+
+  addSelectRow(form, 'labelContent', task.labelContent,
+    LABEL_CONTENT_OPTIONS.map(o => ({ value: o, label: o })),
+    val => upd('labelContent', val));
+  addSelectRow(form, 'labelPlacement', task.labelPlacement,
+    LABEL_PLACEMENT_OPTIONS.map(o => ({ value: o, label: o })),
+    val => upd('labelPlacement', val));
+  addNumberRow(form, 'labelOffset', task.labelOffset, val => {
+    const n = parseInt(val, 10);
+    if (Number.isFinite(n)) upd('labelOffset', n);
+  });
+  addTextRow(form, 'fillColor', task.fillColor, val => upd('fillColor', val));
+  addSelectRow(form, 'fillPattern', task.fillPattern,
+    FILL_PATTERN_OPTIONS.map(o => ({ value: o, label: o })),
+    val => upd('fillPattern', val));
+  addTextRow(form, 'patternColor', task.patternColor, val => upd('patternColor', val));
+  addTextRow(form, 'dateFormat', task.dateFormat == null ? '' : task.dateFormat,
+    val => upd('dateFormat', val === '' ? null : val));
+}
+
+function addReadonlyRow(form, fieldName, value, suffix) {
+  const label = document.createElement('label');
+  label.textContent = fieldName + (suffix || '');
+  const div = document.createElement('div');
+  div.className = 'readonly';
+  div.textContent = (value === null || value === undefined) ? '' : String(value);
+  form.appendChild(label);
+  form.appendChild(div);
+}
+
+function addTextRow(form, fieldName, value, commitFn) {
+  const label = document.createElement('label');
+  label.textContent = fieldName;
   const input = document.createElement('input');
   input.type  = 'text';
-  input.value = originalText;
-  td.textContent = '';
-  td.appendChild(input);
-  input.focus();
-  input.select();
+  input.value = value == null ? '' : String(value);
+  attachCommitHandlers(input, () => input.value, commitFn);
+  form.appendChild(label);
+  form.appendChild(input);
+}
 
-  let cancelled = false;
-  function commit() {
-    if (cancelled) {
-      td.textContent = originalText;
-      return;
-    }
-    const newValue = input.value;
-    if (newValue === originalText) {
-      td.textContent = originalText;
-      return;
-    }
-    dispatch({ entity: 'task', action: 'update', id, field: 'name', value: newValue });
-    // dispatch's post-mutation hook re-renders the Data tab; this <td> is gone.
+function addNumberRow(form, fieldName, value, commitFn) {
+  const label = document.createElement('label');
+  label.textContent = fieldName;
+  const input = document.createElement('input');
+  input.type  = 'number';
+  input.step  = '1';
+  input.value = value == null ? '' : String(value);
+  // data-field marker enables targeted DOM updates without rebuilding the form
+  // (e.g. syncTaskRowInput after a Move Up / Move Down dispatch).
+  input.dataset.field = fieldName;
+  attachCommitHandlers(input, () => input.value, commitFn);
+  form.appendChild(label);
+  form.appendChild(input);
+}
+
+function addDateRow(form, fieldName, value, commitFn) {
+  const label = document.createElement('label');
+  label.textContent = fieldName;
+  const input = document.createElement('input');
+  input.type  = 'date';
+  input.value = value == null ? '' : String(value);
+  attachCommitHandlers(input, () => input.value, commitFn);
+  form.appendChild(label);
+  form.appendChild(input);
+}
+
+function addSelectRow(form, fieldName, value, options, commitFn) {
+  const label = document.createElement('label');
+  label.textContent = fieldName;
+  const select = document.createElement('select');
+  if (options.length === 0) select.disabled = true;
+  // Placeholder for null values — gives the user a visible "no selection"
+  // state instead of the browser silently displaying the first real option.
+  if (value === null || value === undefined) {
+    const placeholder = document.createElement('option');
+    placeholder.value = '';
+    placeholder.textContent = '—';
+    select.appendChild(placeholder);
   }
-  input.addEventListener('keydown', e => {
-    if (e.key === 'Escape')      { cancelled = true; input.blur(); }
-    else if (e.key === 'Enter')  { input.blur(); }
+  options.forEach(o => {
+    const opt = document.createElement('option');
+    opt.value = o.value;
+    opt.textContent = o.label;
+    select.appendChild(opt);
   });
-  input.addEventListener('blur', commit);
+  select.value = (value === null || value === undefined) ? '' : String(value);
+  attachCommitHandlers(select, () => select.value, commitFn);
+  form.appendChild(label);
+  form.appendChild(select);
+}
+
+// Targeted in-place sync of the form's row input after a Move Up / Move Down
+// dispatch. renderTasksForm no-ops on same-id, so without this the form
+// continues to display the pre-click row value. Only used for the row field;
+// the slice-2a known-limitation for stale isMilestone display is preserved.
+function syncTaskRowInput(taskId) {
+  const task = projectData.tasks.find(t => t.id === taskId);
+  if (!task) return;
+  const input = document.querySelector('.entity-form input[data-field="row"]');
+  if (!input) return;
+  input.value = task.row == null ? '' : String(task.row);
+}
+
+function attachCommitHandlers(control, getValue, commitFn) {
+  let preEditValue = getValue();
+  let cancelled = false;
+  control.addEventListener('focus', () => {
+    preEditValue = getValue();
+    cancelled = false;
+  });
+  control.addEventListener('keydown', ev => {
+    if (ev.key === 'Escape') {
+      cancelled = true;
+      control.value = preEditValue;
+      control.blur();
+    } else if (ev.key === 'Enter' && control.tagName === 'INPUT' && control.type !== 'date') {
+      control.blur();
+    }
+  });
+  control.addEventListener('blur', () => {
+    if (cancelled) { cancelled = false; return; }
+    commitFn(getValue());
+  });
 }
 
 // ── Inspector renderer ─────────────────────────────────────────────────────────
@@ -692,12 +1091,49 @@ function runPostMutationHook() {
   updateIssuesTabLabel();
 }
 
+// Updates the Save-button disabled state and the status-text line. Shared
+// between the file-load handler and New Project so the formatting stays in
+// sync; only the prefix varies.
+function refreshStatusAndButtons(prefix) {
+  const d = projectData;
+  const noData = d.tasks.length === 0 && d.swimlanes.length === 0;
+  document.getElementById('saveBtn').disabled    = noData;
+  document.getElementById('saveSvgBtn').disabled = noData;
+  const cnt = (num, s) => `${num} ${num === 1 ? s : s + 's'}`;
+  document.getElementById('status').textContent =
+    `${prefix} — `                                  +
+    `${cnt(d.tasks.length,     'task')}, `           +
+    `${cnt(d.swimlanes.length, 'swimlane')}, `       +
+    `${cnt(d.links.length,     'link')}, `           +
+    `${cnt(d.pipes.length,     'pipe')}, `           +
+    `${cnt(d.curtains.length,  'curtain')}, `        +
+    `${cnt(d.notes.length,     'note')}`;
+}
+
 // ── Public entry point ─────────────────────────────────────────────────────────
 function initUI() {
   document.getElementById('tabData').addEventListener('click',      () => activateTab('data'));
   document.getElementById('tabIssues').addEventListener('click',    () => activateTab('issues'));
   document.getElementById('tabChart').addEventListener('click',     () => activateTab('chart'));
   document.getElementById('tabInspector').addEventListener('click', () => activateTab('inspector'));
+
+  document.getElementById('newProjectBtn').addEventListener('click', function() {
+    projectData    = createEmptyProjectData();
+    loadedFilename = null;
+    resetDataPanelState();
+    issuesFilterState = ISSUE_DEFAULT_FILTER();
+
+    // Activate the Data + Tasks tabs BEFORE the dispatches so their post-mutation
+    // re-renders land on the Data panel rather than re-rendering whichever
+    // top-level tab the user was previously on.
+    activateTab('data');
+
+    dispatch({ entity: 'swimlane', action: 'add' });
+    dispatch({ entity: 'swimlane', action: 'update', id: 1, field: 'name', value: 'Swimlane 1' });
+
+    refreshStatusAndButtons('New project');
+    updateIssuesTabLabel();
+  });
 
   document.getElementById('fileInput').addEventListener('change', function(e) {
     const file = e.target.files[0];
@@ -710,25 +1146,14 @@ function initUI() {
       projectData._validation = validateProject(projectData);
       loadedFilename = file.name;
 
+      resetDataPanelState();
       issuesFilterState = ISSUE_DEFAULT_FILTER();
       updateIssuesTabLabel();
       if (document.getElementById('tabIssues').classList.contains('active')) {
         renderIssuesPanel(document.getElementById('issuesPanel'));
       }
 
-      const d = projectData;
-      const noData = d.tasks.length === 0 && d.swimlanes.length === 0;
-      document.getElementById('saveBtn').disabled    = noData;
-      document.getElementById('saveSvgBtn').disabled = noData;
-      const cnt = (num, s) => `${num} ${num === 1 ? s : s + 's'}`;
-      document.getElementById('status').textContent =
-        `Loaded: ${file.name} — `                    +
-        `${cnt(d.tasks.length,     'task')}, `        +
-        `${cnt(d.swimlanes.length, 'swimlane')}, `    +
-        `${cnt(d.links.length,     'link')}, `        +
-        `${cnt(d.pipes.length,     'pipe')}, `        +
-        `${cnt(d.curtains.length,  'curtain')}, `     +
-        `${cnt(d.notes.length,     'note')}`;
+      refreshStatusAndButtons(`Loaded: ${file.name}`);
 
       renderDataPanel();
     };
@@ -761,4 +1186,8 @@ function initUI() {
     a.click();
     URL.revokeObjectURL(url);
   });
+
+  // Bootstrap the empty Data panel so the entity tab strip and empty Tasks
+  // panel appear on page load, not just after the first file load / mutation.
+  renderDataPanel();
 }

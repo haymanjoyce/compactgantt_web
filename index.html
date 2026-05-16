@@ -13,6 +13,16 @@
   <script src="validation.js"></script>
   <script src="ui.js"></script>
   <style>
+    :root {
+      --cg-border: 1px solid #ccc;
+      --cg-bg-panel: white;
+      --cg-bg-toolbar: #f5f5f5;
+      --cg-bg-selected: #e0ecff;
+      --cg-form-col-width: 360px;
+      --cg-label-col-width: 140px;
+      --cg-control-height: 28px;
+      --cg-gap: 8px;
+    }
     body { font-family: sans-serif; padding: 1rem; }
     #status { margin: 0.5rem 0 0.75rem; color: #555; }
     .tabs { display: flex; gap: 4px; margin-bottom: 1rem; }
@@ -29,6 +39,72 @@
     table { border-collapse: collapse; margin-bottom: 2rem; font-size: 0.85rem; }
     th, td { border: 1px solid #ccc; padding: 4px 8px; white-space: nowrap; }
     th { background: #f0f0f0; }
+
+    /* Data panel — second-tier tab strip */
+    .entity-tabs { display: flex; gap: 2px; margin-bottom: 8px; border-bottom: var(--cg-border); }
+    .entity-tab {
+      padding: 4px 14px; cursor: pointer; background: transparent;
+      border: none; font-size: 0.85rem; color: #555;
+      border-bottom: 2px solid transparent; margin-bottom: -1px;
+    }
+    .entity-tab:hover { color: #222; }
+    .entity-tab.active { color: #222; font-weight: 600; border-bottom-color: #2563eb; }
+
+    /* Data panel — two-pane layout */
+    .entity-panel {
+      display: grid;
+      grid-template-columns: 1fr var(--cg-form-col-width);
+      gap: var(--cg-gap);
+      align-items: start;
+    }
+    .entity-left, .entity-right {
+      border: var(--cg-border); background: var(--cg-bg-panel);
+      max-height: calc(100vh - 220px); overflow: auto;
+    }
+    .entity-right { padding: 12px; }
+
+    /* Toolbar */
+    .entity-toolbar {
+      display: flex; gap: 4px; padding: 6px;
+      background: var(--cg-bg-toolbar);
+      border-bottom: var(--cg-border);
+      position: sticky; top: 0; z-index: 1;
+    }
+    .entity-toolbar button {
+      padding: 3px 10px; font-size: 0.85rem;
+      border: 1px solid #bbb; background: white; cursor: pointer;
+      height: var(--cg-control-height); box-sizing: border-box;
+    }
+    .entity-toolbar button:disabled { color: #999; cursor: not-allowed; background: #fafafa; }
+
+    /* Navigation table */
+    .entity-nav-table { width: 100%; margin: 0; font-size: 0.85rem; }
+    .entity-nav-table th { position: sticky; top: var(--cg-control-height); z-index: 1; }
+    .entity-nav-table tbody tr { cursor: pointer; }
+    .entity-nav-table tbody tr.selected { background: var(--cg-bg-selected); }
+    .entity-empty {
+      padding: 1.5rem; text-align: center; color: #777; font-size: 0.9rem;
+    }
+
+    /* Edit form */
+    .entity-form { display: grid; grid-template-columns: var(--cg-label-col-width) 1fr; gap: var(--cg-gap); align-items: center; }
+    .entity-form label { text-align: right; font-size: 0.85rem; color: #444; }
+    .entity-form input, .entity-form select {
+      height: var(--cg-control-height); padding: 2px 6px; font-size: 0.85rem;
+      box-sizing: border-box; width: 100%;
+    }
+    .entity-form .readonly {
+      height: var(--cg-control-height); padding: 4px 6px; font-size: 0.85rem;
+      background: #f5f5f5; border: 1px solid #ddd; color: #555; box-sizing: border-box;
+      display: flex; align-items: center;
+    }
+    .entity-form-empty {
+      padding: 2rem 1rem; text-align: center; color: #777; font-size: 0.9rem;
+    }
+    .entity-stub {
+      padding: 2rem; text-align: center; color: #777; font-size: 0.9rem;
+      border: var(--cg-border); background: var(--cg-bg-panel);
+    }
 
     .issues-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-bottom: 0.5rem; }
     .issues-search { flex: 1 1 240px; min-width: 180px; padding: 4px 8px; font-size: 0.9rem; border: 1px solid #bbb; }
@@ -58,6 +134,7 @@
 </head>
 <body>
 
+  <button id="newProjectBtn">New Project</button>
   <input type="file" id="fileInput" accept=".xlsx">
   <button id="saveBtn" disabled>Save</button>
   <button id="saveSvgBtn" disabled>Save SVG</button>
@@ -70,22 +147,7 @@
     <button class="tab"        id="tabInspector">Inspector</button>
   </div>
 
-  <div id="dataPanel">
-    <h2>Tasks</h2>               <div id="tasksContainer"></div>
-    <h2>Swimlanes</h2>           <div id="swimlanesContainer"></div>
-    <h2>Links</h2>               <div id="linksContainer"></div>
-    <h2>Pipes</h2>               <div id="pipesContainer"></div>
-    <h2>Curtains</h2>            <div id="curtainsContainer"></div>
-    <h2>Notes</h2>               <div id="notesContainer"></div>
-    <h2>Config: Layout</h2>      <div id="configLayoutContainer"></div>
-    <h2>Config: Bars</h2>        <div id="configBarsContainer"></div>
-    <h2>Config: Timeline</h2>    <div id="configTimelineContainer"></div>
-    <h2>Config: Titles</h2>      <div id="configTitlesContainer"></div>
-    <h2>Config: Style</h2>       <div id="configStyleContainer"></div>
-    <h2>Config: Typography</h2>  <div id="configTypographyContainer"></div>
-    <h2>Config: Preferences</h2> <div id="configPreferencesContainer"></div>
-    <h2>Config: Rendering</h2>   <div id="configRenderingContainer"></div>
-  </div>
+  <div id="dataPanel"></div>
 
   <div id="issuesPanel" style="display:none;"></div>
 
