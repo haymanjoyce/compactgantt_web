@@ -473,7 +473,7 @@ function parseWorkbook(workbook) {
     const raw = parseEntitySheet(tasksSheet, {
       'ID':              { key: 'id',             def: null                   },
       'Swimlane ID':     { key: 'swimlaneId',      def: null                   },
-      'Row':             { key: 'row',             def: 1,  fallback: 'Swimlane Row' },
+      'Row':             { key: 'row',             def: null,  fallback: 'Swimlane Row' },
       'Name':            { key: 'name',            def: ''                     },
       'Start Date':      { key: 'startDate',       def: null                   },
       'Finish Date':     { key: 'finishDate',      def: null                   },
@@ -489,7 +489,7 @@ function parseWorkbook(workbook) {
       const id             = toInt(t.id, null, { entity: 'task', id: null, field: 'id' });
       const c              = (field) => ({ entity: 'task', id, field });
       const swimlaneId     = toInt(t.swimlaneId, null, c('swimlaneId'));
-      const row            = toInt(t.row, 1, c('row'));
+      const row            = toInt(t.row, null, c('row'));
       const startDate      = parseDate(t.startDate, c('startDate'));
       const finishDate     = parseDate(t.finishDate, c('finishDate'));
       const labelContent   = normalizeLabelContent(t.labelContent, c('labelContent'));

@@ -420,6 +420,7 @@ function renderTasksForm(container, selectedId) {
   });
 
   addNumberRow(form, 'row', task.row, val => {
+    if (val === '') { upd('row', null); return; }
     const n = parseInt(val, 10);
     if (Number.isFinite(n)) upd('row', n);
   });

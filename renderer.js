@@ -477,7 +477,7 @@ function renderChart(projectData) {
     if (task.startDate > chartEndDate) continue;
     if (task.finishDate < chartStartDate) continue;
 
-    const row        = (task.row > swimlane.rowCount) ? 1 : task.row;
+    const row        = (Number.isInteger(task.row) && task.row >= 1 && task.row <= swimlane.rowCount) ? task.row : 1;
     const absRow     = startRowOf[task.swimlaneId] + row - 1;
     const rowY       = taskRowY1 + absRow * rowH;
     const rowCenterY = rowY + rowH / 2;
