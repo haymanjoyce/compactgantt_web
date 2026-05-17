@@ -16,11 +16,20 @@ let entitySelections = { tasks: null, swimlanes: null, links: null, pipes: null,
 let nextSelectionIntent = null;
 let formRenderedForId = null;
 
+// Config-panel state — active sub-tab and a per-block form-rebuild gate parallel
+// to formRenderedForId. Reset on file load / New Project alongside data-panel
+// state (function name is a soft misnomer kept for low-churn consistency with
+// the existing entitySelections reset).
+let activeConfigBlock = 'layout';
+let configBlockRenderedFor = null;
+
 function resetDataPanelState() {
   activeEntityTab    = 'tasks';
   entitySelections   = { tasks: null, swimlanes: null, links: null, pipes: null, curtains: null, notes: null };
   nextSelectionIntent = null;
   formRenderedForId  = null;
+  activeConfigBlock       = 'layout';
+  configBlockRenderedFor  = null;
 }
 
 // ── Table renderers ────────────────────────────────────────────────────────────
@@ -66,7 +75,7 @@ function renderConfigTable(container, config) {
 function activateTab(name) {
   activeTab = name;
 
-  ['data', 'issues', 'chart', 'inspector'].forEach(n => {
+  ['data', 'issues', 'chart', 'config', 'inspector'].forEach(n => {
     document.getElementById(n + 'Panel').style.display = n === name ? '' : 'none';
     document.getElementById('tab' + n.charAt(0).toUpperCase() + n.slice(1)).classList.toggle('active', n === name);
   });
@@ -84,6 +93,10 @@ function activateTab(name) {
     panel.innerHTML = projectData.tasks.length === 0
       ? '<p>No project loaded</p>'
       : renderChart(projectData);
+  }
+
+  if (name === 'config') {
+    renderConfigPanel(document.getElementById('configPanel'));
   }
 
   if (name === 'inspector') {
@@ -538,6 +551,26 @@ function addSelectRow(form, fieldName, value, options, commitFn) {
   attachCommitHandlers(select, () => select.value, commitFn);
   form.appendChild(label);
   form.appendChild(select);
+}
+
+// NOTE: unlike addTextRow / addNumberRow / addSelectRow which pass the raw
+// string from the input to commitFn (caller parses), this helper passes the
+// parsed boolean directly. Commit handlers in the Config tab receive `true`
+// or `false`, not a string. Auto-commits on the native 'change' event — no
+// blur cycle, no Escape-to-revert (toggling back is one click).
+function addCheckboxRow(form, fieldName, value, commitFn) {
+  const label = document.createElement('label');
+  label.textContent = fieldName;
+  const wrapper = document.createElement('div');
+  wrapper.className = 'checkbox-wrapper';
+  const input = document.createElement('input');
+  input.type    = 'checkbox';
+  input.checked = !!value;
+  input.dataset.field = fieldName;
+  input.addEventListener('change', () => commitFn(input.checked));
+  wrapper.appendChild(input);
+  form.appendChild(label);
+  form.appendChild(wrapper);
 }
 
 // Targeted in-place sync of the form's row input after a Move Up / Move Down
@@ -1254,6 +1287,273 @@ function attachCommitHandlers(control, getValue, commitFn) {
   });
 }
 
+// ── Config panel ───────────────────────────────────────────────────────────────
+// Form-only — no nav table, no toolbar, no selection state. Seven sub-tabs
+// correspond to the seven user-facing config blocks (config.rendering is
+// deliberately excluded). Persistent-skeleton pattern mirrors renderDataPanel:
+// the sub-tab strip and an outer area survive across same-block re-renders so
+// commit-on-blur dispatches preserve focus inside the form.
+
+const CONFIG_TABS = [
+  { key: 'layout',      label: 'Layout'      },
+  { key: 'bars',        label: 'Bars'        },
+  { key: 'timeline',    label: 'Timeline'    },
+  { key: 'titles',      label: 'Titles'      },
+  { key: 'style',       label: 'Style'       },
+  { key: 'typography',  label: 'Typography'  },
+  { key: 'preferences', label: 'Preferences' },
+];
+
+const MILESTONE_SHAPE_OPTIONS = ['diamond', 'circle'];
+const HEADER_FOOTER_TEXT_ALIGN_OPTIONS = ['left', 'center', 'right'];
+
+function renderConfigPanel(panel) {
+  let strip = document.getElementById('configTabStrip');
+  let area  = document.getElementById('configArea');
+  if (!strip || !area) {
+    panel.innerHTML = '<div id="configTabStrip" class="entity-tabs"></div><div id="configArea"></div>';
+    strip = document.getElementById('configTabStrip');
+    area  = document.getElementById('configArea');
+  }
+
+  buildConfigTabStrip(strip);
+
+  if (area.dataset.block !== activeConfigBlock) {
+    area.dataset.block = activeConfigBlock;
+    area.innerHTML = '<div class="config-panel"><div class="config-form-container"></div></div>';
+    configBlockRenderedFor = null;
+  }
+
+  const container = area.querySelector('.config-form-container');
+  if (activeConfigBlock === 'layout')      renderLayoutConfigForm(container);
+  if (activeConfigBlock === 'bars')        renderBarsConfigForm(container);
+  if (activeConfigBlock === 'timeline')    renderTimelineConfigForm(container);
+  if (activeConfigBlock === 'titles')      renderTitlesConfigForm(container);
+  if (activeConfigBlock === 'style')       renderStyleConfigForm(container);
+  if (activeConfigBlock === 'typography')  renderTypographyConfigForm(container);
+  if (activeConfigBlock === 'preferences') renderPreferencesConfigForm(container);
+}
+
+function buildConfigTabStrip(strip) {
+  strip.innerHTML = '';
+  CONFIG_TABS.forEach(t => {
+    const btn = document.createElement('button');
+    btn.className = 'entity-tab' + (t.key === activeConfigBlock ? ' active' : '');
+    btn.textContent = t.label;
+    btn.addEventListener('click', () => {
+      if (activeConfigBlock === t.key) return;
+      activeConfigBlock = t.key;
+      renderConfigPanel(document.getElementById('configPanel'));
+    });
+    strip.appendChild(btn);
+  });
+}
+
+// Integer commit: empty → null, NaN → no-op (input keeps user's garbage until next rebuild).
+function commitInt(upd, field) {
+  return val => {
+    if (val === '') { upd(field, null); return; }
+    const n = parseInt(val, 10);
+    if (Number.isFinite(n)) upd(field, n);
+  };
+}
+
+// Float commit: empty → null, NaN → no-op.
+function commitFloat(upd, field) {
+  return val => {
+    if (val === '') { upd(field, null); return; }
+    const n = parseFloat(val);
+    if (Number.isFinite(n)) upd(field, n);
+  };
+}
+
+function renderLayoutConfigForm(container) {
+  if (configBlockRenderedFor === 'layout' && container.childElementCount > 0) return;
+  configBlockRenderedFor = 'layout';
+  container.innerHTML = '';
+
+  const form = document.createElement('div');
+  form.className = 'entity-form';
+  container.appendChild(form);
+
+  const layout = projectData.config.layout;
+  const upd = (field, value) =>
+    dispatch({ entity: 'config', action: 'update', block: 'layout', field, value });
+
+  addNumberRow(form, 'outerWidth',      layout.outerWidth,      commitInt(upd, 'outerWidth'));
+  addNumberRow(form, 'outerHeight',     layout.outerHeight,     commitInt(upd, 'outerHeight'));
+  addNumberRow(form, 'paddingTop',      layout.paddingTop,      commitInt(upd, 'paddingTop'));
+  addNumberRow(form, 'paddingRight',    layout.paddingRight,    commitInt(upd, 'paddingRight'));
+  addNumberRow(form, 'paddingBottom',   layout.paddingBottom,   commitInt(upd, 'paddingBottom'));
+  addNumberRow(form, 'paddingLeft',     layout.paddingLeft,     commitInt(upd, 'paddingLeft'));
+  addCheckboxRow(form, 'showRowDividers', layout.showRowDividers, val => upd('showRowDividers', val));
+}
+
+function renderBarsConfigForm(container) {
+  if (configBlockRenderedFor === 'bars' && container.childElementCount > 0) return;
+  configBlockRenderedFor = 'bars';
+  container.innerHTML = '';
+
+  const form = document.createElement('div');
+  form.className = 'entity-form';
+  container.appendChild(form);
+
+  const bars = projectData.config.bars;
+  const upd = (field, value) =>
+    dispatch({ entity: 'config', action: 'update', block: 'bars', field, value });
+
+  addNumberRow(form, 'taskBarHeightFactor',   bars.taskBarHeightFactor,   commitFloat(upd, 'taskBarHeightFactor'),   { step: '0.1' });
+  addNumberRow(form, 'milestoneSizeFactor',   bars.milestoneSizeFactor,   commitFloat(upd, 'milestoneSizeFactor'),   { step: '0.1' });
+  addNumberRow(form, 'taskCornerRadius',      bars.taskCornerRadius,      commitInt  (upd, 'taskCornerRadius'));
+  addSelectRow(form, 'milestoneShape',        bars.milestoneShape,
+    MILESTONE_SHAPE_OPTIONS.map(o => ({ value: o, label: o })),
+    val => upd('milestoneShape', val));
+  addNumberRow(form, 'milestoneCornerRadius', bars.milestoneCornerRadius, commitFloat(upd, 'milestoneCornerRadius'), { step: '0.1' });
+}
+
+function renderTimelineConfigForm(container) {
+  if (configBlockRenderedFor === 'timeline' && container.childElementCount > 0) return;
+  configBlockRenderedFor = 'timeline';
+  container.innerHTML = '';
+
+  const form = document.createElement('div');
+  form.className = 'entity-form';
+  container.appendChild(form);
+
+  const timeline = projectData.config.timeline;
+  const upd = (field, value) =>
+    dispatch({ entity: 'config', action: 'update', block: 'timeline', field, value });
+
+  // Date fields commit twice: the value, then the paired *Explicit flag.
+  // The writer round-trips empty (explicit=false) as "auto-derive from tasks",
+  // and non-empty (explicit=true) as the user's authoritative value. The flags
+  // are derived state — not user-editable, not rendered as rows.
+  addDateRow(form, 'chartStartDate', timeline.chartStartDate, val => {
+    if (val === '') {
+      upd('chartStartDate', null);
+      upd('chartStartDateExplicit', false);
+    } else {
+      upd('chartStartDate', val);
+      upd('chartStartDateExplicit', true);
+    }
+  });
+  addDateRow(form, 'chartEndDate', timeline.chartEndDate, val => {
+    if (val === '') {
+      upd('chartEndDate', null);
+      upd('chartEndDateExplicit', false);
+    } else {
+      upd('chartEndDate', val);
+      upd('chartEndDateExplicit', true);
+    }
+  });
+
+  addCheckboxRow(form, 'showYears',  timeline.showYears,  val => upd('showYears',  val));
+  addCheckboxRow(form, 'showMonths', timeline.showMonths, val => upd('showMonths', val));
+  addCheckboxRow(form, 'showWeeks',  timeline.showWeeks,  val => upd('showWeeks',  val));
+  addCheckboxRow(form, 'showDays',   timeline.showDays,   val => upd('showDays',   val));
+  addCheckboxRow(form, 'showDates',  timeline.showDates,  val => upd('showDates',  val));
+  addCheckboxRow(form, 'gridlineYears',  timeline.gridlineYears,  val => upd('gridlineYears',  val));
+  addCheckboxRow(form, 'gridlineMonths', timeline.gridlineMonths, val => upd('gridlineMonths', val));
+  addCheckboxRow(form, 'gridlineWeeks',  timeline.gridlineWeeks,  val => upd('gridlineWeeks',  val));
+  addCheckboxRow(form, 'gridlineDays',   timeline.gridlineDays,   val => upd('gridlineDays',   val));
+}
+
+function renderTitlesConfigForm(container) {
+  if (configBlockRenderedFor === 'titles' && container.childElementCount > 0) return;
+  configBlockRenderedFor = 'titles';
+  container.innerHTML = '';
+
+  const form = document.createElement('div');
+  form.className = 'entity-form';
+  container.appendChild(form);
+
+  const titles = projectData.config.titles;
+  const upd = (field, value) =>
+    dispatch({ entity: 'config', action: 'update', block: 'titles', field, value });
+
+  addNumberRow(form, 'headerHeight',    titles.headerHeight,    commitInt(upd, 'headerHeight'));
+  addTextRow  (form, 'headerText',      titles.headerText,      val => upd('headerText', val));
+  addSelectRow(form, 'headerTextAlign', titles.headerTextAlign,
+    HEADER_FOOTER_TEXT_ALIGN_OPTIONS.map(o => ({ value: o, label: o })),
+    val => upd('headerTextAlign', val));
+  addNumberRow(form, 'footerHeight',    titles.footerHeight,    commitInt(upd, 'footerHeight'));
+  addTextRow  (form, 'footerText',      titles.footerText,      val => upd('footerText', val));
+  addSelectRow(form, 'footerTextAlign', titles.footerTextAlign,
+    HEADER_FOOTER_TEXT_ALIGN_OPTIONS.map(o => ({ value: o, label: o })),
+    val => upd('footerTextAlign', val));
+}
+
+function renderStyleConfigForm(container) {
+  if (configBlockRenderedFor === 'style' && container.childElementCount > 0) return;
+  configBlockRenderedFor = 'style';
+  container.innerHTML = '';
+
+  const form = document.createElement('div');
+  form.className = 'entity-form';
+  container.appendChild(form);
+
+  const style = projectData.config.style;
+  const upd = (field, value) =>
+    dispatch({ entity: 'config', action: 'update', block: 'style', field, value });
+
+  const STYLE_FIELDS = [
+    'chartBackgroundColor', 'headerFooterBackgroundColor', 'headerFooterBorderColor',
+    'headerFooterTextColor', 'swimlaneLabelColor', 'swimlaneDividerColor',
+    'scaleBackgroundColor', 'scaleTickColor', 'scaleLabelTextColor',
+    'gridlineVerticalColor', 'taskStrokeColor', 'milestoneStrokeColor',
+    'outsideLabelTextColor', 'leaderLineColor', 'insideLabelTextColor',
+    'noteTextColor',
+  ];
+  STYLE_FIELDS.forEach(f => addTextRow(form, f, style[f], val => upd(f, val)));
+}
+
+function renderTypographyConfigForm(container) {
+  if (configBlockRenderedFor === 'typography' && container.childElementCount > 0) return;
+  configBlockRenderedFor = 'typography';
+  container.innerHTML = '';
+
+  const form = document.createElement('div');
+  form.className = 'entity-form';
+  container.appendChild(form);
+
+  const typo = projectData.config.typography;
+  const upd = (field, value) =>
+    dispatch({ entity: 'config', action: 'update', block: 'typography', field, value });
+
+  addTextRow(form, 'fontFamily', typo.fontFamily, val => upd('fontFamily', val));
+
+  const FONT_SIZE_FIELDS = [
+    'taskFontSize', 'scaleFontSize', 'headerFooterFontSize', 'noteFontSize',
+    'swimlaneFontSize', 'pipeFontSize', 'curtainFontSize',
+  ];
+  FONT_SIZE_FIELDS.forEach(f => addNumberRow(form, f, typo[f], commitInt(upd, f)));
+
+  const ALIGNMENT_FACTOR_FIELDS = [
+    'scaleAlignmentFactor', 'taskAlignmentFactor', 'headerFooterAlignmentFactor',
+    'pipeAlignmentFactor', 'curtainAlignmentFactor', 'noteAlignmentFactor',
+    'swimlaneTopAlignmentFactor', 'swimlaneBottomAlignmentFactor',
+  ];
+  ALIGNMENT_FACTOR_FIELDS.forEach(f =>
+    addNumberRow(form, f, typo[f], commitFloat(upd, f), { step: '0.1' }));
+}
+
+function renderPreferencesConfigForm(container) {
+  if (configBlockRenderedFor === 'preferences' && container.childElementCount > 0) return;
+  configBlockRenderedFor = 'preferences';
+  container.innerHTML = '';
+
+  const form = document.createElement('div');
+  form.className = 'entity-form';
+  container.appendChild(form);
+
+  const prefs = projectData.config.preferences;
+  const upd = (field, value) =>
+    dispatch({ entity: 'config', action: 'update', block: 'preferences', field, value });
+
+  addTextRow(form, 'uiDateFormat',    prefs.uiDateFormat,    val => upd('uiDateFormat',    val));
+  addTextRow(form, 'chartDateFormat', prefs.chartDateFormat, val => upd('chartDateFormat', val));
+}
+
 // ── Inspector renderer ─────────────────────────────────────────────────────────
 function renderInspector(panel) {
   const d = projectData;
@@ -1793,6 +2093,7 @@ function initUI() {
   document.getElementById('tabData').addEventListener('click',      () => activateTab('data'));
   document.getElementById('tabIssues').addEventListener('click',    () => activateTab('issues'));
   document.getElementById('tabChart').addEventListener('click',     () => activateTab('chart'));
+  document.getElementById('tabConfig').addEventListener('click',    () => activateTab('config'));
   document.getElementById('tabInspector').addEventListener('click', () => activateTab('inspector'));
 
   document.getElementById('newProjectBtn').addEventListener('click', function() {
@@ -1829,6 +2130,9 @@ function initUI() {
       updateIssuesTabLabel();
       if (document.getElementById('tabIssues').classList.contains('active')) {
         renderIssuesPanel(document.getElementById('issuesPanel'));
+      }
+      if (document.getElementById('tabConfig').classList.contains('active')) {
+        renderConfigPanel(document.getElementById('configPanel'));
       }
 
       refreshStatusAndButtons(`Loaded: ${file.name}`);

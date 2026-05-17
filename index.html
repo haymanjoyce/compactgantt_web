@@ -102,6 +102,21 @@
       background: #f5f5f5; border: 1px solid #ddd; color: #555; box-sizing: border-box;
       display: flex; align-items: center;
     }
+    .entity-form .checkbox-wrapper {
+      height: var(--cg-control-height);
+      display: flex; align-items: center;
+    }
+    .entity-form .checkbox-wrapper input[type="checkbox"] {
+      width: auto; height: auto; margin: 0;
+    }
+
+    /* Config panel — form-only, single column, no two-pane grid */
+    .config-panel {
+      border: var(--cg-border); background: var(--cg-bg-panel);
+      padding: 12px;
+      max-width: calc(var(--cg-label-col-width) + var(--cg-form-col-width) + var(--cg-gap) * 2 + 24px);
+      max-height: calc(100vh - 220px); overflow: auto;
+    }
     .entity-form-empty {
       padding: 2rem 1rem; text-align: center; color: #777; font-size: 0.9rem;
     }
@@ -148,6 +163,7 @@
     <button class="tab active" id="tabData">Data</button>
     <button class="tab"        id="tabIssues">Issues</button>
     <button class="tab"        id="tabChart">Chart</button>
+    <button class="tab"        id="tabConfig">Config</button>
     <button class="tab"        id="tabInspector">Inspector</button>
   </div>
 
@@ -158,6 +174,8 @@
   <div id="chartPanel" style="display:none;">
     <p>No project loaded</p>
   </div>
+
+  <div id="configPanel" style="display:none;"></div>
 
   <div id="inspectorPanel" style="display:none;"></div>
 
