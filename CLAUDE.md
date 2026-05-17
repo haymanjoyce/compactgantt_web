@@ -128,10 +128,10 @@ Config sheet key names are confirmed. The `kv*` helpers (`kvStr/kvInt/kvFloat/kv
 ```
 
 - `entity` — singular lowercase: `'task'` / `'swimlane'` / `'link'` / `'pipe'` / `'curtain'` / `'note'` / `'config'`
-- `id` — entity row id (integer for parsed ids, `null` for config rows or when the row's own id cell was missing/unparseable)
+- `id` — entity row id (integer for parsed ids, `null` for config rows). Exception: `'id_assigned'` notices (see table below) carry the **newly-assigned** id, not null, so the user can locate the auto-assigned row in the data. Other notices on a row whose id cell was blank/unparseable also carry the assigned id, because `c()` in each entity parse block captures `id` after assignment.
 - `field` — JS property name (e.g. `'startDate'`, `'paddingTop'`), never the Excel header
 - `rawValue` — original cell value as it appeared in `row[header]` / `map[key]`, unmodified (no stringify, no trim)
-- `reason` — closed enum, four values, all emitted by the parser. `validation.js` reads these via `consumeNotice` and emits `Issue` objects with human-readable `message` fields; it does not emit notices itself.
+- `reason` — closed enum, five values, all emitted by the parser. `validation.js` reads these via `consumeNotice` and emits `Issue` objects with human-readable `message` fields; it does not emit notices itself.
 
 Reason values:
 
@@ -141,8 +141,9 @@ Reason values:
 | `'unparseable_number'` | non-empty value that `parseInt` / `parseFloat` returned `NaN` for; emitted by `toInt` / `toFloat` / `kvInt` / `kvFloat` |
 | `'unrecognised_boolean'` | non-empty string in a boolean field that, after trim+lowercase, is neither `'yes'` nor `'no'`; emitted by `kvBool`. Native JS booleans (SheetJS `typeof v === 'boolean'`) pass through silently |
 | `'unrecognised_enum'` | non-empty value that a `normalize*` function did not recognise; emitted by each `normalize*` function |
+| `'id_assigned'` | id cell was blank, missing, or unparseable; parser assigned `max(existing) + 1` (same invariant as the dispatcher's `add` — never gap-fill). Emitted by `makeIdAssigner` in `parser.js` for every entity sheet. `rawValue` is `null` for blank/missing or the raw garbage (e.g. `"abc"`). Suppresses the upstream `unparseable_number` notice for id cells by parsing id directly rather than via `toInt` — one notice per row, never two. Notably also fires on empty id cells — exception to the "empty cells produce no notice" rule below. |
 
-**Empty vs unparseable distinction.** Empty cells (`null` / `undefined` / `''`), whitespace-only strings (`'   '`), and Invalid `Date` objects (`isNaN(getTime())`, as SheetJS produces when reading an empty date-typed cell after a round trip) NEVER produce a notice — they take the default silently. Notices fire only when the user wrote something meaningful that the parser ignored. This is the entire point of the side-channel: it separates "user wrote nothing" from "user wrote something the parser couldn't use."
+**Empty vs unparseable distinction.** Empty cells (`null` / `undefined` / `''`), whitespace-only strings (`'   '`), and Invalid `Date` objects (`isNaN(getTime())`, as SheetJS produces when reading an empty date-typed cell after a round trip) NEVER produce a notice — they take the default silently. Notices fire only when the user wrote something meaningful that the parser ignored. This is the entire point of the side-channel: it separates "user wrote nothing" from "user wrote something the parser couldn't use." **Exception:** `'id_assigned'` notices fire on blank/missing id cells too, because the parser-assigned id is a write the user should know about.
 
 **Notice order.** Parser-traversal order: entity sheets first (tasks, swimlanes, links, pipes, curtains, notes), then config sheets (layout, bars, timeline, titles, style, typography, preferences). Within a sheet, top-to-bottom row order. Within a row, left-to-right field order.
 
@@ -156,7 +157,7 @@ Reason values:
 
 `validateProject(projectData)` returns `{ errors: [Issue], warnings: [Issue], notices: [Issue] }` — all three keys always present. Pure: no DOM, no side effects, never mutates `projectData`, never throws.
 
-Each `Issue` is `{ entity, id, field, message, value }`. `entity` is singular lowercase (same enum as `_parseNotices`). `id` is the entity row id, `null` for config issues and rows whose id cell was missing/unparseable. `field` is a JS property name. `value` is `null` for "missing field" rules, `rawValue` from `_parseNotices` for parse-derived rules, the current field value otherwise.
+Each `Issue` is `{ entity, id, field, message, value }`. `entity` is singular lowercase (same enum as `_parseNotices`). `id` is the entity row id, `null` for config issues only — entity rows always have a non-null id at validation time (parser auto-assigns; see Parse notices §`id_assigned`). `field` is a JS property name. `value` is `null` for "missing field" rules, `rawValue` from `_parseNotices` for parse-derived rules, the current field value otherwise.
 
 **Structure.** A thin `validateProject` coordinator calls 14 per-block validators (six entity + eight config, in parse traversal order) and concatenates results. Shared helpers at top of `validation.js`.
 

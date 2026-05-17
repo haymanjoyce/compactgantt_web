@@ -188,6 +188,46 @@ function parseEntitySheet(worksheet, colDefs) {
   });
 }
 
+// ── Auto-assign id helper ──────────────────────────────────────────────────────
+// Returns a per-row assignment function. The function takes a row index and
+// returns the parsed integer id from raw[i].id when finite; otherwise assigns
+// max(existing) + 1 (same invariant as the dispatcher's add: never gap-fill)
+// and records an 'id_assigned' notice. The notice's id field carries the
+// newly-assigned id — a deliberate exception to the usual "id: null when the
+// row's own id cell was missing/unparseable" convention, so the user can
+// locate the row in the data. rawValue preserves the original cell content
+// (null for blank/absent, the raw value for present-but-unparseable garbage).
+// Suppresses the upstream 'unparseable_number' notice for id cells by parsing
+// the id directly rather than routing through toInt — one notice per row,
+// never two.
+function makeIdAssigner(raw, entitySingular) {
+  const preParsed = raw.map(r => {
+    const v = r.id;
+    if (v == null || v === '') return null;
+    const n = parseInt(v, 10);
+    return Number.isFinite(n) ? n : null;
+  });
+  let maxId = 0;
+  for (const id of preParsed) {
+    if (id !== null && id > maxId) maxId = id;
+  }
+  return (i) => {
+    let id = preParsed[i];
+    if (id === null) {
+      maxId++;
+      id = maxId;
+      recordNotice({
+        entity: entitySingular,
+        id,
+        field: 'id',
+        rawValue: raw[i].id,
+        reason: 'id_assigned',
+      });
+    }
+    return id;
+  };
+}
+
 // ── Config sheet parser ────────────────────────────────────────────────────────
 // Config sheets are key-value pairs: col A = field name, col B = value.
 // Returns a plain { key: value } map for use with the kv* extractors below.
@@ -485,8 +525,9 @@ function parseWorkbook(workbook) {
       'Pattern Color':   { key: 'patternColor',    def: 'white'                },
       'Date Format':     { key: 'dateFormat',      def: null                   },
     });
-    projectData.tasks = raw.map(t => {
-      const id             = toInt(t.id, null, { entity: 'task', id: null, field: 'id' });
+    const assignTaskId = makeIdAssigner(raw, 'task');
+    projectData.tasks = raw.map((t, i) => {
+      const id             = assignTaskId(i);
       const c              = (field) => ({ entity: 'task', id, field });
       const swimlaneId     = toInt(t.swimlaneId, null, c('swimlaneId'));
       const row            = toInt(t.row, null, c('row'));
@@ -520,8 +561,9 @@ function parseWorkbook(workbook) {
       'Label Position':   { key: 'labelPosition',    def: 'top-right' },
       'Background Color': { key: 'backgroundColor',  def: 'white'     },
     });
+    const assignSwimlaneId = makeIdAssigner(raw, 'swimlane');
     projectData.swimlanes = raw.map((s, i) => {
-      const id            = toInt(s.id, null, { entity: 'swimlane', id: null, field: 'id' });
+      const id            = assignSwimlaneId(i);
       const c             = (field) => ({ entity: 'swimlane', id, field });
       const rowCount      = toInt(s.rowCount, 1, c('rowCount'));
       const labelPosition = normalizeLabelPosition(s.labelPosition, c('labelPosition'));
@@ -547,8 +589,9 @@ function parseWorkbook(workbook) {
       'Line Style':   { key: 'lineStyle',  def: 'solid'           },
       'Routing':      { key: 'routing',    def: 'auto', fallback: 'Link Routing' },
     });
-    projectData.links = raw.map(l => {
-      const id         = toInt(l.id, null, { entity: 'link', id: null, field: 'id' });
+    const assignLinkId = makeIdAssigner(raw, 'link');
+    projectData.links = raw.map((l, i) => {
+      const id         = assignLinkId(i);
       const c          = (field) => ({ entity: 'link', id, field });
       const fromTaskId = toInt(l.fromTaskId, null, c('fromTaskId'));
       const toTaskId   = toInt(l.toTaskId, null, c('toTaskId'));
@@ -574,8 +617,9 @@ function parseWorkbook(workbook) {
       'Line Style':     { key: 'lineStyle',     def: 'solid' },
       'Label Position': { key: 'labelPosition', def: 1       },
     });
-    projectData.pipes = raw.map(p => {
-      const id            = toInt(p.id, null, { entity: 'pipe', id: null, field: 'id' });
+    const assignPipeId = makeIdAssigner(raw, 'pipe');
+    projectData.pipes = raw.map((p, i) => {
+      const id            = assignPipeId(i);
       const c             = (field) => ({ entity: 'pipe', id, field });
       const date          = parseDate(p.date, c('date'));
       const lineStyle     = normalizeLineStylePipe(p.lineStyle, c('lineStyle'));
@@ -604,8 +648,9 @@ function parseWorkbook(workbook) {
       'Label Position': { key: 'labelPosition', def: 1       },
       'Label Anchor':   { key: 'labelAnchor',   def: 'start' },
     });
-    projectData.curtains = raw.map(cu => {
-      const id            = toInt(cu.id, null, { entity: 'curtain', id: null, field: 'id' });
+    const assignCurtainId = makeIdAssigner(raw, 'curtain');
+    projectData.curtains = raw.map((cu, i) => {
+      const id            = assignCurtainId(i);
       const c             = (field) => ({ entity: 'curtain', id, field });
       const startDate     = parseDate(cu.startDate, c('startDate'));
       const endDate       = parseDate(cu.endDate, c('endDate'));
@@ -639,8 +684,9 @@ function parseWorkbook(workbook) {
       'Fill Color':     { key: 'fillColor',      def: ''     },
       'Text':           { key: 'text',           def: ''     },
     });
-    projectData.notes = raw.map(n => {
-      const id            = toInt(n.id, null, { entity: 'note', id: null, field: 'id' });
+    const assignNoteId = makeIdAssigner(raw, 'note');
+    projectData.notes = raw.map((n, i) => {
+      const id            = assignNoteId(i);
       const c             = (field) => ({ entity: 'note', id, field });
       const xPct          = toFloat(n.xPct, 0, c('xPct'));
       const yPct          = toFloat(n.yPct, 0, c('yPct'));

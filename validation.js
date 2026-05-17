@@ -66,6 +66,7 @@ function noticeMessage(reason) {
     case 'unparseable_number':   return 'Unparseable number';
     case 'unrecognised_boolean': return 'Unrecognised boolean value';
     case 'unrecognised_enum':    return 'Unrecognised value';
+    case 'id_assigned':          return 'ID assigned by parser (source cell was blank or unparseable)';
     default:                     return 'Parse notice';
   }
 }
@@ -113,13 +114,10 @@ function validateTasks(projectData) {
     const id = t.id;
 
     // Errors
-    if (isMissingField(t.id, pN, 'task', null, 'id')) {
-      errors.push(mkIssue('task', null, 'id', 'Missing id', null));
-    }
     if (id !== null && dupIds.has(id)) {
       errors.push(mkIssue('task', id, 'id', `Duplicate id ${id}`, id));
     }
-    for (const f of ['id', 'swimlaneId', 'row', 'labelOffset']) {
+    for (const f of ['swimlaneId', 'row', 'labelOffset']) {
       const n = consumeNotice(pN, consumed, 'task', id, f, 'unparseable_number');
       if (n) errors.push(mkIssue('task', id, f, noticeMessage(n.reason), n.rawValue));
     }
@@ -175,6 +173,10 @@ function validateTasks(projectData) {
 
     // Notices
     {
+      const n = consumeNotice(pN, consumed, 'task', id, 'id', 'id_assigned');
+      if (n) notices.push(mkIssue('task', id, 'id', noticeMessage(n.reason), n.rawValue));
+    }
+    {
       const n = consumeNotice(pN, consumed, 'task', id, 'labelContent', 'unrecognised_enum');
       if (n) notices.push(mkIssue('task', id, 'labelContent', noticeMessage(n.reason), n.rawValue));
     }
@@ -217,13 +219,10 @@ function validateSwimlanes(projectData) {
     const id = s.id;
 
     // Errors
-    if (isMissingField(s.id, pN, 'swimlane', null, 'id')) {
-      errors.push(mkIssue('swimlane', null, 'id', 'Missing id', null));
-    }
     if (id !== null && dupIds.has(id)) {
       errors.push(mkIssue('swimlane', id, 'id', `Duplicate id ${id}`, id));
     }
-    for (const f of ['id', 'rowCount']) {
+    for (const f of ['rowCount']) {
       const n = consumeNotice(pN, consumed, 'swimlane', id, f, 'unparseable_number');
       if (n) errors.push(mkIssue('swimlane', id, f, noticeMessage(n.reason), n.rawValue));
     }
@@ -243,6 +242,10 @@ function validateSwimlanes(projectData) {
     }
 
     // Notices
+    {
+      const n = consumeNotice(pN, consumed, 'swimlane', id, 'id', 'id_assigned');
+      if (n) notices.push(mkIssue('swimlane', id, 'id', noticeMessage(n.reason), n.rawValue));
+    }
     {
       const n = consumeNotice(pN, consumed, 'swimlane', id, 'labelPosition', 'unrecognised_enum');
       if (n) notices.push(mkIssue('swimlane', id, 'labelPosition', noticeMessage(n.reason), n.rawValue));
@@ -298,13 +301,10 @@ function validateLinks(projectData) {
     const id = l.id;
 
     // Errors
-    if (isMissingField(l.id, pN, 'link', null, 'id')) {
-      errors.push(mkIssue('link', null, 'id', 'Missing id', null));
-    }
     if (id !== null && dupIds.has(id)) {
       errors.push(mkIssue('link', id, 'id', `Duplicate id ${id}`, id));
     }
-    for (const f of ['id', 'fromTaskId', 'toTaskId']) {
+    for (const f of ['fromTaskId', 'toTaskId']) {
       const n = consumeNotice(pN, consumed, 'link', id, f, 'unparseable_number');
       if (n) errors.push(mkIssue('link', id, f, noticeMessage(n.reason), n.rawValue));
     }
@@ -371,6 +371,10 @@ function validateLinks(projectData) {
     }
 
     // Notices
+    {
+      const n = consumeNotice(pN, consumed, 'link', id, 'id', 'id_assigned');
+      if (n) notices.push(mkIssue('link', id, 'id', noticeMessage(n.reason), n.rawValue));
+    }
     if (l.fromTaskId !== null && l.toTaskId !== null
         && dupPairs.has(`${l.fromTaskId}|${l.toTaskId}`)) {
       notices.push(mkIssue('link', id, 'fromTaskId',
@@ -397,15 +401,8 @@ function validatePipes(projectData) {
     const id = p.id;
 
     // Errors
-    if (isMissingField(p.id, pN, 'pipe', null, 'id')) {
-      errors.push(mkIssue('pipe', null, 'id', 'Missing id', null));
-    }
     if (id !== null && dupIds.has(id)) {
       errors.push(mkIssue('pipe', id, 'id', `Duplicate id ${id}`, id));
-    }
-    {
-      const n = consumeNotice(pN, consumed, 'pipe', id, 'id', 'unparseable_number');
-      if (n) errors.push(mkIssue('pipe', id, 'id', noticeMessage(n.reason), n.rawValue));
     }
     if (isMissingField(p.date, pN, 'pipe', id, 'date')) {
       errors.push(mkIssue('pipe', id, 'date', 'Missing date', null));
@@ -436,6 +433,12 @@ function validatePipes(projectData) {
     if (p.date !== null && cs !== null && ce !== null && (p.date < cs || p.date > ce)) {
       warnings.push(mkIssue('pipe', id, 'date', 'date outside chart range', p.date));
     }
+
+    // Notices
+    {
+      const n = consumeNotice(pN, consumed, 'pipe', id, 'id', 'id_assigned');
+      if (n) notices.push(mkIssue('pipe', id, 'id', noticeMessage(n.reason), n.rawValue));
+    }
   }
 
   return { errors, warnings, notices };
@@ -456,15 +459,8 @@ function validateCurtains(projectData) {
     const id = c.id;
 
     // Errors
-    if (isMissingField(c.id, pN, 'curtain', null, 'id')) {
-      errors.push(mkIssue('curtain', null, 'id', 'Missing id', null));
-    }
     if (id !== null && dupIds.has(id)) {
       errors.push(mkIssue('curtain', id, 'id', `Duplicate id ${id}`, id));
-    }
-    {
-      const n = consumeNotice(pN, consumed, 'curtain', id, 'id', 'unparseable_number');
-      if (n) errors.push(mkIssue('curtain', id, 'id', noticeMessage(n.reason), n.rawValue));
     }
     if (isMissingField(c.startDate, pN, 'curtain', id, 'startDate')) {
       errors.push(mkIssue('curtain', id, 'startDate', 'Missing startDate', null));
@@ -509,6 +505,12 @@ function validateCurtains(projectData) {
         warnings.push(mkIssue('curtain', id, 'startDate', 'Curtain fully outside chart date range', c.startDate));
       }
     }
+
+    // Notices
+    {
+      const n = consumeNotice(pN, consumed, 'curtain', id, 'id', 'id_assigned');
+      if (n) notices.push(mkIssue('curtain', id, 'id', noticeMessage(n.reason), n.rawValue));
+    }
   }
 
   return { errors, warnings, notices };
@@ -527,15 +529,8 @@ function validateNotes(projectData) {
     const id = note.id;
 
     // Errors
-    if (isMissingField(note.id, pN, 'note', null, 'id')) {
-      errors.push(mkIssue('note', null, 'id', 'Missing id', null));
-    }
     if (id !== null && dupIds.has(id)) {
       errors.push(mkIssue('note', id, 'id', `Duplicate id ${id}`, id));
-    }
-    {
-      const n = consumeNotice(pN, consumed, 'note', id, 'id', 'unparseable_number');
-      if (n) errors.push(mkIssue('note', id, 'id', noticeMessage(n.reason), n.rawValue));
     }
     for (const f of ['xPct', 'yPct', 'widthPct', 'heightPct']) {
       const n = consumeNotice(pN, consumed, 'note', id, f, 'unparseable_number');
@@ -574,6 +569,12 @@ function validateNotes(projectData) {
     }
     if (note.fillColor !== '' && note.fillColor != null && !isValidCssColor(note.fillColor)) {
       warnings.push(mkIssue('note', id, 'fillColor', 'Invalid CSS color', note.fillColor));
+    }
+
+    // Notices
+    {
+      const n = consumeNotice(pN, consumed, 'note', id, 'id', 'id_assigned');
+      if (n) notices.push(mkIssue('note', id, 'id', noticeMessage(n.reason), n.rawValue));
     }
   }
 
