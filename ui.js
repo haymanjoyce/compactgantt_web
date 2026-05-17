@@ -131,21 +131,20 @@ function renderDataPanel() {
   buildEntityTabStrip(strip);
 
   // Rebuild the entity-area sub-tree only when switching tabs, not on every
-  // mutation. Inside the Tasks tree, the form's container survives untouched
-  // so renderTasksForm can decide whether to rebuild it.
+  // mutation. The form's container survives untouched so each panel's form
+  // renderer can decide whether to rebuild it.
   if (area.dataset.tab !== activeEntityTab) {
     area.dataset.tab = activeEntityTab;
-    if (activeEntityTab === 'tasks' || activeEntityTab === 'swimlanes') {
-      area.innerHTML = '<div class="entity-panel"><div class="entity-left"></div><div class="entity-right"></div></div>';
-      formRenderedForId = null;  // right pane is a fresh element — force form rebuild
-    } else {
-      const label = ENTITY_TABS.find(t => t.key === activeEntityTab).label;
-      area.innerHTML = `<div class="entity-stub">${escapeHtml(label)} tab — coming in slice 2b</div>`;
-    }
+    area.innerHTML = '<div class="entity-panel"><div class="entity-left"></div><div class="entity-right"></div></div>';
+    formRenderedForId = null;  // right pane is a fresh element — force form rebuild
   }
 
   if (activeEntityTab === 'tasks')     renderTasksPanel(area);
   if (activeEntityTab === 'swimlanes') renderSwimlanesPanel(area);
+  if (activeEntityTab === 'links')     renderLinksPanel(area);
+  if (activeEntityTab === 'pipes')     renderPipesPanel(area);
+  if (activeEntityTab === 'curtains')  renderCurtainsPanel(area);
+  if (activeEntityTab === 'notes')     renderNotesPanel(area);
 }
 
 function buildEntityTabStrip(strip) {
@@ -470,12 +469,18 @@ function addTextRow(form, fieldName, value, commitFn) {
   form.appendChild(input);
 }
 
-function addNumberRow(form, fieldName, value, commitFn) {
+// opts: { step, min, max } — all optional. Defaults to integer-stepping (step=1,
+// no bounds). Parsing is the caller's responsibility (parseInt vs parseFloat
+// inside commitFn); the helper only configures the input's HTML attributes.
+function addNumberRow(form, fieldName, value, commitFn, opts) {
+  const o = opts || {};
   const label = document.createElement('label');
   label.textContent = fieldName;
   const input = document.createElement('input');
   input.type  = 'number';
-  input.step  = '1';
+  input.step  = o.step != null ? String(o.step) : '1';
+  if (o.min != null) input.min = String(o.min);
+  if (o.max != null) input.max = String(o.max);
   input.value = value == null ? '' : String(value);
   // data-field marker enables targeted DOM updates without rebuilding the form
   // (e.g. syncTaskRowInput after a Move Up / Move Down dispatch).
@@ -483,6 +488,19 @@ function addNumberRow(form, fieldName, value, commitFn) {
   attachCommitHandlers(input, () => input.value, commitFn);
   form.appendChild(label);
   form.appendChild(input);
+}
+
+function addTextareaRow(form, fieldName, value, commitFn, rows) {
+  const label = document.createElement('label');
+  label.textContent = fieldName;
+  const ta = document.createElement('textarea');
+  ta.rows  = rows != null ? rows : 3;
+  ta.value = value == null ? '' : String(value);
+  // Enter inserts a newline (attachCommitHandlers gates its Enter→blur on
+  // tagName === 'INPUT'), so multi-line text commits naturally on blur.
+  attachCommitHandlers(ta, () => ta.value, commitFn);
+  form.appendChild(label);
+  form.appendChild(ta);
 }
 
 function addDateRow(form, fieldName, value, commitFn) {
@@ -718,6 +736,499 @@ function syncSwimlaneOrderCell(swimlaneId) {
   const cell = document.querySelector('.entity-form .readonly[data-field="order"]');
   if (!cell) return;
   cell.textContent = sw.order == null ? '' : String(sw.order);
+}
+
+// ── Shared helpers for Links / Pipes / Curtains / Notes panels ────────────────
+// These four entity tabs share identical toolbar mechanics (no Add prerequisite,
+// no delete-block, dispatcher-driven array reorder) and identical nav-table
+// row-click behaviour. Tasks (delete-block, row-field Move Up/Down) and
+// Swimlanes (predates this helper, plus order-cell sync) keep their own
+// dedicated toolbars and inline row handlers.
+
+function renderSimpleEntityToolbar(entitySingular, entityPlural, arr, selectedId) {
+  const toolbar = document.createElement('div');
+  toolbar.className = 'entity-toolbar';
+  const idx = selectedId == null ? -1 : arr.findIndex(r => r.id === selectedId);
+
+  function mkBtn(label) {
+    const b = document.createElement('button');
+    b.textContent = label;
+    return b;
+  }
+
+  const btnAdd       = mkBtn('Add');
+  const btnDelete    = mkBtn('Delete');
+  const btnDuplicate = mkBtn('Duplicate');
+  const btnMoveUp    = mkBtn('Move Up');
+  const btnMoveDown  = mkBtn('Move Down');
+
+  if (idx === -1) {
+    btnDelete.disabled = btnDuplicate.disabled = btnMoveUp.disabled = btnMoveDown.disabled = true;
+  } else {
+    if (idx === 0)              btnMoveUp.disabled   = true;
+    if (idx === arr.length - 1) btnMoveDown.disabled = true;
+  }
+
+  btnAdd.addEventListener('click', () => {
+    const newId = nextIdFor(arr);
+    nextSelectionIntent = { entity: entityPlural, id: newId };
+    dispatch({ entity: entitySingular, action: 'add' });
+  });
+  btnDelete.addEventListener('click', () => {
+    const i = arr.findIndex(r => r.id === selectedId);
+    let nextId = null;
+    if (i !== -1) {
+      if (i + 1 < arr.length) nextId = arr[i + 1].id;
+      else if (i - 1 >= 0)    nextId = arr[i - 1].id;
+    }
+    nextSelectionIntent = { entity: entityPlural, id: nextId };
+    dispatch({ entity: entitySingular, action: 'delete', id: selectedId });
+  });
+  btnDuplicate.addEventListener('click', () => {
+    const newId = nextIdFor(arr);
+    nextSelectionIntent = { entity: entityPlural, id: newId };
+    dispatch({ entity: entitySingular, action: 'duplicate', id: selectedId });
+  });
+  // Selection follows the moved row. The id doesn't change, but setting the
+  // intent makes the post-mutation consume step explicit and uniform.
+  btnMoveUp.addEventListener('click', () => {
+    nextSelectionIntent = { entity: entityPlural, id: selectedId };
+    dispatch({ entity: entitySingular, action: 'moveUp', id: selectedId });
+  });
+  btnMoveDown.addEventListener('click', () => {
+    nextSelectionIntent = { entity: entityPlural, id: selectedId };
+    dispatch({ entity: entitySingular, action: 'moveDown', id: selectedId });
+  });
+
+  toolbar.appendChild(btnAdd);
+  toolbar.appendChild(btnDelete);
+  toolbar.appendChild(btnDuplicate);
+  toolbar.appendChild(btnMoveUp);
+  toolbar.appendChild(btnMoveDown);
+  return toolbar;
+}
+
+// mousedown rather than click so the natural focus shift doesn't commit the
+// in-progress edit through the wrong code path — same reason Tasks/Swimlanes
+// use mousedown. See renderTasksNavTable for the original rationale.
+function attachNavTableRowHandlers(table, entityPlural) {
+  table.querySelectorAll('tbody tr[data-id]').forEach(tr => {
+    tr.addEventListener('mousedown', () => {
+      const id = parseInt(tr.dataset.id, 10);
+      if (!Number.isFinite(id)) return;
+      if (id === entitySelections[entityPlural]) return;
+      nextSelectionIntent = { entity: entityPlural, id };
+      const active = document.activeElement;
+      const inForm = active && active.closest && active.closest('.entity-form');
+      if (inForm) {
+        active.blur();
+      } else {
+        renderDataPanel();
+      }
+    });
+  });
+}
+
+// ── Links entity panel ─────────────────────────────────────────────────────────
+
+function renderLinksPanel(area) {
+  const links = projectData.links;
+  let selectedId = entitySelections.links;
+  if (selectedId !== null && !links.some(l => l.id === selectedId)) selectedId = null;
+  if (selectedId === null && links.length > 0) selectedId = links[0].id;
+  entitySelections.links = selectedId;
+
+  const left  = area.querySelector('.entity-left');
+  const right = area.querySelector('.entity-right');
+
+  left.innerHTML = '';
+  left.appendChild(renderSimpleEntityToolbar('link', 'links', links, selectedId));
+  left.appendChild(renderLinksNavTable(selectedId));
+
+  renderLinksForm(right, selectedId);
+}
+
+// Format an FK reference to a task for display. null → em-dash (user hasn't
+// filled this in yet); orphan id (no matching task) → "{id} — (missing)".
+function formatTaskRefCell(taskId) {
+  if (taskId == null) return '—';
+  const task = projectData.tasks.find(t => t.id === taskId);
+  return taskId + ' — ' + (task ? task.name : '(missing)');
+}
+
+// Build the option list for a fromTaskId / toTaskId <select>. If currentValue
+// is an orphan id (non-null, no matching task), prepend a "{id} — (missing)"
+// option so the orphan state is visible and the user can re-point or save with
+// the orphan persisting.
+function buildTaskRefOptions(currentValue) {
+  const opts = projectData.tasks.map(t => ({ value: String(t.id), label: `${t.id} — ${t.name}` }));
+  if (currentValue != null && !projectData.tasks.some(t => t.id === currentValue)) {
+    opts.unshift({ value: String(currentValue), label: `${currentValue} — (missing)` });
+  }
+  return opts;
+}
+
+function renderLinksNavTable(selectedId) {
+  const links = projectData.links;
+  const table = document.createElement('table');
+  table.className = 'entity-nav-table';
+  const COLS = ['id', 'fromTaskId', 'toTaskId', 'lineColor', 'lineStyle', 'routing'];
+
+  let html = '<thead><tr>';
+  COLS.forEach(c => { html += `<th>${c}</th>`; });
+  html += '</tr></thead><tbody>';
+
+  if (links.length === 0) {
+    html += `<tr><td colspan="${COLS.length}" class="entity-empty">No links. Click Add to create one.</td></tr>`;
+  } else {
+    links.forEach(l => {
+      const isSelected = l.id === selectedId;
+      html += `<tr data-id="${l.id}"${isSelected ? ' class="selected"' : ''}>`;
+      COLS.forEach(c => {
+        let v;
+        if (c === 'fromTaskId' || c === 'toTaskId') v = formatTaskRefCell(l[c]);
+        else                                        v = l[c] == null ? '' : l[c];
+        html += `<td>${escapeHtml(String(v))}</td>`;
+      });
+      html += '</tr>';
+    });
+  }
+  html += '</tbody></table>';
+  table.innerHTML = html;
+
+  attachNavTableRowHandlers(table, 'links');
+  return table;
+}
+
+const LINK_LINE_STYLE_OPTIONS = ['solid', 'dashed'];
+const LINK_ROUTING_OPTIONS    = ['auto', 'hv', 'vh'];
+
+function renderLinksForm(container, selectedId) {
+  if (selectedId === formRenderedForId && container.childElementCount > 0) return;
+  formRenderedForId = selectedId;
+  container.innerHTML = '';
+
+  if (selectedId === null) {
+    const empty = document.createElement('div');
+    empty.className = 'entity-form-empty';
+    empty.textContent = 'Select a row to edit.';
+    container.appendChild(empty);
+    return;
+  }
+
+  const link = projectData.links.find(l => l.id === selectedId);
+  if (!link) { formRenderedForId = null; return; }
+
+  const form = document.createElement('div');
+  form.className = 'entity-form';
+  container.appendChild(form);
+
+  const upd = (field, value) => dispatch({ entity: 'link', action: 'update', id: link.id, field, value });
+
+  addReadonlyRow(form, 'id', link.id);
+  addSelectRow(form, 'fromTaskId', link.fromTaskId, buildTaskRefOptions(link.fromTaskId), val => {
+    if (val === '') return;
+    const n = parseInt(val, 10);
+    if (Number.isFinite(n)) upd('fromTaskId', n);
+  });
+  addSelectRow(form, 'toTaskId', link.toTaskId, buildTaskRefOptions(link.toTaskId), val => {
+    if (val === '') return;
+    const n = parseInt(val, 10);
+    if (Number.isFinite(n)) upd('toTaskId', n);
+  });
+  addTextRow(form, 'lineColor', link.lineColor, val => upd('lineColor', val));
+  addSelectRow(form, 'lineStyle', link.lineStyle,
+    LINK_LINE_STYLE_OPTIONS.map(o => ({ value: o, label: o })),
+    val => upd('lineStyle', val));
+  addSelectRow(form, 'routing', link.routing,
+    LINK_ROUTING_OPTIONS.map(o => ({ value: o, label: o })),
+    val => upd('routing', val));
+}
+
+// ── Pipes entity panel ─────────────────────────────────────────────────────────
+
+function renderPipesPanel(area) {
+  const pipes = projectData.pipes;
+  let selectedId = entitySelections.pipes;
+  if (selectedId !== null && !pipes.some(p => p.id === selectedId)) selectedId = null;
+  if (selectedId === null && pipes.length > 0) selectedId = pipes[0].id;
+  entitySelections.pipes = selectedId;
+
+  const left  = area.querySelector('.entity-left');
+  const right = area.querySelector('.entity-right');
+
+  left.innerHTML = '';
+  left.appendChild(renderSimpleEntityToolbar('pipe', 'pipes', pipes, selectedId));
+  left.appendChild(renderPipesNavTable(selectedId));
+
+  renderPipesForm(right, selectedId);
+}
+
+function renderPipesNavTable(selectedId) {
+  const pipes = projectData.pipes;
+  const table = document.createElement('table');
+  table.className = 'entity-nav-table';
+  const COLS = ['id', 'date', 'name', 'color', 'lineStyle', 'labelPosition'];
+
+  let html = '<thead><tr>';
+  COLS.forEach(c => { html += `<th>${c}</th>`; });
+  html += '</tr></thead><tbody>';
+
+  if (pipes.length === 0) {
+    html += `<tr><td colspan="${COLS.length}" class="entity-empty">No pipes. Click Add to create one.</td></tr>`;
+  } else {
+    pipes.forEach(p => {
+      const isSelected = p.id === selectedId;
+      html += `<tr data-id="${p.id}"${isSelected ? ' class="selected"' : ''}>`;
+      COLS.forEach(c => {
+        const v = p[c] == null ? '' : p[c];
+        html += `<td>${escapeHtml(String(v))}</td>`;
+      });
+      html += '</tr>';
+    });
+  }
+  html += '</tbody></table>';
+  table.innerHTML = html;
+
+  attachNavTableRowHandlers(table, 'pipes');
+  return table;
+}
+
+const PIPE_LINE_STYLE_OPTIONS = ['solid', 'dashed', 'dotted'];
+
+function renderPipesForm(container, selectedId) {
+  if (selectedId === formRenderedForId && container.childElementCount > 0) return;
+  formRenderedForId = selectedId;
+  container.innerHTML = '';
+
+  if (selectedId === null) {
+    const empty = document.createElement('div');
+    empty.className = 'entity-form-empty';
+    empty.textContent = 'Select a row to edit.';
+    container.appendChild(empty);
+    return;
+  }
+
+  const pipe = projectData.pipes.find(p => p.id === selectedId);
+  if (!pipe) { formRenderedForId = null; return; }
+
+  const form = document.createElement('div');
+  form.className = 'entity-form';
+  container.appendChild(form);
+
+  const upd = (field, value) => dispatch({ entity: 'pipe', action: 'update', id: pipe.id, field, value });
+
+  addReadonlyRow(form, 'id', pipe.id);
+  addDateRow(form, 'date', pipe.date, val => upd('date', val === '' ? null : val));
+  addTextRow(form, 'name',  pipe.name,  val => upd('name',  val));
+  addTextRow(form, 'color', pipe.color, val => upd('color', val));
+  addSelectRow(form, 'lineStyle', pipe.lineStyle,
+    PIPE_LINE_STYLE_OPTIONS.map(o => ({ value: o, label: o })),
+    val => upd('lineStyle', val));
+  addNumberRow(form, 'labelPosition', pipe.labelPosition, val => {
+    const n = parseFloat(val);
+    if (Number.isFinite(n)) upd('labelPosition', n);
+  }, { step: '0.1', min: '0', max: '1' });
+}
+
+// ── Curtains entity panel ──────────────────────────────────────────────────────
+
+function renderCurtainsPanel(area) {
+  const curtains = projectData.curtains;
+  let selectedId = entitySelections.curtains;
+  if (selectedId !== null && !curtains.some(c => c.id === selectedId)) selectedId = null;
+  if (selectedId === null && curtains.length > 0) selectedId = curtains[0].id;
+  entitySelections.curtains = selectedId;
+
+  const left  = area.querySelector('.entity-left');
+  const right = area.querySelector('.entity-right');
+
+  left.innerHTML = '';
+  left.appendChild(renderSimpleEntityToolbar('curtain', 'curtains', curtains, selectedId));
+  left.appendChild(renderCurtainsNavTable(selectedId));
+
+  renderCurtainsForm(right, selectedId);
+}
+
+function renderCurtainsNavTable(selectedId) {
+  const curtains = projectData.curtains;
+  const table = document.createElement('table');
+  table.className = 'entity-nav-table';
+  const COLS = ['id', 'startDate', 'endDate', 'name', 'color', 'opacity', 'labelAnchor'];
+
+  let html = '<thead><tr>';
+  COLS.forEach(c => { html += `<th>${c}</th>`; });
+  html += '</tr></thead><tbody>';
+
+  if (curtains.length === 0) {
+    html += `<tr><td colspan="${COLS.length}" class="entity-empty">No curtains. Click Add to create one.</td></tr>`;
+  } else {
+    curtains.forEach(cu => {
+      const isSelected = cu.id === selectedId;
+      html += `<tr data-id="${cu.id}"${isSelected ? ' class="selected"' : ''}>`;
+      COLS.forEach(c => {
+        const v = cu[c] == null ? '' : cu[c];
+        html += `<td>${escapeHtml(String(v))}</td>`;
+      });
+      html += '</tr>';
+    });
+  }
+  html += '</tbody></table>';
+  table.innerHTML = html;
+
+  attachNavTableRowHandlers(table, 'curtains');
+  return table;
+}
+
+const CURTAIN_LABEL_ANCHOR_OPTIONS = ['start', 'end'];
+
+function renderCurtainsForm(container, selectedId) {
+  if (selectedId === formRenderedForId && container.childElementCount > 0) return;
+  formRenderedForId = selectedId;
+  container.innerHTML = '';
+
+  if (selectedId === null) {
+    const empty = document.createElement('div');
+    empty.className = 'entity-form-empty';
+    empty.textContent = 'Select a row to edit.';
+    container.appendChild(empty);
+    return;
+  }
+
+  const cu = projectData.curtains.find(c => c.id === selectedId);
+  if (!cu) { formRenderedForId = null; return; }
+
+  const form = document.createElement('div');
+  form.className = 'entity-form';
+  container.appendChild(form);
+
+  const upd = (field, value) => dispatch({ entity: 'curtain', action: 'update', id: cu.id, field, value });
+
+  addReadonlyRow(form, 'id', cu.id);
+  addDateRow(form, 'startDate', cu.startDate, val => upd('startDate', val === '' ? null : val));
+  addDateRow(form, 'endDate',   cu.endDate,   val => upd('endDate',   val === '' ? null : val));
+  addTextRow(form, 'name',  cu.name,  val => upd('name',  val));
+  addTextRow(form, 'color', cu.color, val => upd('color', val));
+  addNumberRow(form, 'opacity', cu.opacity, val => {
+    const n = parseFloat(val);
+    if (Number.isFinite(n)) upd('opacity', n);
+  }, { step: '0.1', min: '0', max: '1' });
+  addNumberRow(form, 'labelPosition', cu.labelPosition, val => {
+    const n = parseFloat(val);
+    if (Number.isFinite(n)) upd('labelPosition', n);
+  }, { step: '0.1', min: '0', max: '1' });
+  addSelectRow(form, 'labelAnchor', cu.labelAnchor,
+    CURTAIN_LABEL_ANCHOR_OPTIONS.map(o => ({ value: o, label: o })),
+    val => upd('labelAnchor', val));
+}
+
+// ── Notes entity panel ─────────────────────────────────────────────────────────
+
+function renderNotesPanel(area) {
+  const notes = projectData.notes;
+  let selectedId = entitySelections.notes;
+  if (selectedId !== null && !notes.some(n => n.id === selectedId)) selectedId = null;
+  if (selectedId === null && notes.length > 0) selectedId = notes[0].id;
+  entitySelections.notes = selectedId;
+
+  const left  = area.querySelector('.entity-left');
+  const right = area.querySelector('.entity-right');
+
+  left.innerHTML = '';
+  left.appendChild(renderSimpleEntityToolbar('note', 'notes', notes, selectedId));
+  left.appendChild(renderNotesNavTable(selectedId));
+
+  renderNotesForm(right, selectedId);
+}
+
+// Collapse any whitespace (newlines, tabs, runs of spaces) to single spaces so
+// the nav-table preview reads as a single clean line regardless of how the
+// source text is wrapped. Then 40-char truncate with ellipsis — matches the
+// Issues tab's truncation convention.
+function notePreviewText(text) {
+  const collapsed = String(text == null ? '' : text).replace(/\s+/g, ' ').trim();
+  if (collapsed.length <= 40) return collapsed;
+  return collapsed.slice(0, 39).trimEnd() + '…';
+}
+
+function renderNotesNavTable(selectedId) {
+  const notes = projectData.notes;
+  const table = document.createElement('table');
+  table.className = 'entity-nav-table';
+  const COLS = ['id', 'text'];
+
+  let html = '<thead><tr>';
+  COLS.forEach(c => { html += `<th>${c}</th>`; });
+  html += '</tr></thead><tbody>';
+
+  if (notes.length === 0) {
+    html += `<tr><td colspan="${COLS.length}" class="entity-empty">No notes. Click Add to create one.</td></tr>`;
+  } else {
+    notes.forEach(n => {
+      const isSelected = n.id === selectedId;
+      const fullText   = String(n.text == null ? '' : n.text);
+      const preview    = notePreviewText(n.text);
+      html += `<tr data-id="${n.id}"${isSelected ? ' class="selected"' : ''}>`;
+      html += `<td>${escapeHtml(String(n.id))}</td>`;
+      html += `<td title="${escapeHtml(fullText)}">${escapeHtml(preview)}</td>`;
+      html += '</tr>';
+    });
+  }
+  html += '</tbody></table>';
+  table.innerHTML = html;
+
+  attachNavTableRowHandlers(table, 'notes');
+  return table;
+}
+
+const NOTE_TEXT_ALIGN_OPTIONS     = ['left', 'center', 'right'];
+const NOTE_VERTICAL_ALIGN_OPTIONS = ['top', 'middle', 'bottom'];
+
+function renderNotesForm(container, selectedId) {
+  if (selectedId === formRenderedForId && container.childElementCount > 0) return;
+  formRenderedForId = selectedId;
+  container.innerHTML = '';
+
+  if (selectedId === null) {
+    const empty = document.createElement('div');
+    empty.className = 'entity-form-empty';
+    empty.textContent = 'Select a row to edit.';
+    container.appendChild(empty);
+    return;
+  }
+
+  const note = projectData.notes.find(n => n.id === selectedId);
+  if (!note) { formRenderedForId = null; return; }
+
+  const form = document.createElement('div');
+  form.className = 'entity-form';
+  container.appendChild(form);
+
+  const upd = (field, value) => dispatch({ entity: 'note', action: 'update', id: note.id, field, value });
+  const floatCommit = field => val => {
+    const n = parseFloat(val);
+    if (Number.isFinite(n)) upd(field, n);
+  };
+
+  addReadonlyRow(form, 'id', note.id);
+  // xPct/yPct/widthPct/heightPct: no min/max — negative xPct/yPct legal per
+  // §9.15 (partial overflow renders as-positioned); negative width/height is
+  // accepted as input and surfaced by validation in the Issues tab.
+  addNumberRow(form, 'xPct',      note.xPct,      floatCommit('xPct'),      { step: '1' });
+  addNumberRow(form, 'yPct',      note.yPct,      floatCommit('yPct'),      { step: '1' });
+  addNumberRow(form, 'widthPct',  note.widthPct,  floatCommit('widthPct'),  { step: '1' });
+  addNumberRow(form, 'heightPct', note.heightPct, floatCommit('heightPct'), { step: '1' });
+  addSelectRow(form, 'textAlign', note.textAlign,
+    NOTE_TEXT_ALIGN_OPTIONS.map(o => ({ value: o, label: o })),
+    val => upd('textAlign', val));
+  addSelectRow(form, 'verticalAlign', note.verticalAlign,
+    NOTE_VERTICAL_ALIGN_OPTIONS.map(o => ({ value: o, label: o })),
+    val => upd('verticalAlign', val));
+  // Empty string is legal and meaningful for both colors — suppresses the
+  // border/fill rect in the renderer.
+  addTextRow(form, 'borderColor', note.borderColor, val => upd('borderColor', val));
+  addTextRow(form, 'fillColor',   note.fillColor,   val => upd('fillColor',   val));
+  addTextareaRow(form, 'text', note.text, val => upd('text', val));
 }
 
 function attachCommitHandlers(control, getValue, commitFn) {

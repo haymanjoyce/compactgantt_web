@@ -788,8 +788,12 @@ function renderChart(projectData) {
     const clipId = `note-clip-${note.id}`;
     noteClipDefs += `<clipPath id="${clipId}"><rect x="${n(noteX)}" y="${n(noteY)}" width="${n(noteW)}" height="${n(noteH)}"/></clipPath>`;
 
-    const firstTspan = `<tspan x="${n(textX)}">${escapeXml(lines[0])}</tspan>`;
-    const restTspans  = lines.slice(1).map(line => `<tspan x="${n(textX)}" dy="${lineHeight}">${escapeXml(line)}</tspan>`).join('');
+    // Empty wrapped lines (from consecutive \n in the source) need a
+    // non-breaking space so the <tspan> reserves glyph height; an empty tspan
+    // is zero-height and collapses the intended blank line.
+    const renderTspanContent = line => line === '' ? '&#160;' : escapeXml(line);
+    const firstTspan = `<tspan x="${n(textX)}">${renderTspanContent(lines[0])}</tspan>`;
+    const restTspans  = lines.slice(1).map(line => `<tspan x="${n(textX)}" dy="${lineHeight}">${renderTspanContent(line)}</tspan>`).join('');
     notesSvg += `<text x="${n(textX)}" y="${n(firstLineY)}" text-anchor="${textAnchor}" font-family="'${escapeXml(typography.fontFamily)}'" font-size="${fontSize}" fill="${style.noteTextColor}" clip-path="url(#${clipId})">${firstTspan}${restTspans}</text>`;
   }
 
