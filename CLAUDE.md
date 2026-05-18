@@ -258,6 +258,10 @@ Enum `<select>` options use the canonical lowercase values the parser stores (`a
 
 `addCheckboxRow(form, field, value, commitFn)` is a `<input type="checkbox">` wrapped in `.checkbox-wrapper`. Auto-commits on the native `'change'` event (not blur — toggling is atomic, no Escape-to-revert). **Commit-argument asymmetry:** unlike the other helpers which pass the raw input string to `commitFn`, this helper passes the parsed boolean directly. Used exclusively by the Config tab.
 
+`addColorRow(form, field, value, commitFn, opts)` renders a text input (source of truth — `commitFn` always receives the raw string, same contract as `addTextRow`) paired with a native `<input type="color">` swatch inside a `.color-row-wrapper` flex container. `opts.allowEmpty` (default `false`): when `true` and the current value is empty/null/undefined, an em-dash placeholder (`.color-swatch-placeholder`) replaces the swatch in the same fixed 24px footprint. Swatch auto-commits on its native `'change'` event (no Escape-to-cancel — re-pick to reverse). Text→`#rrggbb` sync via `parseTextToHex6` (hex passthrough, `#rgb` expansion, ~20-name keyword map); on parse failure the swatch keeps its previous value (on commit) or falls back to `#000000` (on first render). Swatch commits update the paired text input's `preEditValue` via `attachCommitHandlers`' `{ setPreEditValue }` return handle so a subsequent Escape doesn't desync the displayed text from `projectData`.
+
+**Known v1 limitation (allowEmpty:true):** the em-dash placeholder is not directly clickable — to materialise a real swatch the user types any non-empty value, commits, then switches selection away and back. Consistent with the form's existing non-auto-rebuild posture (e.g. stale `isMilestone` after a date edit). A future iteration could make the placeholder a click target that mounts a swatch on first interaction.
+
 Config-tab number commits use the local `commitInt` / `commitFloat` factory helpers — empty → null, non-finite → no-op.
 
 ### Issues tab

@@ -452,11 +452,11 @@ function renderTasksForm(container, selectedId) {
     const n = parseInt(val, 10);
     if (Number.isFinite(n)) upd('labelOffset', n);
   });
-  addTextRow(form, 'fillColor', task.fillColor, val => upd('fillColor', val));
+  addColorRow(form, 'fillColor', task.fillColor, val => upd('fillColor', val));
   addSelectRow(form, 'fillPattern', task.fillPattern,
     FILL_PATTERN_OPTIONS.map(o => ({ value: o, label: o })),
     val => upd('fillPattern', val));
-  addTextRow(form, 'patternColor', task.patternColor, val => upd('patternColor', val));
+  addColorRow(form, 'patternColor', task.patternColor, val => upd('patternColor', val));
   addTextRow(form, 'dateFormat', task.dateFormat == null ? '' : task.dateFormat,
     val => upd('dateFormat', val === '' ? null : val));
 }
@@ -481,6 +481,90 @@ function addTextRow(form, fieldName, value, commitFn) {
   attachCommitHandlers(input, () => input.value, commitFn);
   form.appendChild(label);
   form.appendChild(input);
+}
+
+// Best-effort text → "#rrggbb" mapping for syncing the native swatch with the
+// text input. Intentionally narrow: hex passthrough, #rgb expansion, and a
+// small named-keyword subset. Anything else returns null and the caller falls
+// back per spec (keep previous on commit; #000000 on first render).
+const COLOR_NAME_TO_HEX = {
+  black:  '#000000', white:  '#ffffff',
+  red:    '#ff0000', green:  '#008000', blue:    '#0000ff',
+  yellow: '#ffff00', orange: '#ffa500', purple:  '#800080',
+  pink:   '#ffc0cb', brown:  '#a52a2a', gold:    '#ffd700',
+  silver: '#c0c0c0', gray:   '#808080', grey:    '#808080',
+  cyan:   '#00ffff', magenta:'#ff00ff', lime:    '#00ff00',
+  navy:   '#000080', teal:   '#008080', maroon:  '#800000',
+};
+function parseTextToHex6(text) {
+  if (text == null) return null;
+  const s = String(text).trim().toLowerCase();
+  if (s === '') return null;
+  if (/^#[0-9a-f]{6}$/.test(s)) return s;
+  if (/^#[0-9a-f]{3}$/.test(s)) {
+    return '#' + s[1] + s[1] + s[2] + s[2] + s[3] + s[3];
+  }
+  return COLOR_NAME_TO_HEX[s] || null;
+}
+
+// Hybrid color picker: text input (source of truth) + native <input type="color">
+// swatch (convenience). The swatch sits in a fixed-width slot on the right of
+// the control column; both controls share a flex wrapper. opts: { allowEmpty }
+// — when true, an empty value renders an em-dash placeholder in the swatch
+// slot instead of a swatch (known v1 limitation: the placeholder is not
+// directly clickable; the user types a value to materialise a real swatch on
+// the next form rebuild).
+function addColorRow(form, fieldName, value, commitFn, opts) {
+  const o = opts || {};
+  const allowEmpty = !!o.allowEmpty;
+  const initialStr = value == null ? '' : String(value);
+  const showPlaceholder = allowEmpty && initialStr === '';
+
+  const label = document.createElement('label');
+  label.textContent = fieldName;
+
+  const wrapper = document.createElement('div');
+  wrapper.className = 'color-row-wrapper';
+
+  const input = document.createElement('input');
+  input.type  = 'text';
+  input.value = initialStr;
+
+  let swatch = null;
+  if (showPlaceholder) {
+    const placeholder = document.createElement('span');
+    placeholder.className = 'color-swatch-placeholder';
+    placeholder.textContent = '—';  // em-dash
+    wrapper.appendChild(input);
+    wrapper.appendChild(placeholder);
+  } else {
+    swatch = document.createElement('input');
+    swatch.type = 'color';
+    swatch.className = 'color-swatch';
+    swatch.value = parseTextToHex6(initialStr) || '#000000';
+    wrapper.appendChild(input);
+    wrapper.appendChild(swatch);
+  }
+
+  const handle = attachCommitHandlers(input, () => input.value, val => {
+    commitFn(val);
+    if (swatch) {
+      const hex = parseTextToHex6(val);
+      if (hex !== null) swatch.value = hex;
+    }
+  });
+
+  if (swatch) {
+    swatch.addEventListener('change', () => {
+      const hex = swatch.value;
+      input.value = hex;
+      handle.setPreEditValue(hex);
+      commitFn(hex);
+    });
+  }
+
+  form.appendChild(label);
+  form.appendChild(wrapper);
 }
 
 // opts: { step, min, max } — all optional. Defaults to integer-stepping (step=1,
@@ -757,7 +841,7 @@ function renderSwimlanesForm(container, selectedId) {
   addSelectRow(form, 'labelPosition', sw.labelPosition,
     LABEL_POSITION_OPTIONS.map(o => ({ value: o, label: o })),
     val => upd('labelPosition', val));
-  addTextRow(form, 'backgroundColor', sw.backgroundColor, val => upd('backgroundColor', val));
+  addColorRow(form, 'backgroundColor', sw.backgroundColor, val => upd('backgroundColor', val));
 }
 
 // Targeted in-place sync of the form's order readonly cell after a Move Up /
@@ -970,7 +1054,7 @@ function renderLinksForm(container, selectedId) {
     const n = parseInt(val, 10);
     if (Number.isFinite(n)) upd('toTaskId', n);
   });
-  addTextRow(form, 'lineColor', link.lineColor, val => upd('lineColor', val));
+  addColorRow(form, 'lineColor', link.lineColor, val => upd('lineColor', val));
   addSelectRow(form, 'lineStyle', link.lineStyle,
     LINK_LINE_STYLE_OPTIONS.map(o => ({ value: o, label: o })),
     val => upd('lineStyle', val));
@@ -1055,7 +1139,7 @@ function renderPipesForm(container, selectedId) {
   addReadonlyRow(form, 'id', pipe.id);
   addDateRow(form, 'date', pipe.date, val => upd('date', val === '' ? null : val));
   addTextRow(form, 'name',  pipe.name,  val => upd('name',  val));
-  addTextRow(form, 'color', pipe.color, val => upd('color', val));
+  addColorRow(form, 'color', pipe.color, val => upd('color', val));
   addSelectRow(form, 'lineStyle', pipe.lineStyle,
     PIPE_LINE_STYLE_OPTIONS.map(o => ({ value: o, label: o })),
     val => upd('lineStyle', val));
@@ -1142,7 +1226,7 @@ function renderCurtainsForm(container, selectedId) {
   addDateRow(form, 'startDate', cu.startDate, val => upd('startDate', val === '' ? null : val));
   addDateRow(form, 'endDate',   cu.endDate,   val => upd('endDate',   val === '' ? null : val));
   addTextRow(form, 'name',  cu.name,  val => upd('name',  val));
-  addTextRow(form, 'color', cu.color, val => upd('color', val));
+  addColorRow(form, 'color', cu.color, val => upd('color', val));
   addNumberRow(form, 'opacity', cu.opacity, val => {
     const n = parseFloat(val);
     if (Number.isFinite(n)) upd('opacity', n);
@@ -1260,11 +1344,14 @@ function renderNotesForm(container, selectedId) {
     val => upd('verticalAlign', val));
   // Empty string is legal and meaningful for both colors — suppresses the
   // border/fill rect in the renderer.
-  addTextRow(form, 'borderColor', note.borderColor, val => upd('borderColor', val));
-  addTextRow(form, 'fillColor',   note.fillColor,   val => upd('fillColor',   val));
+  addColorRow(form, 'borderColor', note.borderColor, val => upd('borderColor', val), { allowEmpty: true });
+  addColorRow(form, 'fillColor',   note.fillColor,   val => upd('fillColor',   val), { allowEmpty: true });
   addTextareaRow(form, 'text', note.text, val => upd('text', val));
 }
 
+// Returns { setPreEditValue }. Only addColorRow uses it — to keep the
+// Escape-to-revert target in sync after a sibling swatch commits a new value
+// while the text input is focused. Other callers ignore the return value.
 function attachCommitHandlers(control, getValue, commitFn) {
   let preEditValue = getValue();
   let cancelled = false;
@@ -1285,6 +1372,9 @@ function attachCommitHandlers(control, getValue, commitFn) {
     if (cancelled) { cancelled = false; return; }
     commitFn(getValue());
   });
+  return {
+    setPreEditValue(val) { preEditValue = val; },
+  };
 }
 
 // ── Config panel ───────────────────────────────────────────────────────────────
@@ -1504,7 +1594,7 @@ function renderStyleConfigForm(container) {
     'outsideLabelTextColor', 'leaderLineColor', 'insideLabelTextColor',
     'noteTextColor',
   ];
-  STYLE_FIELDS.forEach(f => addTextRow(form, f, style[f], val => upd(f, val)));
+  STYLE_FIELDS.forEach(f => addColorRow(form, f, style[f], val => upd(f, val)));
 }
 
 function renderTypographyConfigForm(container) {
