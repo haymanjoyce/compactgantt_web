@@ -483,28 +483,33 @@ function addTextRow(form, fieldName, value, commitFn) {
   form.appendChild(input);
 }
 
-// Best-effort text → "#rrggbb" mapping for syncing the native swatch with the
-// text input. Intentionally narrow: hex passthrough, #rgb expansion, and a
-// small named-keyword subset. Anything else returns null and the caller falls
-// back per spec (keep previous on commit; #000000 on first render).
-const COLOR_NAME_TO_HEX = {
-  black:  '#000000', white:  '#ffffff',
-  red:    '#ff0000', green:  '#008000', blue:    '#0000ff',
-  yellow: '#ffff00', orange: '#ffa500', purple:  '#800080',
-  pink:   '#ffc0cb', brown:  '#a52a2a', gold:    '#ffd700',
-  silver: '#c0c0c0', gray:   '#808080', grey:    '#808080',
-  cyan:   '#00ffff', magenta:'#ff00ff', lime:    '#00ff00',
-  navy:   '#000080', teal:   '#008080', maroon:  '#800000',
-};
+// Text → "#rrggbb" mapping for syncing the native swatch with the text input.
+// Hex passthrough takes a fast path; everything else (named colours, rgb(),
+// rgba(), hsl(), hsla(), 8-digit hex) defers to the browser's CSS parser via
+// a transient display:none probe element. Alpha is stripped — the swatch is
+// RGB-only because <input type="color"> cannot represent alpha; the text
+// input remains source of truth and preserves the original string verbatim.
+// NOT PURE: makes a DOM round-trip on non-hex inputs. Call only from UI
+// rendering paths — never from the renderer or validator.
 function parseTextToHex6(text) {
   if (text == null) return null;
-  const s = String(text).trim().toLowerCase();
+  const s = String(text).trim();
   if (s === '') return null;
-  if (/^#[0-9a-f]{6}$/.test(s)) return s;
-  if (/^#[0-9a-f]{3}$/.test(s)) {
-    return '#' + s[1] + s[1] + s[2] + s[2] + s[3] + s[3];
+  if (/^#[0-9a-f]{6}$/i.test(s)) return s.toLowerCase();
+  if (/^#[0-9a-f]{3}$/i.test(s)) {
+    return ('#' + s[1] + s[1] + s[2] + s[2] + s[3] + s[3]).toLowerCase();
   }
-  return COLOR_NAME_TO_HEX[s] || null;
+  const probe = document.createElement('div');
+  probe.style.display = 'none';
+  probe.style.color = s;
+  if (probe.style.color === '') return null;
+  document.body.appendChild(probe);
+  const computed = getComputedStyle(probe).color;
+  document.body.removeChild(probe);
+  const m = computed.match(/^rgba?\((\d+),\s*(\d+),\s*(\d+)/);
+  if (!m) return null;
+  const toHex = n => parseInt(n, 10).toString(16).padStart(2, '0');
+  return '#' + toHex(m[1]) + toHex(m[2]) + toHex(m[3]);
 }
 
 // Hybrid color picker: text input (source of truth) + native <input type="color">
