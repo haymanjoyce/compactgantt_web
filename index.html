@@ -18,8 +18,10 @@
       --cg-bg-panel: white;
       --cg-bg-toolbar: #f5f5f5;
       --cg-bg-selected: #e0ecff;
-      --cg-form-col-width: 360px;
-      --cg-label-col-width: 140px;
+      --cg-data-form-col-width: 420px;
+      --cg-data-label-col-width: 140px;
+      --cg-config-form-col-width: 420px;
+      --cg-config-label-col-width: 200px;
       --cg-control-height: 28px;
       --cg-gap: 8px;
     }
@@ -53,7 +55,7 @@
     /* Data panel — two-pane layout */
     .entity-panel {
       display: grid;
-      grid-template-columns: 1fr var(--cg-form-col-width);
+      grid-template-columns: 1fr var(--cg-data-form-col-width);
       gap: var(--cg-gap);
       align-items: start;
     }
@@ -87,7 +89,8 @@
     }
 
     /* Edit form */
-    .entity-form { display: grid; grid-template-columns: var(--cg-label-col-width) 1fr; gap: var(--cg-gap); align-items: center; }
+    .entity-form { display: grid; grid-template-columns: var(--cg-data-label-col-width) 1fr; gap: var(--cg-gap); align-items: center; }
+    .config-panel .entity-form { grid-template-columns: var(--cg-config-label-col-width) 1fr; }
     .entity-form label { text-align: right; font-size: 0.85rem; color: #444; }
     .entity-form input, .entity-form select {
       height: var(--cg-control-height); padding: 2px 6px; font-size: 0.85rem;
@@ -110,9 +113,10 @@
       width: auto; height: auto; margin: 0;
     }
 
-    /* Color picker — text input (source of truth) + native swatch (or em-dash
-       placeholder when allowEmpty and empty) side-by-side in the right grid
-       column. Text input flex-grows; swatch/placeholder is a fixed 24px slot. */
+    /* Color picker — text input (source of truth) + native swatch side-by-side
+       in the right grid column, with an optional ✕ clear button (allowEmpty
+       call sites only). Text input flex-grows; swatch and clear button each
+       occupy a fixed 24px slot. */
     .entity-form .color-row-wrapper {
       display: flex; align-items: center; gap: 4px; width: 100%;
     }
@@ -125,21 +129,28 @@
       padding: 0; border: 1px solid #bbb; cursor: pointer;
       background: transparent;
     }
-    .entity-form .color-row-wrapper > .color-swatch-placeholder {
+    .entity-form .color-row-wrapper > .color-clear-btn {
       flex: 0 0 24px;
       width: 24px; height: 24px;
-      border: var(--cg-border);
-      background: #f5f5f5; color: #777;
-      display: flex; align-items: center; justify-content: center;
+      padding: 0; margin: 0;
+      border: 1px solid #bbb; background: #fafafa; color: #555;
       font-size: 0.85rem; line-height: 1;
+      cursor: pointer;
       box-sizing: border-box;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .entity-form .color-row-wrapper > .color-clear-btn:hover {
+      background: #eee; color: #222;
+    }
+    .entity-form .color-row-wrapper > .color-clear-btn:disabled {
+      cursor: default; opacity: 0.5;
     }
 
     /* Config panel — form-only, single column, no two-pane grid */
     .config-panel {
       border: var(--cg-border); background: var(--cg-bg-panel);
       padding: 12px;
-      max-width: calc(var(--cg-label-col-width) + var(--cg-form-col-width) + var(--cg-gap) * 2 + 24px);
+      max-width: calc(var(--cg-config-label-col-width) + var(--cg-config-form-col-width) + var(--cg-gap) * 2 + 24px);
       max-height: calc(100vh - 220px); overflow: auto;
     }
     .entity-form-empty {

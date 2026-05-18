@@ -510,15 +510,15 @@ function parseTextToHex6(text) {
 // Hybrid color picker: text input (source of truth) + native <input type="color">
 // swatch (convenience). The swatch sits in a fixed-width slot on the right of
 // the control column; both controls share a flex wrapper. opts: { allowEmpty }
-// — when true, an empty value renders an em-dash placeholder in the swatch
-// slot instead of a swatch (known v1 limitation: the placeholder is not
-// directly clickable; the user types a value to materialise a real swatch on
-// the next form rebuild).
+// — when true, a `.color-clear-btn` ✕ button renders in its own fixed-width
+// slot to the right of the swatch (always present, regardless of current
+// value). Clicking ✕ clears the text input to empty, snaps the swatch to
+// #000000 (so cleared and never-set fields look identical — native swatches
+// cannot represent an empty state), and commits empty.
 function addColorRow(form, fieldName, value, commitFn, opts) {
   const o = opts || {};
   const allowEmpty = !!o.allowEmpty;
   const initialStr = value == null ? '' : String(value);
-  const showPlaceholder = allowEmpty && initialStr === '';
 
   const label = document.createElement('label');
   label.textContent = fieldName;
@@ -530,37 +530,40 @@ function addColorRow(form, fieldName, value, commitFn, opts) {
   input.type  = 'text';
   input.value = initialStr;
 
-  let swatch = null;
-  if (showPlaceholder) {
-    const placeholder = document.createElement('span');
-    placeholder.className = 'color-swatch-placeholder';
-    placeholder.textContent = '—';  // em-dash
-    wrapper.appendChild(input);
-    wrapper.appendChild(placeholder);
-  } else {
-    swatch = document.createElement('input');
-    swatch.type = 'color';
-    swatch.className = 'color-swatch';
-    swatch.value = parseTextToHex6(initialStr) || '#000000';
-    wrapper.appendChild(input);
-    wrapper.appendChild(swatch);
-  }
+  const swatch = document.createElement('input');
+  swatch.type = 'color';
+  swatch.className = 'color-swatch';
+  swatch.value = parseTextToHex6(initialStr) || '#000000';
+
+  wrapper.appendChild(input);
+  wrapper.appendChild(swatch);
 
   const handle = attachCommitHandlers(input, () => input.value, val => {
     commitFn(val);
-    if (swatch) {
-      const hex = parseTextToHex6(val);
-      if (hex !== null) swatch.value = hex;
-    }
+    const hex = parseTextToHex6(val);
+    if (hex !== null) swatch.value = hex;
   });
 
-  if (swatch) {
-    swatch.addEventListener('change', () => {
-      const hex = swatch.value;
-      input.value = hex;
-      handle.setPreEditValue(hex);
-      commitFn(hex);
+  swatch.addEventListener('change', () => {
+    const hex = swatch.value;
+    input.value = hex;
+    handle.setPreEditValue(hex);
+    commitFn(hex);
+  });
+
+  if (allowEmpty) {
+    const clearBtn = document.createElement('button');
+    clearBtn.type = 'button';
+    clearBtn.className = 'color-clear-btn';
+    clearBtn.textContent = '✕';  // ✕ U+2715 MULTIPLICATION X
+    clearBtn.title = 'Clear';
+    clearBtn.addEventListener('click', () => {
+      input.value = '';
+      swatch.value = '#000000';
+      handle.setPreEditValue('');
+      commitFn('');
     });
+    wrapper.appendChild(clearBtn);
   }
 
   form.appendChild(label);
