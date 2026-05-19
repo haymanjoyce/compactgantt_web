@@ -184,10 +184,11 @@ Finish-to-Start dependency arrows. Implementation notes:
 - Milestone origin and termination both = `xFor(startDate)` (centre) — link geometry stays independent of milestone shape.
 
 **Link classification (render-time, not stored):**
-- *Forward*: `pred.finishDate <= succ.startDate` — skip silently if `origX >= termX`.
+- *Forward*: `pred.finishDate <= succ.startDate` with non-zero horizontal travel — H/V/V-H/AUTO V-H-V routing per `link.routing`.
+- *Vertical forward*: zero-lag forward (`pred.finishDate === succ.startDate`, surfaces as `origX >= termX`) on different absolute rows — pure vertical line at `x = origX = termX`. Routing ignored. Termination y differs by successor type — see milestone-successor note below.
 - *Late-recoverable*: `pred.finishDate > succ.startDate AND pred.finishDate < succ.finishDate AND different absolute rows` — vertical-only path, termination x = origin x, termination y = top edge of succ if below pred, bottom edge if above.
-- *Invalid* (skip silently): `pred.finishDate >= succ.finishDate`; same-row late links; forward links where `origX >= termX`.
-- Milestone successors cannot be late-recoverable (their `startDate === finishDate` makes the late condition impossible).
+- *Invalid* (skip silently): `pred.finishDate >= succ.finishDate`; same-row late links; same-row zero-lag forward links.
+- Milestone successors cannot be late-recoverable (their `startDate === finishDate` makes the late condition impossible) but routinely appear as vertical-forward successors — the canonical "task bar finishes day X, milestone marks completion day X on a different row" case.
 
 **Routing (forward only):** `HV`, `VH`, `AUTO`+same-row (direct horizontal), `AUTO`+different-rows (V-H-V with midY = mean of endpoints).
 
@@ -197,9 +198,9 @@ Finish-to-Start dependency arrows. Implementation notes:
 
 **Arrowheads:** per-link `<polygon>` triangles sized by `arrowheadSizeFactor * rowH`, not SVG `<marker>` defs — avoids browser inconsistency with `context-fill`/`context-stroke`.
 
-**Milestone predecessor/successor special cases (forward links only):**
+**Milestone predecessor/successor special cases:**
 - *Origin marker suppressed* when `pred.isMilestone` — path still starts at the milestone centre but no filled circle is drawn over the shape.
-- *Arrowhead backed off* when `succ.isMilestone` — tip is placed at `milestoneHalf + rendering.linkArrowheadMilestoneGap` from the centre along the arrowhead direction. Late-recoverable links cannot have milestone successors.
+- *Arrowhead backed off* when `succ.isMilestone` — tip is placed at `milestoneHalf + rendering.linkArrowheadMilestoneGap` from the centre along the arrowhead direction. The back-off is calibrated for `termY === succ.rowCenterY`; vertical-forward → milestone deliberately uses `rowCenterY` (vs. `barTopY` / `barBottomY` for bar successors) so this calibration holds for both forward and vertical-forward branches. Late-recoverable links cannot have milestone successors.
 
 ## Pipes / Curtains / Notes rendering
 

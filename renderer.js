@@ -593,16 +593,26 @@ function renderChart(projectData) {
 
     const origX = pred.originX;
     const origY = pred.rowCenterY;
-    let termX, termY, isLate;
+    let termX, termY, isVerticalOnly;
 
     if (pred.finishDate <= succ.startDate) {
       // Forward link
       termX = succ.termX;
       termY = succ.rowCenterY;
-      if (origX >= termX) continue; // backwards geometry — skip silently
+      if (origX >= termX) {
+        if (pred.absRow === succ.absRow) continue; // same-row zero-lag: no horizontal room
+        // Different-row zero-lag forward — render as vertical-only line.
+        // Bar successors land at barTopY/barBottomY; milestone successors land at
+        // rowCenterY so the slot-11 milestone back-off lands the tip outside the diamond.
+        isVerticalOnly = true;
+        termX = origX;
+        termY = succ.isMilestone
+          ? succ.rowCenterY
+          : (succ.absRow > pred.absRow ? succ.barTopY : succ.barBottomY);
+      }
     } else if (pred.finishDate < succ.finishDate && pred.absRow !== succ.absRow) {
       // Late-recoverable: different rows, succ still in progress when pred finishes
-      isLate = true;
+      isVerticalOnly = true;
       termX  = origX; // path is exactly vertical: termination x equals origin x
       termY  = succ.absRow > pred.absRow ? succ.barTopY : succ.barBottomY;
     } else {
@@ -611,7 +621,7 @@ function renderChart(projectData) {
 
     let pathD, arrowDir;
 
-    if (isLate) {
+    if (isVerticalOnly) {
       pathD    = `M ${n(origX)},${n(origY)} L ${n(termX)},${n(termY)}`;
       arrowDir = succ.absRow > pred.absRow ? 'down' : 'up';
     } else {
