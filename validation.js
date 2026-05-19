@@ -347,14 +347,15 @@ function validateLinks(projectData) {
     if (pred && succ
         && l.fromTaskId !== l.toTaskId
         && pred.startDate !== null && pred.finishDate !== null
-        && succ.startDate !== null && succ.finishDate !== null) {
-      // R1
+        && succ.startDate !== null && succ.finishDate !== null
+        && pred.finishDate > succ.startDate) {
+      // R1 — pred runs at or past succ's finish
       if (pred.finishDate >= succ.finishDate) {
         warnings.push(mkIssue('link', id, 'fromTaskId',
           'Invalid link: predecessor finish ≥ successor finish', l.fromTaskId));
       }
       // R2 — late-recoverable but same absolute row
-      const isLate = pred.finishDate > succ.startDate && pred.finishDate < succ.finishDate;
+      const isLate = pred.finishDate < succ.finishDate;
       if (isLate) {
         const aP = absRowOf.get(pred.id);
         const aS = absRowOf.get(succ.id);
@@ -362,11 +363,6 @@ function validateLinks(projectData) {
           warnings.push(mkIssue('link', id, 'fromTaskId',
             'Invalid link: late-recoverable on same row', l.fromTaskId));
         }
-      }
-      // R3 — forward link with collapsing geometry (pred.finish === succ.start)
-      if (pred.finishDate <= succ.startDate && pred.finishDate === succ.startDate) {
-        warnings.push(mkIssue('link', id, 'fromTaskId',
-          'Invalid link: forward link with predecessor finish equal to successor start', l.fromTaskId));
       }
     }
 
