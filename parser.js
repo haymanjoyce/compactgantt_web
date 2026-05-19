@@ -487,17 +487,22 @@ function createEmptyCurtain() {
 }
 
 function createEmptyNote() {
+  // Add-flow defaults intentionally diverge from the parser's blank-cell defaults
+  // (widthPct/heightPct def:0, borderColor/fillColor def:'', text def:''). Blank Excel
+  // cells mean "user left this empty" and must round-trip as 0/''; the Add button
+  // means "give me a usable starting state" — sized, visible, and with placeholder
+  // text the user overwrites. Do not align the parser column defs to match.
   return {
     id:            null,
     xPct:          0,
     yPct:          0,
-    widthPct:      0,
-    heightPct:     0,
+    widthPct:      20,
+    heightPct:     10,
     textAlign:     'left',
     verticalAlign: 'top',
-    borderColor:   '',
-    fillColor:     '',
-    text:          '',
+    borderColor:   'black',
+    fillColor:     'white',
+    text:          'Note',
   };
 }
 
