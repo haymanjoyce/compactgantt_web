@@ -23,6 +23,7 @@
       --cg-config-form-col-width: 420px;
       --cg-config-label-col-width: 200px;
       --cg-control-height: 28px;
+      --cg-toolbar-height: 41px; /* control-height + 2*6px padding + 1px border */
       --cg-gap: 8px;
     }
     body { font-family: sans-serif; padding: 1rem; }
@@ -70,7 +71,9 @@
       display: flex; gap: 4px; padding: 6px;
       background: var(--cg-bg-toolbar);
       border-bottom: var(--cg-border);
-      position: sticky; top: 0; z-index: 1;
+      position: sticky; top: 0; z-index: 2;
+      min-height: var(--cg-toolbar-height);
+      box-sizing: border-box;
     }
     .entity-toolbar button {
       padding: 3px 10px; font-size: 0.85rem;
@@ -81,7 +84,8 @@
 
     /* Navigation table */
     .entity-nav-table { width: 100%; margin: 0; font-size: 0.85rem; }
-    .entity-nav-table th { position: sticky; top: var(--cg-control-height); z-index: 1; }
+    /* -1px is a deliberate overlap under the toolbar (z-index 2) to eliminate sub-pixel-rounding gaps during scroll. */
+    .entity-nav-table th { position: sticky; top: calc(var(--cg-toolbar-height) - 1px); z-index: 1; }
     .entity-nav-table tbody tr { cursor: pointer; }
     .entity-nav-table tbody tr.selected { background: var(--cg-bg-selected); }
     .entity-empty {
