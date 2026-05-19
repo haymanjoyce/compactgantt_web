@@ -341,6 +341,12 @@ function formatSwimlaneIdCell(swimlaneId) {
   return swimlaneId + ' — ' + (sw ? sw.name : '<unknown>');
 }
 
+function formatNavTableDateCell(iso) {
+  if (iso == null || iso === '') return '';
+  try { return formatDate(iso, projectData.config.preferences.uiDateFormat); }
+  catch (e) { return iso; }
+}
+
 function renderTasksNavTable(selectedId) {
   const sortedTasks = buildTasksDisplayOrder();
   const table = document.createElement('table');
@@ -359,8 +365,9 @@ function renderTasksNavTable(selectedId) {
       html += `<tr data-id="${t.id}"${isSelected ? ' class="selected"' : ''}>`;
       COLS.forEach(c => {
         let v;
-        if (c === 'swimlaneId') v = formatSwimlaneIdCell(t.swimlaneId);
-        else                    v = t[c] == null ? '' : t[c];
+        if (c === 'swimlaneId')                       v = formatSwimlaneIdCell(t.swimlaneId);
+        else if (c === 'startDate' || c === 'finishDate') v = formatNavTableDateCell(t[c]);
+        else                                          v = t[c] == null ? '' : t[c];
         html += `<td>${escapeHtml(String(v))}</td>`;
       });
       html += '</tr>';
@@ -1107,7 +1114,9 @@ function renderPipesNavTable(selectedId) {
       const isSelected = p.id === selectedId;
       html += `<tr data-id="${p.id}"${isSelected ? ' class="selected"' : ''}>`;
       COLS.forEach(c => {
-        const v = p[c] == null ? '' : p[c];
+        let v;
+        if (c === 'date') v = formatNavTableDateCell(p.date);
+        else              v = p[c] == null ? '' : p[c];
         html += `<td>${escapeHtml(String(v))}</td>`;
       });
       html += '</tr>';
@@ -1193,7 +1202,9 @@ function renderCurtainsNavTable(selectedId) {
       const isSelected = cu.id === selectedId;
       html += `<tr data-id="${cu.id}"${isSelected ? ' class="selected"' : ''}>`;
       COLS.forEach(c => {
-        const v = cu[c] == null ? '' : cu[c];
+        let v;
+        if (c === 'startDate' || c === 'endDate') v = formatNavTableDateCell(cu[c]);
+        else                                      v = cu[c] == null ? '' : cu[c];
         html += `<td>${escapeHtml(String(v))}</td>`;
       });
       html += '</tr>';
