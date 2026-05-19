@@ -313,23 +313,29 @@ function whyCannotDeleteTask(id) {
 // Sorted display order for the Tasks navigation table. Returns a shallow copy
 // of projectData.tasks; the array itself is never mutated (array order remains
 // under user control via the Excel sheet / writer round-trip).
-// Key: (swimlane.order, task.row, originalIndex). Orphan tasks (no matching
-// swimlane) sort to the end; within any group, null/undefined task.row sorts
-// after numeric rows. Infinity sentinels make the comparator straightforward
-// without tripping JS's null/undefined-vs-number quirks.
+// Key: (swimlane.order, task.row, finishDate, startDate, originalIndex), all
+// ascending. Orphan tasks (no matching swimlane) sort to the end; within any
+// group, null/undefined task.row and null/empty dates sort after their
+// well-typed counterparts. Sentinels (Infinity for numbers, '￿' for
+// dates — sorts after any YYYY-MM-DD string) make the comparator
+// straightforward without tripping JS's null/undefined-vs-number quirks.
 function buildTasksDisplayOrder() {
   const tasks = projectData.tasks;
   const swimlaneOrderById = new Map();
   projectData.swimlanes.forEach(s => swimlaneOrderById.set(s.id, s.order));
   const decorated = tasks.map((t, i) => ({
-    task:    t,
-    swOrder: swimlaneOrderById.has(t.swimlaneId) ? swimlaneOrderById.get(t.swimlaneId) : Infinity,
-    rowKey:  (typeof t.row === 'number' && Number.isFinite(t.row)) ? t.row : Infinity,
-    index:   i,
+    task:       t,
+    swOrder:    swimlaneOrderById.has(t.swimlaneId) ? swimlaneOrderById.get(t.swimlaneId) : Infinity,
+    rowKey:     (typeof t.row === 'number' && Number.isFinite(t.row)) ? t.row : Infinity,
+    finishKey:  (typeof t.finishDate === 'string' && t.finishDate !== '') ? t.finishDate : '￿',
+    startKey:   (typeof t.startDate  === 'string' && t.startDate  !== '') ? t.startDate  : '￿',
+    index:      i,
   }));
   decorated.sort((a, b) => {
-    if (a.swOrder !== b.swOrder) return a.swOrder - b.swOrder;
-    if (a.rowKey  !== b.rowKey)  return a.rowKey  - b.rowKey;
+    if (a.swOrder    !== b.swOrder)    return a.swOrder - b.swOrder;
+    if (a.rowKey     !== b.rowKey)     return a.rowKey  - b.rowKey;
+    if (a.finishKey  !== b.finishKey)  return a.finishKey < b.finishKey ? -1 : 1;
+    if (a.startKey   !== b.startKey)   return a.startKey  < b.startKey  ? -1 : 1;
     return a.index - b.index;
   });
   return decorated.map(d => d.task);
