@@ -220,7 +220,7 @@ Finish-to-Start dependency arrows. Implementation notes:
 
 ## Current UI
 
-Five-tab layout (left to right): **Data → Issues → Chart → Config → Inspector**.
+Five-tab layout (left to right): **Data → Chart → Issues → Config → Inspector**.
 
 **Data** tab hosts entity-specific data-entry panels. Second-tier tab strip (Tasks / Swimlanes / Links / Pipes / Curtains / Notes); all six panels are live. `renderDataPanel()` is the single render entry point — invoked on tab activation, on file load, on New Project, and after any `dispatch()` mutation via the post-mutation hook. The two-pane skeleton (`.entity-left` + `.entity-right`) is rebuilt on second-tier tab switch only; the form container survives mutations so commit-on-blur preserves focus.
 

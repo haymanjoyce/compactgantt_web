@@ -75,7 +75,7 @@ function renderConfigTable(container, config) {
 function activateTab(name) {
   activeTab = name;
 
-  ['data', 'issues', 'chart', 'config', 'inspector'].forEach(n => {
+  ['data', 'chart', 'issues', 'config', 'inspector'].forEach(n => {
     document.getElementById(n + 'Panel').style.display = n === name ? '' : 'none';
     document.getElementById('tab' + n.charAt(0).toUpperCase() + n.slice(1)).classList.toggle('active', n === name);
   });
