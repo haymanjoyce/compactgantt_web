@@ -156,6 +156,7 @@ Each `Issue` is `{ entity, id, field, message, value }`. `entity` is singular lo
 - **Render order (painter's algorithm, 15 slots):** defined in `renderer.js` (search for the SVG layer accumulators). Header/footer paint last so they frame the chart regardless of unusual layout dimensions. Slot numbers referenced elsewhere (e.g. "slot 7", "slot 14") correspond to those accumulators in source order.
 - **Color handling:** colors are passed directly from `projectData` to SVG `fill`/`stroke` attributes without renderer-side validation; invalid CSS color names render as SVG's default (black). Validation lives in `validation.js`.
 - **Swimlane backgrounds:** `<rect>` fill = `swimlane.backgroundColor` — no renderer-side fallback. The parser supplies the default `"white"`.
+- **Swimlane labels:** always rendered with `font-weight="bold"` — fixed rendering choice, not configurable (no config field, no parser/writer/validation entry).
 - **Header/footer text alignment:** per-band via `titles.headerTextAlign` / `titles.footerTextAlign`. Horizontal inset uses `rendering.headerFooterTextPadding` for `left` and `right` only (centred text uses band centre). Each band also emits an inside-edge `<line>` border (`style.headerFooterBorderColor`), suppressed with the band when its height is 0.
 - **Milestones:** centred on `startDate`; size = `bars.milestoneSizeFactor * rowHeight`. Two shapes via `bars.milestoneShape`:
   - `circle` — `<circle>` circumscribing the diamond's anchors; `milestoneCornerRadius` ignored.

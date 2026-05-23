@@ -719,7 +719,7 @@ function renderChart(projectData) {
       ty = n(sy + sh - rowH * (1 - typography.swimlaneBottomAlignmentFactor));
     }
 
-    labelsSvg += `<text x="${n(tx)}" y="${ty}" text-anchor="${anchor}" font-family="'${escapeXml(typography.fontFamily)}'" font-size="${typography.swimlaneFontSize}" fill="${style.swimlaneLabelColor}">${escapeXml(s.name)}</text>`;
+    labelsSvg += `<text x="${n(tx)}" y="${ty}" text-anchor="${anchor}" font-family="'${escapeXml(typography.fontFamily)}'" font-size="${typography.swimlaneFontSize}" font-weight="bold" fill="${style.swimlaneLabelColor}">${escapeXml(s.name)}</text>`;
   }
 
   // ── 14. Notes ─────────────────────────────────────────────────────────────────
