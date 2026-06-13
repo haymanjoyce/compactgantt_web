@@ -91,11 +91,16 @@
     /* Swimlane group headers in the Tasks nav table: plain bold, not selectable
        (no data-id), and a <td> rather than <th> so the sticky-th rule never applies. */
     .entity-nav-table-group-header td { font-weight: bold; cursor: default; background: var(--cg-bg-toolbar); }
-    /* CSS-drawn task symbols in the Tasks nav table symbol column. */
-    .task-symbol { display: inline-block; vertical-align: middle; }
-    .task-symbol-bar { width: 16px; height: 12px; }
+    /* CSS-drawn task symbols in the Tasks nav table symbol column.
+       border-box keeps the 1px black border inside the declared dimensions, so the
+       border never grows the bounding box (diamond stays centred, bar width stays = inline px). */
+    .task-symbol { display: inline-block; vertical-align: middle; box-sizing: border-box; border: 1px solid black; }
+    /* Bar width is set inline per row (proportional to duration); only height is fixed here. */
+    .task-symbol-bar { height: 12px; }
     /* 9px square → ~12.7px diagonal, matching the bar's 12px vertical extent once rotated. */
     .task-symbol-milestone { width: 9px; height: 9px; transform: rotate(45deg); }
+    /* Fixed symbol-column width — must match SYMBOL_COL_WIDTH_PX in ui.js (bar maxWidth basis). */
+    .entity-nav-table .task-symbol-col { width: 64px; }
     .entity-empty {
       padding: 1.5rem; text-align: center; color: #777; font-size: 0.9rem;
     }

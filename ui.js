@@ -347,22 +347,47 @@ function formatNavTableDateCell(iso) {
   catch (e) { return iso; }
 }
 
-// Integer calendar-day span (finishDate − startDate) for the Days column.
-// Empty when either date is missing/empty or the pair is non-finite (malformed
-// but non-empty) — mirrors formatNavTableDateCell's empty-on-garbage posture.
-// Negative values render literally; milestones naturally yield 0.
-function formatTaskDaysCell(t) {
-  if (t.startDate == null || t.startDate === '' || t.finishDate == null || t.finishDate === '') return '';
+// Integer calendar-day span (finishDate − startDate), or null when either date is
+// missing/empty or the pair is non-finite (malformed but non-empty). Negative spans
+// pass through literally; milestones yield 0.
+function taskDays(t) {
+  if (t.startDate == null || t.startDate === '' || t.finishDate == null || t.finishDate === '') return null;
   const d = daysBetween(t.startDate, t.finishDate);
-  return Number.isFinite(d) ? String(d) : '';
+  return Number.isFinite(d) ? d : null;
+}
+
+// Days column text — empty on null span (mirrors formatNavTableDateCell's empty-on-garbage posture).
+function formatTaskDaysCell(t) {
+  const d = taskDays(t);
+  return d == null ? '' : String(d);
+}
+
+// Symbol-column bar geometry. SYMBOL_COL_WIDTH_PX must match the .task-symbol-col
+// CSS width in index.html; the usable bar range is that minus end padding on each side.
+const SYMBOL_COL_WIDTH_PX = 64;
+const SYMBOL_END_PADDING_PX = 5;
+const BAR_MIN_WIDTH_PX = 10;
+const BAR_MAX_WIDTH_PX = SYMBOL_COL_WIDTH_PX - 2 * SYMBOL_END_PADDING_PX; // 54
+
+// Bar width proportional to positive duration, scaled linearly against maxDays (the
+// largest positive span among bar tasks in the table). Unified minWidth guard collapses
+// every degenerate case — missing/non-finite span, span ≤ 0 (incl. negative), or no
+// positive-duration bars anywhere (maxDays ≤ 0) — to BAR_MIN_WIDTH_PX.
+function computeBarWidth(t, maxDays) {
+  const d = taskDays(t);
+  if (d == null || d <= 0 || maxDays <= 0) return BAR_MIN_WIDTH_PX;
+  return Math.round(BAR_MIN_WIDTH_PX + (d / maxDays) * (BAR_MAX_WIDTH_PX - BAR_MIN_WIDTH_PX));
 }
 
 // Small CSS-drawn marker for the symbol column: a rotated square (diamond) for
-// milestones, a wider-than-tall rectangle for bars. Fill = task.fillColor;
+// milestones, a duration-proportional rectangle for bars. Fill = task.fillColor;
 // task.fillPattern is intentionally ignored (solid only — patterns are chart-only).
-function taskSymbolMarkup(t) {
-  const cls = t.isMilestone ? 'task-symbol task-symbol-milestone' : 'task-symbol task-symbol-bar';
-  return `<span class="${cls}" style="background:${escapeHtml(String(t.fillColor))}"></span>`;
+function taskSymbolMarkup(t, barWidth) {
+  const bg = escapeHtml(String(t.fillColor));
+  if (t.isMilestone) {
+    return `<span class="task-symbol task-symbol-milestone" style="background:${bg}"></span>`;
+  }
+  return `<span class="task-symbol task-symbol-bar" style="width:${barWidth}px;background:${bg}"></span>`;
 }
 
 function renderTasksNavTable(selectedId) {
@@ -390,10 +415,20 @@ function renderTasksNavTable(selectedId) {
     }
   });
 
+  // Pre-pass: largest positive span among bar (non-milestone) tasks — the proportional
+  // scaling basis. Milestones are excluded; non-finite/non-positive spans don't raise it.
+  let maxDays = 0;
+  sortedTasks.forEach(t => {
+    if (t.isMilestone) return;
+    const d = taskDays(t);
+    if (d != null && d > maxDays) maxDays = d;
+  });
+
   let html = '<thead><tr>';
   COLS.forEach(c => {
-    if (c === 'Days') html += '<th title="Calendar days">Days</th>';
-    else              html += `<th>${c}</th>`;
+    if (c === 'symbol')    html += '<th class="task-symbol-col">symbol</th>';
+    else if (c === 'Days') html += '<th title="Calendar days">Days</th>';
+    else                   html += `<th>${c}</th>`;
   });
   html += '</tr></thead><tbody>';
 
@@ -409,7 +444,7 @@ function renderTasksNavTable(selectedId) {
       const symbolBg = sw ? ` style="background:${escapeHtml(String(sw.backgroundColor))}"` : '';
       let row = `<tr data-id="${t.id}"${isSelected ? ' class="selected"' : ''}>`;
       COLS.forEach(c => {
-        if (c === 'symbol')                          row += `<td${symbolBg}>${taskSymbolMarkup(t)}</td>`;
+        if (c === 'symbol')                          row += `<td class="task-symbol-col"${symbolBg}>${taskSymbolMarkup(t, computeBarWidth(t, maxDays))}</td>`;
         else if (c === 'Days')                       row += `<td>${escapeHtml(formatTaskDaysCell(t))}</td>`;
         else if (c === 'startDate' || c === 'finishDate') row += `<td>${escapeHtml(formatNavTableDateCell(t[c]))}</td>`;
         else                                         row += `<td>${escapeHtml(String(t[c] == null ? '' : t[c]))}</td>`;
