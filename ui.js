@@ -225,6 +225,7 @@ function renderTasksToolbar(selectedId) {
   }
   if (idx === -1) {
     btnDelete.disabled = btnDuplicate.disabled = btnMoveUp.disabled = btnMoveDown.disabled = true;
+    btnDelete.title = btnDuplicate.title = btnMoveUp.title = btnMoveDown.title = 'No row selected';
   } else {
     const blockReason = whyCannotDeleteTask(selectedId);
     if (blockReason !== null) {
@@ -242,8 +243,16 @@ function renderTasksToolbar(selectedId) {
       btnMoveUp.disabled = btnMoveDown.disabled = true;
       btnMoveUp.title = btnMoveDown.title = 'Task has no swimlane';
     } else {
-      if (!(typeof task.row === 'number' && task.row > 1))                 btnMoveUp.disabled   = true;
-      if (!(typeof task.row === 'number' && task.row < swimlane.rowCount)) btnMoveDown.disabled = true;
+      // Tooltip text splits on whether row is numeric: a null/non-numeric row
+      // isn't "at an edge", it's missing — parallels the 'Task has no swimlane' case.
+      if (!(typeof task.row === 'number' && task.row > 1)) {
+        btnMoveUp.disabled = true;
+        btnMoveUp.title = typeof task.row === 'number' ? 'Already at top of swimlane' : 'Task has no row';
+      }
+      if (!(typeof task.row === 'number' && task.row < swimlane.rowCount)) {
+        btnMoveDown.disabled = true;
+        btnMoveDown.title = typeof task.row === 'number' ? 'Already at bottom of swimlane' : 'Task has no row';
+      }
     }
   }
 
@@ -394,7 +403,7 @@ function renderTasksNavTable(selectedId) {
   const sortedTasks = buildTasksDisplayOrder();
   const table = document.createElement('table');
   table.className = 'entity-nav-table';
-  const COLS = ['id', 'symbol', 'name', 'Days', 'startDate', 'finishDate'];
+  const COLS = ['id', 'row', 'symbol', 'name', 'Days', 'startDate', 'finishDate'];
 
   // Bucket the cascade-sorted tasks by swimlane, preserving order. Defined
   // swimlanes get their own bucket; tasks with a null/empty swimlaneId go to
@@ -426,9 +435,10 @@ function renderTasksNavTable(selectedId) {
 
   let html = '<thead><tr>';
   COLS.forEach(c => {
-    if (c === 'symbol')    html += '<th class="task-symbol-col">symbol</th>';
-    else if (c === 'Days') html += '<th title="Calendar days">Days</th>';
-    else                   html += `<th>${c}</th>`;
+    if (c === 'row')         html += '<th class="task-row-col">row</th>';
+    else if (c === 'symbol') html += '<th class="task-symbol-col">symbol</th>';
+    else if (c === 'Days')   html += '<th class="task-days-col" title="Calendar days">Days</th>';
+    else                     html += `<th>${c}</th>`;
   });
   html += '</tr></thead><tbody>';
 
@@ -444,8 +454,9 @@ function renderTasksNavTable(selectedId) {
       const symbolBg = sw ? ` style="background:${escapeHtml(String(sw.backgroundColor))}"` : '';
       let row = `<tr data-id="${t.id}"${isSelected ? ' class="selected"' : ''}>`;
       COLS.forEach(c => {
-        if (c === 'symbol')                          row += `<td class="task-symbol-col"${symbolBg}>${taskSymbolMarkup(t, computeBarWidth(t, maxDays))}</td>`;
-        else if (c === 'Days')                       row += `<td>${escapeHtml(formatTaskDaysCell(t))}</td>`;
+        if (c === 'row')                             row += `<td class="task-row-col">${escapeHtml(String(t.row == null ? '' : t.row))}</td>`;
+        else if (c === 'symbol')                     row += `<td class="task-symbol-col"${symbolBg}>${taskSymbolMarkup(t, computeBarWidth(t, maxDays))}</td>`;
+        else if (c === 'Days')                       row += `<td class="task-days-col">${escapeHtml(formatTaskDaysCell(t))}</td>`;
         else if (c === 'startDate' || c === 'finishDate') row += `<td>${escapeHtml(formatNavTableDateCell(t[c]))}</td>`;
         else                                         row += `<td>${escapeHtml(String(t[c] == null ? '' : t[c]))}</td>`;
       });
@@ -813,9 +824,10 @@ function renderSwimlanesToolbar(selectedId) {
 
   if (idx === -1) {
     btnDelete.disabled = btnDuplicate.disabled = btnMoveUp.disabled = btnMoveDown.disabled = true;
+    btnDelete.title = btnDuplicate.title = btnMoveUp.title = btnMoveDown.title = 'No row selected';
   } else {
-    if (idx === 0)                    btnMoveUp.disabled   = true;
-    if (idx === swimlanes.length - 1) btnMoveDown.disabled = true;
+    if (idx === 0)                    { btnMoveUp.disabled   = true; btnMoveUp.title   = 'Already at top';    }
+    if (idx === swimlanes.length - 1) { btnMoveDown.disabled = true; btnMoveDown.title = 'Already at bottom'; }
   }
 
   btnAdd.addEventListener('click', () => {
@@ -986,9 +998,10 @@ function renderSimpleEntityToolbar(entitySingular, entityPlural, arr, selectedId
 
   if (idx === -1) {
     btnDelete.disabled = btnDuplicate.disabled = btnMoveUp.disabled = btnMoveDown.disabled = true;
+    btnDelete.title = btnDuplicate.title = btnMoveUp.title = btnMoveDown.title = 'No row selected';
   } else {
-    if (idx === 0)              btnMoveUp.disabled   = true;
-    if (idx === arr.length - 1) btnMoveDown.disabled = true;
+    if (idx === 0)              { btnMoveUp.disabled   = true; btnMoveUp.title   = 'Already at top';    }
+    if (idx === arr.length - 1) { btnMoveDown.disabled = true; btnMoveDown.title = 'Already at bottom'; }
   }
 
   btnAdd.addEventListener('click', () => {

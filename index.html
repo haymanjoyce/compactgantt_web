@@ -101,6 +101,17 @@
     .task-symbol-milestone { width: 9px; height: 9px; transform: rotate(45deg); }
     /* Fixed symbol-column width — must match SYMBOL_COL_WIDTH_PX in ui.js (bar maxWidth basis). */
     .entity-nav-table .task-symbol-col { width: 64px; }
+    /* id column: right-align in every entity nav table; exclude the two colspan rows
+       (Tasks group headers, and the centered .entity-empty message — which the
+       first-child selector would otherwise out-specify). */
+    .entity-nav-table th:first-child,
+    .entity-nav-table tbody tr:not(.entity-nav-table-group-header) td:first-child:not(.entity-empty) {
+      text-align: right;
+    }
+    /* Days column (Tasks only) — numeric, right-aligned. */
+    .entity-nav-table .task-days-col { text-align: right; }
+    /* row column (Tasks only) — numeric, right-aligned. */
+    .entity-nav-table .task-row-col { text-align: right; }
     .entity-empty {
       padding: 1.5rem; text-align: center; color: #777; font-size: 0.9rem;
     }
