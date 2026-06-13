@@ -88,6 +88,14 @@
     .entity-nav-table th { position: sticky; top: calc(var(--cg-toolbar-height) - 1px); z-index: 1; }
     .entity-nav-table tbody tr { cursor: pointer; }
     .entity-nav-table tbody tr.selected { background: var(--cg-bg-selected); }
+    /* Swimlane group headers in the Tasks nav table: plain bold, not selectable
+       (no data-id), and a <td> rather than <th> so the sticky-th rule never applies. */
+    .entity-nav-table-group-header td { font-weight: bold; cursor: default; background: var(--cg-bg-toolbar); }
+    /* CSS-drawn task symbols in the Tasks nav table symbol column. */
+    .task-symbol { display: inline-block; vertical-align: middle; }
+    .task-symbol-bar { width: 16px; height: 12px; }
+    /* 9px square → ~12.7px diagonal, matching the bar's 12px vertical extent once rotated. */
+    .task-symbol-milestone { width: 9px; height: 9px; transform: rotate(45deg); }
     .entity-empty {
       padding: 1.5rem; text-align: center; color: #777; font-size: 0.9rem;
     }

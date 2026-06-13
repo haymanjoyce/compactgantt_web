@@ -341,43 +341,91 @@ function buildTasksDisplayOrder() {
   return decorated.map(d => d.task);
 }
 
-function formatSwimlaneIdCell(swimlaneId) {
-  if (swimlaneId == null) return '—';
-  const sw = projectData.swimlanes.find(s => s.id === swimlaneId);
-  return swimlaneId + ' — ' + (sw ? sw.name : '<unknown>');
-}
-
 function formatNavTableDateCell(iso) {
   if (iso == null || iso === '') return '';
   try { return formatDate(iso, projectData.config.preferences.uiDateFormat); }
   catch (e) { return iso; }
 }
 
+// Integer calendar-day span (finishDate − startDate) for the Days column.
+// Empty when either date is missing/empty or the pair is non-finite (malformed
+// but non-empty) — mirrors formatNavTableDateCell's empty-on-garbage posture.
+// Negative values render literally; milestones naturally yield 0.
+function formatTaskDaysCell(t) {
+  if (t.startDate == null || t.startDate === '' || t.finishDate == null || t.finishDate === '') return '';
+  const d = daysBetween(t.startDate, t.finishDate);
+  return Number.isFinite(d) ? String(d) : '';
+}
+
+// Small CSS-drawn marker for the symbol column: a rotated square (diamond) for
+// milestones, a wider-than-tall rectangle for bars. Fill = task.fillColor;
+// task.fillPattern is intentionally ignored (solid only — patterns are chart-only).
+function taskSymbolMarkup(t) {
+  const cls = t.isMilestone ? 'task-symbol task-symbol-milestone' : 'task-symbol task-symbol-bar';
+  return `<span class="${cls}" style="background:${escapeHtml(String(t.fillColor))}"></span>`;
+}
+
 function renderTasksNavTable(selectedId) {
   const sortedTasks = buildTasksDisplayOrder();
   const table = document.createElement('table');
   table.className = 'entity-nav-table';
-  const COLS = ['id', 'name', 'swimlaneId', 'row', 'startDate', 'finishDate'];
+  const COLS = ['id', 'symbol', 'name', 'Days', 'startDate', 'finishDate'];
+
+  // Bucket the cascade-sorted tasks by swimlane, preserving order. Defined
+  // swimlanes get their own bucket; tasks with a null/empty swimlaneId go to
+  // Unassigned; a non-empty swimlaneId with no matching swimlane goes to
+  // Misassigned.
+  const definedIds = new Set(projectData.swimlanes.map(s => s.id));
+  const bySwimlane = new Map();
+  const unassigned = [];
+  const misassigned = [];
+  sortedTasks.forEach(t => {
+    if (t.swimlaneId == null || t.swimlaneId === '') {
+      unassigned.push(t);
+    } else if (definedIds.has(t.swimlaneId)) {
+      if (!bySwimlane.has(t.swimlaneId)) bySwimlane.set(t.swimlaneId, []);
+      bySwimlane.get(t.swimlaneId).push(t);
+    } else {
+      misassigned.push(t);
+    }
+  });
 
   let html = '<thead><tr>';
-  COLS.forEach(c => { html += `<th>${c}</th>`; });
+  COLS.forEach(c => {
+    if (c === 'Days') html += '<th title="Calendar days">Days</th>';
+    else              html += `<th>${c}</th>`;
+  });
   html += '</tr></thead><tbody>';
 
   if (sortedTasks.length === 0) {
     html += `<tr><td colspan="${COLS.length}" class="entity-empty">No tasks. Click Add to create one.</td></tr>`;
   } else {
-    sortedTasks.forEach(t => {
+    const groupHeader = label =>
+      `<tr class="entity-nav-table-group-header"><td colspan="${COLS.length}">${escapeHtml(String(label))}</td></tr>`;
+
+    const dataRow = t => {
       const isSelected = t.id === selectedId;
-      html += `<tr data-id="${t.id}"${isSelected ? ' class="selected"' : ''}>`;
+      const sw = projectData.swimlanes.find(s => s.id === t.swimlaneId);
+      const symbolBg = sw ? ` style="background:${escapeHtml(String(sw.backgroundColor))}"` : '';
+      let row = `<tr data-id="${t.id}"${isSelected ? ' class="selected"' : ''}>`;
       COLS.forEach(c => {
-        let v;
-        if (c === 'swimlaneId')                       v = formatSwimlaneIdCell(t.swimlaneId);
-        else if (c === 'startDate' || c === 'finishDate') v = formatNavTableDateCell(t[c]);
-        else                                          v = t[c] == null ? '' : t[c];
-        html += `<td>${escapeHtml(String(v))}</td>`;
+        if (c === 'symbol')                          row += `<td${symbolBg}>${taskSymbolMarkup(t)}</td>`;
+        else if (c === 'Days')                       row += `<td>${escapeHtml(formatTaskDaysCell(t))}</td>`;
+        else if (c === 'startDate' || c === 'finishDate') row += `<td>${escapeHtml(formatNavTableDateCell(t[c]))}</td>`;
+        else                                         row += `<td>${escapeHtml(String(t[c] == null ? '' : t[c]))}</td>`;
       });
-      html += '</tr>';
+      return row + '</tr>';
+    };
+
+    // Defined swimlanes first, in swimlane.order sequence (array order).
+    // Headers render even when the bucket is empty.
+    projectData.swimlanes.forEach(s => {
+      html += groupHeader(s.name);
+      (bySwimlane.get(s.id) || []).forEach(t => { html += dataRow(t); });
     });
+    // Synthetic groups, only when populated.
+    if (unassigned.length)  { html += groupHeader('Unassigned');  unassigned.forEach(t => { html += dataRow(t); }); }
+    if (misassigned.length) { html += groupHeader('Misassigned'); misassigned.forEach(t => { html += dataRow(t); }); }
   }
   html += '</tbody></table>';
   table.innerHTML = html;
