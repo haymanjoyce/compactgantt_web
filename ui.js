@@ -403,7 +403,7 @@ function renderTasksNavTable(selectedId) {
   const sortedTasks = buildTasksDisplayOrder();
   const table = document.createElement('table');
   table.className = 'entity-nav-table';
-  const COLS = ['id', 'row', 'symbol', 'name', 'Days', 'startDate', 'finishDate'];
+  const COLS = ['id', 'row', 'symbol', 'name', 'days', 'startDate', 'finishDate'];
 
   // Bucket the cascade-sorted tasks by swimlane, preserving order. Defined
   // swimlanes get their own bucket; tasks with a null/empty swimlaneId go to
@@ -437,7 +437,7 @@ function renderTasksNavTable(selectedId) {
   COLS.forEach(c => {
     if (c === 'row')         html += '<th class="task-row-col">row</th>';
     else if (c === 'symbol') html += '<th class="task-symbol-col">symbol</th>';
-    else if (c === 'Days')   html += '<th class="task-days-col" title="Calendar days">Days</th>';
+    else if (c === 'days')   html += '<th class="task-days-col" title="Calendar days">days</th>';
     else                     html += `<th>${c}</th>`;
   });
   html += '</tr></thead><tbody>';
@@ -456,7 +456,7 @@ function renderTasksNavTable(selectedId) {
       COLS.forEach(c => {
         if (c === 'row')                             row += `<td class="task-row-col">${escapeHtml(String(t.row == null ? '' : t.row))}</td>`;
         else if (c === 'symbol')                     row += `<td class="task-symbol-col"${symbolBg}>${taskSymbolMarkup(t, computeBarWidth(t, maxDays))}</td>`;
-        else if (c === 'Days')                       row += `<td class="task-days-col">${escapeHtml(formatTaskDaysCell(t))}</td>`;
+        else if (c === 'days')                       row += `<td class="task-days-col">${escapeHtml(formatTaskDaysCell(t))}</td>`;
         else if (c === 'startDate' || c === 'finishDate') row += `<td>${escapeHtml(formatNavTableDateCell(t[c]))}</td>`;
         else                                         row += `<td>${escapeHtml(String(t[c] == null ? '' : t[c]))}</td>`;
       });
