@@ -1790,7 +1790,13 @@ function renderInspector(panel) {
 
   function appendSection(path, sourceLabel, renderFn) {
     const h2 = document.createElement('h2');
-    h2.textContent = `${path} — ${sourceLabel}`;
+    const pathSpan = document.createElement('span');
+    pathSpan.textContent = path;
+    const sourceSpan = document.createElement('span');
+    sourceSpan.className = 'inspector-section-source';
+    sourceSpan.textContent = ` — ${sourceLabel}`;
+    h2.appendChild(pathSpan);
+    h2.appendChild(sourceSpan);
     panel.appendChild(h2);
     const div = document.createElement('div');
     panel.appendChild(div);

@@ -228,6 +228,20 @@
     .issues-pill-warnings { background: #fde68a; color: #92400e; }
     .issues-pill-notices  { background: #e5e7eb; color: #374151; }
     .issues-placeholder { color: #9ca3af; }
+
+    /* Inspector tables — static read-only diagnostic view; content-width, not full-width. */
+    #inspectorPanel table { border-collapse: collapse; font-size: 0.85rem; margin-bottom: 0.5rem; }
+    #inspectorPanel th, #inspectorPanel td { border: none; padding: 4px 8px; border-bottom: 1px solid #eee; }
+    #inspectorPanel th {
+      text-align: left; background: var(--cg-bg-toolbar); border-bottom: 2px solid #ccc;
+    }
+    #inspectorPanel tbody tr:nth-child(even) { background: #fafafa; }
+    /* Section headers: moderate, bold, tight rhythm, delineating rule. */
+    #inspectorPanel h2 {
+      font-size: 1rem; font-weight: bold; margin: 1.25rem 0 0.35rem;
+      padding-bottom: 0.2rem; border-bottom: var(--cg-border);
+    }
+    #inspectorPanel .inspector-section-source { color: #999; font-weight: normal; font-size: 0.85rem; }
   </style>
 </head>
 <body>
