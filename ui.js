@@ -877,26 +877,36 @@ function renderSwimlanesNavTable(selectedId) {
   const swimlanes = projectData.swimlanes;
   const table = document.createElement('table');
   table.className = 'entity-nav-table';
-  const COLS = [
-    { key: 'id',       label: 'id'              },
-    { key: 'order',    label: 'order (derived)' },
-    { key: 'name',     label: 'name'            },
-    { key: 'rowCount', label: 'rowCount'        },
-  ];
+  // Per-column emission (not a generic loop): the color column is text-free and
+  // style-bearing, and order/rowCount carry alignment classes on header + data cells.
+  const COLS = ['id', 'order', 'color', 'name', 'rowCount'];
+  const COL_COUNT = COLS.length;
+
+  const headerCell = c => {
+    if (c === 'order')    return '<th class="swimlane-order-col">order (derived)</th>';
+    if (c === 'rowCount') return '<th class="swimlane-rowcount-col">rowCount</th>';
+    if (c === 'color')    return '<th>color</th>';
+    return `<th>${c}</th>`;
+  };
 
   let html = '<thead><tr>';
-  COLS.forEach(c => { html += `<th>${c.label}</th>`; });
+  COLS.forEach(c => { html += headerCell(c); });
   html += '</tr></thead><tbody>';
 
   if (swimlanes.length === 0) {
-    html += `<tr><td colspan="${COLS.length}" class="entity-empty">No swimlanes. Click Add to create one.</td></tr>`;
+    html += `<tr><td colspan="${COL_COUNT}" class="entity-empty">No swimlanes. Click Add to create one.</td></tr>`;
   } else {
     swimlanes.forEach(s => {
       const isSelected = s.id === selectedId;
+      // Raw stored backgroundColor as the cell background; browser judges validity.
+      // Always emitted (the field is always present); empty/invalid/null → no-op.
+      const colorBg = ` style="background:${escapeHtml(String(s.backgroundColor))}"`;
       html += `<tr data-id="${s.id}"${isSelected ? ' class="selected"' : ''}>`;
       COLS.forEach(c => {
-        const v = s[c.key] == null ? '' : s[c.key];
-        html += `<td>${escapeHtml(String(v))}</td>`;
+        if (c === 'color')         html += `<td${colorBg}></td>`;
+        else if (c === 'order')    html += `<td class="swimlane-order-col">${escapeHtml(String(s.order == null ? '' : s.order))}</td>`;
+        else if (c === 'rowCount') html += `<td class="swimlane-rowcount-col">${escapeHtml(String(s.rowCount == null ? '' : s.rowCount))}</td>`;
+        else                       html += `<td>${escapeHtml(String(s[c] == null ? '' : s[c]))}</td>`;
       });
       html += '</tr>';
     });

@@ -112,6 +112,13 @@
     .entity-nav-table .task-days-col { text-align: right; }
     /* row column (Tasks only) — numeric, right-aligned. */
     .entity-nav-table .task-row-col { text-align: right; }
+    /* order / rowCount columns (Swimlanes only) — numeric, right-aligned. */
+    /* order: shrink to its 1–2 digit content; the small width forces the long
+       "order (derived)" header to wrap at the space to order / (derived) (its
+       widest unbreakable word), so the column lands ~that wide and the reclaimed
+       space flows to the flexible name column. */
+    .entity-nav-table .swimlane-order-col { text-align: right; width: 1px; white-space: normal; }
+    .entity-nav-table .swimlane-rowcount-col { text-align: right; }
     .entity-empty {
       padding: 1.5rem; text-align: center; color: #777; font-size: 0.9rem;
     }
