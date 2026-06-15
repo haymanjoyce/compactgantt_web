@@ -1216,7 +1216,10 @@ function renderPipesNavTable(selectedId) {
   const COLS = ['id', 'date', 'name', 'color', 'lineStyle', 'labelPosition'];
 
   let html = '<thead><tr>';
-  COLS.forEach(c => { html += `<th>${c}</th>`; });
+  COLS.forEach(c => {
+    if (c === 'labelPosition') html += `<th class="pipe-labelposition-col">${c}</th>`;
+    else                       html += `<th>${c}</th>`;
+  });
   html += '</tr></thead><tbody>';
 
   if (pipes.length === 0) {
@@ -1229,7 +1232,8 @@ function renderPipesNavTable(selectedId) {
         let v;
         if (c === 'date') v = formatNavTableDateCell(p.date);
         else              v = p[c] == null ? '' : p[c];
-        html += `<td>${escapeHtml(String(v))}</td>`;
+        if (c === 'labelPosition') html += `<td class="pipe-labelposition-col">${escapeHtml(String(v))}</td>`;
+        else                       html += `<td>${escapeHtml(String(v))}</td>`;
       });
       html += '</tr>';
     });
@@ -1304,7 +1308,10 @@ function renderCurtainsNavTable(selectedId) {
   const COLS = ['id', 'startDate', 'endDate', 'name', 'color', 'opacity', 'labelAnchor'];
 
   let html = '<thead><tr>';
-  COLS.forEach(c => { html += `<th>${c}</th>`; });
+  COLS.forEach(c => {
+    if (c === 'opacity') html += `<th class="curtain-opacity-col">${c}</th>`;
+    else                 html += `<th>${c}</th>`;
+  });
   html += '</tr></thead><tbody>';
 
   if (curtains.length === 0) {
@@ -1317,7 +1324,8 @@ function renderCurtainsNavTable(selectedId) {
         let v;
         if (c === 'startDate' || c === 'endDate') v = formatNavTableDateCell(cu[c]);
         else                                      v = cu[c] == null ? '' : cu[c];
-        html += `<td>${escapeHtml(String(v))}</td>`;
+        if (c === 'opacity') html += `<td class="curtain-opacity-col">${escapeHtml(String(v))}</td>`;
+        else                 html += `<td>${escapeHtml(String(v))}</td>`;
       });
       html += '</tr>';
     });
