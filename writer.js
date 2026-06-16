@@ -5,7 +5,7 @@
 function boolStr(v) { return v ? 'Yes' : 'No'; }
 
 function writeWorkbook(projectData) {
-  const { tasks, swimlanes, links, pipes, curtains, notes, config } = projectData;
+  const { tasks, swimlanes, links, pipes, curtains, notes, baseline, config } = projectData;
   const { layout, bars, timeline, titles, style, typography, preferences } = config;
 
   const wb = XLSX.utils.book_new();
@@ -66,6 +66,19 @@ function writeWorkbook(projectData) {
       n.id, n.xPct, n.yPct, n.widthPct, n.heightPct, n.textAlign, n.verticalAlign, n.borderColor, n.fillColor, n.text,
     ]),
   ]);
+
+  // ── Baseline ──────────────────────────────────────────────────────────────────
+  // Diverges from the entity-sheet convention: emitted only when non-empty, so
+  // existing/non-baselined files don't gain a stray empty Baseline sheet on save.
+  // The parser already tolerates a missing sheet.
+  if (baseline.length > 0) {
+    addSheet('Baseline', [
+      ['ID', 'Start Date', 'Finish Date'],
+      ...baseline.map(b => [
+        b.id, toJsDate(b.startDate), toJsDate(b.finishDate),
+      ]),
+    ]);
+  }
 
   // ── 7. Layout ─────────────────────────────────────────────────────────────────
   addSheet('Layout', [

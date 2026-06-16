@@ -309,6 +309,7 @@ function kvDate(map, key, fallback, ctx) {
 function createEmptyProjectData() {
   return {
     tasks: [], swimlanes: [], links: [], pipes: [], curtains: [], notes: [],
+    baseline: [],
     _parseNotices: [],
     config: {
       layout: {
@@ -707,6 +708,26 @@ function parseWorkbook(workbook) {
         fillColor:     n.fillColor,
         text:          n.text,
       };
+    });
+  }
+
+  // ── Baseline ─────────────────────────────────────────────────────────────────
+  // A persisted snapshot of prior task dates. Unlike the entity sheets, the
+  // baseline id is a *reference* to an existing task's id, not a freshly
+  // auto-assigned one — parse it verbatim with toInt and skip makeIdAssigner.
+  const baselineSheet = workbook.Sheets['Baseline'];
+  if (baselineSheet) {
+    const raw = parseEntitySheet(baselineSheet, {
+      'ID':          { key: 'id',         def: null },
+      'Start Date':  { key: 'startDate',  def: null },
+      'Finish Date': { key: 'finishDate', def: null },
+    });
+    projectData.baseline = raw.map(b => {
+      const id        = toInt(b.id, null, { entity: 'baseline', id: null, field: 'id' });
+      const c         = (field) => ({ entity: 'baseline', id, field });
+      const startDate = parseDate(b.startDate, c('startDate'));
+      const finishDate = parseDate(b.finishDate, c('finishDate'));
+      return { id, startDate, finishDate };
     });
   }
 

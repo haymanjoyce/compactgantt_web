@@ -1809,6 +1809,7 @@ function renderInspector(panel) {
   appendSection('pipes',     'from Pipes sheet',      div => renderEntityTable(div, d.pipes));
   appendSection('curtains',  'from Curtains sheet',   div => renderEntityTable(div, d.curtains));
   appendSection('notes',     'from Notes sheet',      div => renderEntityTable(div, d.notes));
+  appendSection('baseline',  'from Baseline sheet',   div => renderEntityTable(div, d.baseline));
 
   appendSection('config.layout',      'from Layout sheet',     div => renderConfigTable(div, d.config.layout));
   appendSection('config.bars',        'from Bars sheet',       div => renderConfigTable(div, d.config.bars));
@@ -1819,7 +1820,7 @@ function renderInspector(panel) {
   appendSection('config.preferences', 'from Preferences sheet',div => renderConfigTable(div, d.config.preferences));
   appendSection('config.rendering',   'not in Excel',          div => renderConfigTable(div, d.config.rendering));
 
-  const FIXED = new Set(['tasks', 'swimlanes', 'links', 'pipes', 'curtains', 'notes', 'config']);
+  const FIXED = new Set(['tasks', 'swimlanes', 'links', 'pipes', 'curtains', 'notes', 'baseline', 'config']);
   Object.keys(d).forEach(key => {
     if (FIXED.has(key)) return;
     const val = d[key];
