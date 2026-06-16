@@ -2195,11 +2195,24 @@ const ENTITY_FACTORY = {
   curtain:  createEmptyCurtain,
   note:     createEmptyNote,
 };
-const VALID_ENTITIES = new Set([...Object.keys(ENTITY_ARRAY_KEY), 'config']);
+const VALID_ENTITIES = new Set([...Object.keys(ENTITY_ARRAY_KEY), 'config', 'baseline']);
 const VALID_ACTIONS  = new Set(['update', 'add', 'delete', 'duplicate', 'moveUp', 'moveDown']);
 
 function dispatch({ entity, action, id, block, field, value, index } = {}) {
   if (!VALID_ENTITIES.has(entity)) { console.warn('[dispatch] unknown entity:', entity); return; }
+
+  // ── Baseline ──────────────────────────────────────────────────────────────
+  // Not a per-row entity: a whole-array snapshot replaced wholesale (set) or
+  // emptied (clear). Handled before the VALID_ACTIONS gate because its actions
+  // ('set'/'clear') are deliberately outside the shared per-row action set, so
+  // it self-validates here — mirroring the config branch's own action check.
+  if (entity === 'baseline') {
+    if (action === 'set')   { projectData.baseline = Array.isArray(value) ? value : []; runPostMutationHook(); return; }
+    if (action === 'clear') { projectData.baseline = []; runPostMutationHook(); return; }
+    console.warn('[dispatch] action not supported for baseline:', action);
+    return;
+  }
+
   if (!VALID_ACTIONS.has(action))  { console.warn('[dispatch] unknown action:', action); return; }
 
   // ── Config ────────────────────────────────────────────────────────────────
@@ -2313,6 +2326,7 @@ function refreshStatusAndButtons(prefix) {
   const noData = d.tasks.length === 0 && d.swimlanes.length === 0;
   document.getElementById('saveBtn').disabled    = noData;
   document.getElementById('saveSvgBtn').disabled = noData;
+  refreshBaselineButtons();
   const cnt = (num, s) => `${num} ${num === 1 ? s : s + 's'}`;
   document.getElementById('status').textContent =
     `${prefix} — `                                  +
@@ -2322,6 +2336,18 @@ function refreshStatusAndButtons(prefix) {
     `${cnt(d.pipes.length,     'pipe')}, `           +
     `${cnt(d.curtains.length,  'curtain')}, `        +
     `${cnt(d.notes.length,     'note')}`;
+}
+
+// Baseline buttons have a different enable logic from the Save buttons, and
+// baseline set/clear flows through dispatch (whose hook doesn't call
+// refreshStatusAndButtons). Centralised here so file-load, New Project, and the
+// post-Load/Clear calls all stay consistent. Load enabled once a project is
+// loaded (same noData gate as Save); Clear enabled only with a baseline present.
+function refreshBaselineButtons() {
+  const d = projectData;
+  const noData = d.tasks.length === 0 && d.swimlanes.length === 0;
+  document.getElementById('loadBaselineBtn').disabled  = noData;
+  document.getElementById('clearBaselineBtn').disabled = d.baseline.length === 0;
 }
 
 // ── Public entry point ─────────────────────────────────────────────────────────
@@ -2403,6 +2429,54 @@ function initUI() {
     a.download = filename;
     a.click();
     URL.revokeObjectURL(url);
+  });
+
+  // ── Baseline capture ──────────────────────────────────────────────────────
+  // Load Baseline opens a hidden picker; on change we parse the chosen prior
+  // POAP with the same path as the main loader, then capture ONLY its tasks as
+  // { id, startDate, finishDate } records. Everything else the parse produced
+  // (the prior file's own Baseline sheet, its parse notices / validation) is
+  // discarded — parseWorkbook returns a fresh object and never touches the live
+  // projectData, so nothing merges into the current project.
+  document.getElementById('loadBaselineBtn').addEventListener('click', function() {
+    document.getElementById('baselineInput').click();
+  });
+
+  document.getElementById('baselineInput').addEventListener('change', function(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = function(ev) {
+      let parsed;
+      try {
+        const workbook = XLSX.read(new Uint8Array(ev.target.result), { type: 'array', cellDates: true });
+        parsed = parseWorkbook(workbook);
+      } catch (err) {
+        // Read/parse failure: leave any existing baseline intact.
+        console.warn('[baseline] failed to read/parse file:', err);
+        return;
+      }
+      if (parsed.tasks.length === 0) {
+        // No tasks to capture: don't wipe an existing baseline with an empty one.
+        console.warn('[baseline] file has no tasks; baseline unchanged');
+        return;
+      }
+      const records = parsed.tasks.map(t => ({
+        id: t.id, startDate: t.startDate, finishDate: t.finishDate,
+      }));
+      dispatch({ entity: 'baseline', action: 'set', value: records });
+      refreshBaselineButtons();
+    };
+    reader.readAsArrayBuffer(file);
+
+    // Reset so re-selecting the same file re-fires change.
+    e.target.value = '';
+  });
+
+  document.getElementById('clearBaselineBtn').addEventListener('click', function() {
+    dispatch({ entity: 'baseline', action: 'clear' });
+    refreshBaselineButtons();
   });
 
   // Bootstrap the empty Data panel so the entity tab strip and empty Tasks
