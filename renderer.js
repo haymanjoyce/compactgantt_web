@@ -47,7 +47,7 @@ function makePatternId(fillPattern, fillColor, patternColor) {
 }
 
 // ── Main render function ───────────────────────────────────────────────────────
-function renderChart(projectData) {
+function renderChart(projectData, opts = {}) {
   const { tasks, swimlanes, links, pipes, curtains, notes, config } = projectData;
   const { layout, bars, timeline, titles, style, typography, rendering } = config;
 
@@ -585,12 +585,10 @@ function renderChart(projectData) {
   // simply yields no geom and so no ghost. Vertical placement borrows the live
   // task's rowCenterY; the ghost's SHAPE comes from the baseline's own dates, so
   // a task that became a milestone (or vice versa) still ghosts correctly.
-  const ghostFill   = rendering.ghostFillColor;
-  const ghostOp     = rendering.ghostFillOpacity;
-  const ghostStroke = rendering.ghostStrokeColor;
-  const ghostSW     = rendering.ghostStrokeWidth;
-  const ghostAttrs  = `fill="${ghostFill}" fill-opacity="${ghostOp}" stroke="${ghostStroke}" stroke-width="${ghostSW}"`;
-  for (const b of (projectData.baseline || [])) {
+  // opts.showBaseline gates the whole pass — the toggle (slice 3b) and Save SVG
+  // pass it through; it defaults to shown so omitted-arg callers are unaffected.
+  const ghostAttrs = `fill="${rendering.ghostFillColor}" fill-opacity="${rendering.ghostFillOpacity}" stroke="${rendering.ghostStrokeColor}" stroke-width="${rendering.ghostStrokeWidth}"`;
+  if (opts.showBaseline !== false) for (const b of (projectData.baseline || [])) {
     const geom = taskGeom.get(b.id);
     if (!geom) continue;                                    // unmatched
     if (!b.startDate || !b.finishDate) continue;

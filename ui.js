@@ -6,6 +6,12 @@ let loadedFilename = null;
 // dispatcher's post-mutation hook to know which panel to re-render.
 let activeTab = 'data';
 
+// Chart-tab baseline ghost visibility. Transient (never written to the workbook):
+// a non-destructive view toggle over the 3a ghost overlay, distinct from Clear
+// Baseline. Reset to true on file-load / New Project (via resetDataPanelState)
+// and on baseline load, so a toggled-off state never carries into a new project.
+let showBaseline = true;
+
 // Data-panel state — second-tier entity tab, per-entity selection, and the
 // transient next-selection-intent used by toolbar actions and row clicks to
 // communicate the intended post-mutation selection to renderDataPanel.
@@ -30,6 +36,7 @@ function resetDataPanelState() {
   formRenderedForId  = null;
   activeConfigBlock       = 'layout';
   configBlockRenderedFor  = null;
+  showBaseline            = true;
 }
 
 // ── Table renderers ────────────────────────────────────────────────────────────
@@ -89,10 +96,7 @@ function activateTab(name) {
   }
 
   if (name === 'chart') {
-    const panel = document.getElementById('chartPanel');
-    panel.innerHTML = projectData.tasks.length === 0
-      ? '<p>No project loaded</p>'
-      : renderChart(projectData);
+    renderChartPanel();
   }
 
   if (name === 'config') {
@@ -101,6 +105,35 @@ function activateTab(name) {
 
   if (name === 'inspector') {
     renderInspector(document.getElementById('inspectorPanel'));
+  }
+}
+
+// ── Chart panel renderer ───────────────────────────────────────────────────────
+// "No project loaded" when there are no tasks; otherwise a fixed control row (a
+// "Show baseline" checkbox, present only when a baseline exists) above the chart
+// SVG, which lives in an inner .chart-scroll container so the control row stays
+// put as the chart scrolls. Called on chart-tab activation and re-entrantly by
+// the checkbox listener; the showBaseline flag flows into renderChart and the
+// Save SVG export so screen and file stay WYSIWYG.
+function renderChartPanel() {
+  const panel = document.getElementById('chartPanel');
+  if (projectData.tasks.length === 0) {
+    panel.innerHTML = '<p>No project loaded</p>';
+    return;
+  }
+
+  const hasBaseline = projectData.baseline.length > 0;
+  const controlRow = hasBaseline
+    ? `<div class="chart-controls"><label><input type="checkbox" id="showBaselineToggle"${showBaseline ? ' checked' : ''}> Show baseline</label></div>`
+    : '';
+  panel.innerHTML = `${controlRow}<div class="chart-scroll">${renderChart(projectData, { showBaseline })}</div>`;
+
+  const toggle = document.getElementById('showBaselineToggle');
+  if (toggle) {
+    toggle.addEventListener('change', function(e) {
+      showBaseline = e.target.checked;
+      renderChartPanel();
+    });
   }
 }
 
@@ -2421,7 +2454,7 @@ function initUI() {
       ? (loadedFilename.includes('.') ? loadedFilename.slice(0, loadedFilename.lastIndexOf('.')) : loadedFilename)
       : 'compactgantt_chart';
     const filename = base + '.svg';
-    const svg  = renderChart(projectData);
+    const svg  = renderChart(projectData, { showBaseline });
     const blob = new Blob([svg], { type: 'image/svg+xml' });
     const url  = URL.createObjectURL(blob);
     const a    = document.createElement('a');
@@ -2465,6 +2498,10 @@ function initUI() {
       const records = parsed.tasks.map(t => ({
         id: t.id, startDate: t.startDate, finishDate: t.finishDate,
       }));
+      // Set BEFORE the dispatch: the post-mutation hook re-renders the chart
+      // (if active), and we want it to pick up the now-visible default rather
+      // than a stale toggled-off state from a previous baseline.
+      showBaseline = true;
       dispatch({ entity: 'baseline', action: 'set', value: records });
       refreshBaselineButtons();
     };
