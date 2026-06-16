@@ -131,6 +131,7 @@ function renderChart(projectData) {
       dividersSvg = '',    // 6  swimlane dividers
       pipesSvg = '',       // 7  pipes
       curtainEdgesSvg = '', //    curtain boundary lines and badges
+      ghostSvg = '',      //    baseline ghost bars/milestones (lowest foreground layer)
       linkBodySvg = '',   // 8  link bodies (path segments, no heads)
       barsSvg = '',       // 9  task bars
       milestonesSvg = '', // 10 milestones
@@ -576,6 +577,47 @@ function renderChart(projectData) {
     }
   }
 
+  // ── Baseline ghosts ──────────────────────────────────────────────────────────
+  // A pale backdrop of each baseline record behind its matched live task, so a
+  // slipped task shows its baseline position as a grey shadow. Runs after the
+  // task loop so taskGeom is fully populated. Matching rule: taskGeom.get(b.id) —
+  // an orphan baseline id, or a live task that was skipped/out-of-range/orphaned,
+  // simply yields no geom and so no ghost. Vertical placement borrows the live
+  // task's rowCenterY; the ghost's SHAPE comes from the baseline's own dates, so
+  // a task that became a milestone (or vice versa) still ghosts correctly.
+  const ghostFill   = rendering.ghostFillColor;
+  const ghostOp     = rendering.ghostFillOpacity;
+  const ghostStroke = rendering.ghostStrokeColor;
+  const ghostSW     = rendering.ghostStrokeWidth;
+  const ghostAttrs  = `fill="${ghostFill}" fill-opacity="${ghostOp}" stroke="${ghostStroke}" stroke-width="${ghostSW}"`;
+  for (const b of (projectData.baseline || [])) {
+    const geom = taskGeom.get(b.id);
+    if (!geom) continue;                                    // unmatched
+    if (!b.startDate || !b.finishDate) continue;
+    if (b.finishDate < b.startDate) continue;
+    if (b.startDate > chartEndDate || b.finishDate < chartStartDate) continue;  // off-chart
+
+    const cy = geom.rowCenterY;
+    if (b.startDate === b.finishDate) {
+      // Ghost milestone — sharp shape from the baseline's date, no rounded arcs.
+      const cx = xFor(b.startDate);
+      if (bars.milestoneShape === 'circle') {
+        ghostSvg += `<circle cx="${n(cx)}" cy="${n(cy)}" r="${n(milestoneHalf)}" ${ghostAttrs}/>`;
+      } else {
+        const pts = `${n(cx)},${n(cy - milestoneHalf)} ${n(cx + milestoneHalf)},${n(cy)} ${n(cx)},${n(cy + milestoneHalf)} ${n(cx - milestoneHalf)},${n(cy)}`;
+        ghostSvg += `<polygon points="${pts}" ${ghostAttrs}/>`;
+      }
+    } else {
+      // Ghost bar — same vertical band and corner radius as a live bar.
+      const x1 = Math.max(innerX1, xFor(b.startDate));
+      const x2 = Math.min(innerX2, xFor(b.finishDate));
+      const bw = x2 - x1;
+      if (bw <= 0) continue;
+      const barY = cy - barH / 2;
+      ghostSvg += `<rect x="${n(x1)}" y="${n(barY)}" width="${n(bw)}" height="${n(barH)}" rx="${bars.taskCornerRadius}" ${ghostAttrs}/>`;
+    }
+  }
+
   // ── 8 / 11. Links ────────────────────────────────────────────────────────────
   // Pre-compute all valid link geometry into renderedLinks, then emit bodies
   // (slot 8) and heads (slot 11) as separate passes to maintain z-order.
@@ -824,6 +866,7 @@ function renderChart(projectData) {
     `<g id="swimlane-dividers">${dividersSvg}</g>`,
     `<g id="pipes">${pipesSvg}</g>`,
     `<g id="curtain-edges">${curtainEdgesSvg}</g>`,
+    `<g id="baseline-ghosts">${ghostSvg}</g>`,
     `<g id="link-bodies">${linkBodySvg}</g>`,
     `<g id="task-bars">${barsSvg}</g>`,
     `<g id="milestones">${milestonesSvg}</g>`,

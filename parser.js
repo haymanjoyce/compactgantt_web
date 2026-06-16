@@ -412,6 +412,10 @@ function createEmptyProjectData() {
         notePadding:                4,
         noteLineHeightFactor:       1.2,
         noteCornerRadius:           2,
+        ghostFillColor:             '#999999',
+        ghostFillOpacity:           0.35,
+        ghostStrokeColor:           '#666666',
+        ghostStrokeWidth:           1,
       },
     }
   };
