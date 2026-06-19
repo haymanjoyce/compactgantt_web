@@ -21,7 +21,7 @@ Source files (HTML, CSS, JS) live at the repo root; `index.html` is the sole ent
 | `index.html` | Script tags, single `initUI()` call to boot the UI |
 | `dates.js` | Date helpers — single source of truth for all date conversion and arithmetic |
 | `parser.js` | Exports `parseWorkbook(workbook)`, `createEmptyProjectData()`, and per-entity factories `createEmpty<Entity>()` |
-| `renderer.js` | Exports `renderChart(projectData)` → SVG string; no DOM dependency, no side effects |
+| `renderer.js` | Exports `renderChart(projectData, opts)` → SVG string; no DOM dependency, no side effects |
 | `writer.js` | Exports `writeWorkbook(projectData)` → `Uint8Array`; no DOM dependency, no side effects |
 | `validation.js` | Exports `validateProject(projectData)` → `ValidationReport`; pure, no DOM, no side effects |
 | `ui.js` | UI entry point; owns the live `projectData` reference; exports `initUI()` |
@@ -47,7 +47,7 @@ Exports: `toISODate`, `toJsDate`, `daysBetween`, `formatDate`, `isoWeekLabel`, `
 
 `dispatch({ entity, action, id, block, field, value, index })` is the single-writer entry point for all in-app mutations — centralising it is what makes the post-mutation hook unbypassable.
 
-`entity` ∈ `task` / `swimlane` / `link` / `pipe` / `curtain` / `note` / `config`. `action` ∈ `update` / `add` / `delete` / `duplicate` / `moveUp` / `moveDown` (config: `update` only). Unknown entity/action, missing field, or id miss → `console.warn` + no-op (never throws). `add` uses `parser.js` factories and assigns `id = max(existing) + 1` (or `1`); `duplicate` does the same with a fresh id.
+`entity` ∈ `task` / `swimlane` / `link` / `pipe` / `curtain` / `note` / `config` / `baseline`. `action` ∈ `update` / `add` / `delete` / `duplicate` / `moveUp` / `moveDown` (config: `update` only; baseline: `set` / `clear` only — see Baseline comparison). Unknown entity/action, missing field, or id miss → `console.warn` + no-op (never throws). `add` uses `parser.js` factories and assigns `id = max(existing) + 1` (or `1`); `duplicate` does the same with a fresh id. The `baseline` branch is handled before the `VALID_ACTIONS` gate (its actions are outside the shared per-row set), mirroring config's own action check.
 
 **Deletion blocking** (silent no-op, no hook): a task delete is blocked if any link references it. No other delete is blocked — deleting the last task in a swimlane, or a swimlane that still has tasks, is allowed (orphans stay in `projectData`; validation flags them, renderer skips them).
 
@@ -59,7 +59,7 @@ Exports: `toISODate`, `toJsDate`, `daysBetween`, `formatDate`, `isoWeekLabel`, `
 
 `XLSX.read` uses `{ cellDates: true }` so date-formatted cells arrive as JS `Date` objects.
 
-**Entity sheets** (tabular, row 1 = headers): Tasks, Swimlanes, Links, Pipes, Curtains, Notes. Parsed via `parseEntitySheet(worksheet, colDefs)` — header-based, never positional. Missing columns silently take their declared default (backward-compat). Old-name fallbacks live in `colDefs.fallback`; `parser.js` is authoritative.
+**Entity sheets** (tabular, row 1 = headers): Tasks, Swimlanes, Links, Pipes, Curtains, Notes. Parsed via `parseEntitySheet(worksheet, colDefs)` — header-based, never positional. Missing columns silently take their declared default (backward-compat). Old-name fallbacks live in `colDefs.fallback`; `parser.js` is authoritative. The **Baseline** sheet (reference-id snapshot, omitted from the workbook when empty) is also tabular but special — see Baseline comparison.
 
 **Config sheets** (key-value: col A = field, col B = value): Layout, Bars, Timeline, Titles, Style, Typography, Preferences. Parsed via `parseConfigSheet(worksheet)` → map, read with `kvStr/kvInt/kvFloat/kvBool/kvDate` (each takes an optional `fallback` key, try-new-first).
 
@@ -102,7 +102,7 @@ Reason values:
 
 Each `Issue` is `{ entity, id, field, message, value }`. `entity` singular lowercase (same enum as `_parseNotices`); `id` is the row id, `null` for config issues only. `value` is `null` for "missing field" rules, `rawValue` for parse-derived rules, the current field value otherwise.
 
-**Structure.** A thin `validateProject` coordinator calls 14 per-block validators (six entity + eight config) in parse traversal order, concatenating results.
+**Structure.** A thin `validateProject` coordinator calls 15 per-block validators (seven entity + eight config) in parse traversal order, concatenating results. The seventh entity validator, `validateBaseline` (after `validateNotes`), emits only the orphan-id notice — see Baseline comparison.
 
 **`_parseNotices` consumption.** Entity validators filter notices by entity tag, config validators by an explicit field-ownership Set; matching notices emit Issues into the bucket dictated by the locked rule list (same `reason` → different buckets per field). Array stays in place on `projectData`.
 
@@ -116,7 +116,7 @@ Each `Issue` is `{ entity, id, field, message, value }`. `entity` singular lower
 
 ## Renderer (renderer.js)
 
-`renderChart(projectData)` returns a raw SVG string. Key design rules:
+`renderChart(projectData, opts)` returns a raw SVG string. `opts.showBaseline` (default shown) gates the baseline ghost layer — see Baseline comparison. Key design rules:
 
 - **Coordinate areas:** `innerX1/innerX2` from left/right padding; `taskRowY1/taskRowY2` bracket the task rows below the scale bands and above the footer (formulas in source).
 - **Scale band height:** per visible scale, `max(rendering.minScaleBandHeight, scaleFontSize * rendering.scaleFontToBandHeightFactor)`; total = count × bandHeight.
@@ -183,13 +183,33 @@ Finish-to-Start dependency arrows.
 
 **`<defs>` block (combined).** Pattern-fill defs and note clip paths share one `<defs>`; pattern content is collected first but assembled after the notes pass. Omitted when neither is needed.
 
+## Baseline comparison
+
+A persisted snapshot of prior task dates, rendered as "ghost" bars/milestones behind the live chart for plan-vs-actual comparison. Cross-cuts data layer, renderer, validation, and UI.
+
+**Data shape.** `projectData.baseline` is an array of `{ id, startDate, finishDate }` records — seeded `[]` by `createEmptyProjectData()`, **no `createEmpty*` factory**. `id` is a **reference to an existing task's id**, not auto-assigned: the parser reads it verbatim with `toInt` and skips `makeIdAssigner`, so baseline rows never emit `'id_assigned'` (a non-integer id emits `unparseable_number`, bad dates emit `unparseable_date`, all entity-tagged `'baseline'`).
+
+**Excel.** Baseline sheet (columns `ID` / `Start Date` / `Finish Date`), parsed like an entity sheet but **omitted from the workbook when empty** (writer emits it only when `baseline.length > 0`) so non-baselined files don't gain a stray sheet. Writer position: after Notes, before Layout.
+
+**Capture (UI).** Global-toolbar buttons `Load Baseline` (triggers hidden `#baselineInput` file picker) / `Clear Baseline` — NOT a Data-panel entity (no panel/form/nav-table; absent from `ENTITY_TABS`). Load parses another `.xlsx` via `parseWorkbook`, maps its **tasks** to `{ id, startDate, finishDate }` records, sets `showBaseline = true`, and dispatches `{ entity:'baseline', action:'set', value }`; Clear dispatches `action:'clear'`. `refreshBaselineButtons()` gates the buttons (Load disabled when no project; Clear disabled when `baseline.length === 0`).
+
+**Dispatcher.** `set` replaces `projectData.baseline` wholesale (`Array.isArray(value)` guard, else `[]`); `clear` empties it. Both run `runPostMutationHook()`. No per-row actions.
+
+**Rendering (renderer.js).** Ghost layer = unnumbered `<g id="baseline-ghosts">` between slot 7 (pipes/curtain-edges) and slot 8 (link bodies) — the lowest foreground layer, so live bars/links paint over it. Gated by `opts.showBaseline !== false` (omitted → shown, so unaware callers are unaffected). Each record is matched to a live task by `id` via the `taskGeom` Map (unmatched → no ghost, same implicit orphan handling as links). Vertical placement borrows the matched task's `rowCenterY`; **shape derives from the baseline's own dates** (`startDate === finishDate` → ghost milestone using `bars.milestoneShape`; else ghost bar with `bars.taskCornerRadius`), so a task that flipped milestone↔bar still ghosts correctly. Skip rules: unmatched id, null date, `finishDate < startDate`, fully off-chart, non-positive clipped width. Appearance from hard-coded `config.rendering` fields `ghostFillColor` (`#999999`), `ghostFillOpacity` (`0.35`), `ghostStrokeColor` (`#666666`), `ghostStrokeWidth` (`1`).
+
+**Show/hide toggle (Chart tab).** Module-scope `showBaseline` (default `true`, reset to `true` on file-load / New Project / baseline-load). A `Show baseline` checkbox (`#showBaselineToggle`) renders in the Chart panel **only when `baseline.length > 0`**; toggling re-renders the panel. Transient view state — never written to the workbook (distinct from Clear). Save SVG passes the same flag for WYSIWYG.
+
+**Validation.** `validateBaseline` emits **only notices** — one per record whose `id` is non-null and matches no current task (`'No current task matches this baseline id'`). No structural checks (capture keeps data clean, single-author); baseline-tagged parse notices stay Inspector-only.
+
+**Inspector / Issues.** Inspector renders baseline via a fixed `appendSection('baseline', 'from Baseline sheet', …)` (one of the eight FIXED top-level keys the dynamic walk skips). Issues tab: `baseline` sits in `ISSUE_ENTITY_ORDER` (after `note`, before `config`) and `ISSUE_ENTITY_LABEL` (`'Baseline'`).
+
 ## Current UI
 
 Five-tab layout (left to right): **Data → Chart → Issues → Config → Inspector**.
 
 **Data** tab hosts entity-entry panels behind a second-tier strip (Tasks / Swimlanes / Links / Pipes / Curtains / Notes), all live. `renderDataPanel()` is the single entry point — on tab activation, file load, New Project, and every `dispatch()` via the post-mutation hook. The two-pane skeleton (`.entity-left` + `.entity-right`) rebuilds on second-tier switch only; the form container survives mutations so commit-on-blur preserves focus.
 
-**Chart** tab calls `renderChart(projectData)` on every activation into a horizontally-scrollable container ("No project loaded" if no tasks).
+**Chart** tab calls `renderChart(projectData, { showBaseline })` on every activation into a horizontally-scrollable container ("No project loaded" if no tasks); a `Show baseline` checkbox precedes it when a baseline is loaded (see Baseline comparison).
 
 **Inspector** tab renders every `projectData` field as flat read-only tables on every activation — exhaustive, developer-facing. **Issues** tab: see its section below.
 
@@ -243,11 +263,11 @@ Non-gating: Save xlsx/SVG stay enabled regardless of `_validation`. The Inspecto
 
 `renderEntityTable(container, data, derivedKeys = [])` — `derivedKeys` lists keys whose headers get a ` (derived)` suffix (`['isMilestone']` tasks, `['order']` swimlanes). `renderConfigTable(container, config)` renders a two-column key/value table. Inspector only.
 
-**Inspector dynamic walk:** `renderInspector` skips the seven fixed top-level keys and renders the rest (`_parseNotices`, `_validation`) as diagnostic sections — all-arrays object → sub-section per key (how `_validation`'s buckets render); array → entity table; plain object → key-value table; primitive → single-cell; else `JSON.stringify`. `appendSection` builds its `<h2>` from a path span + muted `.inspector-section-source` provenance span.
+**Inspector dynamic walk:** `renderInspector` skips the eight fixed top-level keys (entities + `baseline` + `config`) and renders the rest (`_parseNotices`, `_validation`) as diagnostic sections — all-arrays object → sub-section per key (how `_validation`'s buckets render); array → entity table; plain object → key-value table; primitive → single-cell; else `JSON.stringify`. `appendSection` builds its `<h2>` from a path span + muted `.inspector-section-source` provenance span.
 
 ### Toolbar buttons
 
-Left to right: **New Project** → file input → **Save** (xlsx) → **Save SVG**. New Project replaces `projectData` with `createEmptyProjectData()`, clears `loadedFilename`, resets data-panel + issues-filter state, activates Data, then dispatches two swimlane mutations to seed `"Swimlane 1"`. Both Save buttons share the disabled gate (`tasks.length === 0 && swimlanes.length === 0`) via `refreshStatusAndButtons`. Save SVG calls `renderChart` directly regardless of active tab. Filenames: xlsx uses `loadedFilename` verbatim; SVG swaps the extension for `.svg`.
+Left to right: **New Project** → file input → **Save** (xlsx) → **Save SVG** → **Load Baseline** → **Clear Baseline** (+ hidden `#baselineInput`). New Project replaces `projectData` with `createEmptyProjectData()`, clears `loadedFilename`, resets data-panel + issues-filter state, activates Data, then dispatches two swimlane mutations to seed `"Swimlane 1"`. Both Save buttons share the disabled gate (`tasks.length === 0 && swimlanes.length === 0`) via `refreshStatusAndButtons`; the two Baseline buttons have their own gate via `refreshBaselineButtons` (see Baseline comparison). Save SVG calls `renderChart` directly regardless of active tab, passing the current `showBaseline`. Filenames: xlsx uses `loadedFilename` verbatim; SVG swaps the extension for `.svg`.
 
 `initUI()` ends with a `renderDataPanel()` so the empty tab strip and Tasks panel exist on page load.
 
@@ -257,7 +277,7 @@ Left to right: **New Project** → file input → **Save** (xlsx) → **Save SVG
 
 **Named-column policy:** columns identified by header name, not index; column order is presentation-only. **Sheet order** matches the `addSheet` sequence; `config.rendering` deliberately excluded.
 
-**Entity sheets:** header row + one data row per entity, always emitted even when the array is empty. Derived fields (`task.isMilestone`, `swimlane.order`) not written; `task.dateFormat` and null dates write as empty cells.
+**Entity sheets:** header row + one data row per entity, always emitted even when the array is empty — **except Baseline**, which is omitted entirely when empty (see Baseline comparison). Derived fields (`task.isMilestone`, `swimlane.order`) not written; `task.dateFormat` and null dates write as empty cells.
 
 **Date cells:** YYYY-MM-DD → `new Date(y, m-1, d)`; null → empty. Timeline dates obey `chartStartDateExplicit` / `chartEndDateExplicit` — only written when explicit, else left empty so auto-derivation survives save/reload.
 
