@@ -21,6 +21,9 @@ let activeEntityTab = 'tasks';
 let entitySelections = { tasks: null, swimlanes: null, links: null, pipes: null, curtains: null, notes: null };
 let nextSelectionIntent = null;
 let formRenderedForId = null;
+// The nav-table cell currently being inline-edited, or null. Drives the editor
+// vs text rendering in renderTasksNavTable; cleared on commit/cancel.
+let editingCell = null;
 
 // Config-panel state — active sub-tab and a per-block form-rebuild gate parallel
 // to formRenderedForId. Reset on file load / New Project alongside data-panel
@@ -34,6 +37,7 @@ function resetDataPanelState() {
   entitySelections   = { tasks: null, swimlanes: null, links: null, pipes: null, curtains: null, notes: null };
   nextSelectionIntent = null;
   formRenderedForId  = null;
+  editingCell        = null;
   activeConfigBlock       = 'layout';
   configBlockRenderedFor  = null;
   showBaseline            = true;
@@ -218,14 +222,21 @@ function renderTasksPanel(area) {
   if (selectedId === null && tasks.length > 0) selectedId = tasks[0].id;
   entitySelections.tasks = selectedId;
 
+  // Drop a stale inline-edit marker if its task no longer exists (e.g. deleted
+  // out from under an open editor) so the mount block below never targets it.
+  if (editingCell && !tasks.some(t => t.id === editingCell.taskId)) editingCell = null;
+
   const left  = area.querySelector('.entity-left');
   const right = area.querySelector('.entity-right');
 
-  // Left pane (toolbar + nav table) is rebuilt every render — no focusable
-  // controls inside, so this has no UX cost.
+  // Left pane (toolbar + nav table) is rebuilt every render. It now hosts a
+  // focusable inline-edit input, so preserve the scroll container's position
+  // across the rebuild (no-op on a freshly created pane where scrollTop is 0).
+  const prevScroll = left.scrollTop;
   left.innerHTML = '';
   left.appendChild(renderTasksToolbar(selectedId));
   left.appendChild(renderTasksNavTable(selectedId));
+  left.scrollTop = prevScroll;
 
   // Right pane (form) is rebuilt only when selectedId changes — see policy
   // note inside renderTasksForm.
@@ -491,6 +502,7 @@ function renderTasksNavTable(selectedId) {
         else if (c === 'symbol')                     row += `<td class="task-symbol-col"${symbolBg}>${taskSymbolMarkup(t, computeBarWidth(t, maxDays))}</td>`;
         else if (c === 'days')                       row += `<td class="task-days-col">${escapeHtml(formatTaskDaysCell(t))}</td>`;
         else if (c === 'startDate' || c === 'finishDate') row += `<td>${escapeHtml(formatNavTableDateCell(t[c]))}</td>`;
+        else if (c === 'name')                       row += `<td data-field="name">${escapeHtml(String(t.name == null ? '' : t.name))}</td>`;
         else                                         row += `<td>${escapeHtml(String(t[c] == null ? '' : t[c]))}</td>`;
       });
       return row + '</tr>';
@@ -518,10 +530,14 @@ function renderTasksNavTable(selectedId) {
       const taskId = parseInt(tr.dataset.id, 10);
       if (!Number.isFinite(taskId)) return;
       if (taskId === entitySelections.tasks) return;
+      // An active editor counts as mid-edit whether it's a right-pane form input
+      // or our inline nav-cell editor — the only focusable thing inside
+      // .entity-nav-table is .nav-cell-input, so this cleanly detects either.
       const active = document.activeElement;
-      const inForm = active && active.closest && active.closest('.entity-form');
-      if (inForm) {
-        // Commit-on-blur path (UNCHANGED): a focused form input must commit before
+      const inEdit = active && active.closest &&
+                     (active.closest('.entity-form') || active.closest('.entity-nav-table'));
+      if (inEdit) {
+        // Commit-on-blur path: a focused form OR inline editor must commit before
         // selection moves; the dispatch's post-hook render consumes this intent.
         nextSelectionIntent = { entity: 'tasks', id: taskId };
         active.blur();
@@ -531,6 +547,51 @@ function renderTasksNavTable(selectedId) {
       }
     });
   });
+
+  // Inline-edit entry: double-click an editable cell (those carrying data-field)
+  // to edit in place. Re-renders through renderDataPanel so editor creation
+  // lives in one place (the mount block below); scroll is preserved.
+  table.querySelectorAll('tbody tr[data-id] td[data-field]').forEach(td => {
+    td.addEventListener('dblclick', () => {
+      const taskId = parseInt(td.closest('tr').dataset.id, 10);
+      const field = td.dataset.field;
+      if (!Number.isFinite(taskId)) return;
+      if (editingCell && editingCell.taskId === taskId && editingCell.field === field) return;
+      if (!projectData.tasks.some(t => t.id === taskId)) return;
+      editingCell = { taskId, field };
+      renderDataPanel();
+    });
+  });
+
+  // Mount the editor when editingCell points at a row in this table. Runs on
+  // every render so the editor survives the rebuild that edit-entry triggers.
+  if (editingCell) {
+    const tr = table.querySelector('tbody tr[data-id="' + String(editingCell.taskId) + '"]');
+    const task = projectData.tasks.find(t => t.id === editingCell.taskId);
+    const td = tr && tr.querySelector('td[data-field="' + editingCell.field + '"]');
+    if (td && task) {
+      td.textContent = '';
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.className = 'nav-cell-input';
+      input.value = task.name == null ? '' : String(task.name);
+      td.appendChild(input);
+      attachCommitHandlers(input, () => input.value, val => {
+        editingCell = null;          // clear BEFORE dispatch so the rebuild renders text
+        formRenderedForId = null;    // force form rebuild so the right-pane name reflects the edit
+        dispatch({ entity: 'task', action: 'update', id: task.id, field: 'name', value: val });
+      });
+      // attachCommitHandlers reverts the value on Escape but has no teardown hook;
+      // an inline cell (unlike a persistent form input) must revert to a text cell.
+      input.addEventListener('keydown', ev => {
+        if (ev.key === 'Escape') { editingCell = null; renderDataPanel(); }
+      });
+      // The table is detached when this runs (the caller appends it afterward),
+      // so a synchronous focus() would no-op. Defer to a microtask, by which
+      // point renderDataPanel's appendChild + scrollTop restore have completed.
+      queueMicrotask(() => { input.focus({ preventScroll: true }); input.select(); });
+    }
+  }
 
   return table;
 }

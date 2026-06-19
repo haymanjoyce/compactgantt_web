@@ -89,6 +89,13 @@
     .entity-nav-table th { position: sticky; top: calc(var(--cg-toolbar-height) - 1px); z-index: 1; }
     .entity-nav-table tbody tr { cursor: pointer; }
     .entity-nav-table tbody tr.selected { background: var(--cg-bg-selected); }
+    /* Inline cell editor (double-click a name cell). Fills the cell and inherits
+       the table font; margin:-1px 0 absorbs the 1px border so the row height
+       doesn't jump versus the plain text cell. */
+    .entity-nav-table td .nav-cell-input {
+      width: 100%; box-sizing: border-box; font: inherit;
+      margin: -1px 0; padding: 0 2px; border: 1px solid #888;
+    }
     /* Swimlane group headers in the Tasks nav table: plain bold, not selectable
        (no data-id), and a <td> rather than <th> so the sticky-th rule never applies. */
     .entity-nav-table-group-header td { font-weight: bold; cursor: default; background: var(--cg-bg-toolbar); }
