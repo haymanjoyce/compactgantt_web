@@ -501,7 +501,7 @@ function renderTasksNavTable(selectedId) {
         if (c === 'row')                             row += `<td class="task-row-col">${escapeHtml(String(t.row == null ? '' : t.row))}</td>`;
         else if (c === 'symbol')                     row += `<td class="task-symbol-col"${symbolBg}>${taskSymbolMarkup(t, computeBarWidth(t, maxDays))}</td>`;
         else if (c === 'days')                       row += `<td class="task-days-col">${escapeHtml(formatTaskDaysCell(t))}</td>`;
-        else if (c === 'startDate' || c === 'finishDate') row += `<td>${escapeHtml(formatNavTableDateCell(t[c]))}</td>`;
+        else if (c === 'startDate' || c === 'finishDate') row += `<td data-field="${c}">${escapeHtml(formatNavTableDateCell(t[c]))}</td>`;
         else if (c === 'name')                       row += `<td data-field="name">${escapeHtml(String(t.name == null ? '' : t.name))}</td>`;
         else                                         row += `<td>${escapeHtml(String(t[c] == null ? '' : t[c]))}</td>`;
       });
@@ -570,16 +570,19 @@ function renderTasksNavTable(selectedId) {
     const task = projectData.tasks.find(t => t.id === editingCell.taskId);
     const td = tr && tr.querySelector('td[data-field="' + editingCell.field + '"]');
     if (td && task) {
+      const field = editingCell.field;
+      const isDate = (field === 'startDate' || field === 'finishDate');
       td.textContent = '';
       const input = document.createElement('input');
-      input.type = 'text';
+      input.type = isDate ? 'date' : 'text';
       input.className = 'nav-cell-input';
-      input.value = task.name == null ? '' : String(task.name);
+      input.value = task[field] == null ? '' : String(task[field]);   // canonical ISO for dates, raw for name
       td.appendChild(input);
       attachCommitHandlers(input, () => input.value, val => {
         editingCell = null;          // clear BEFORE dispatch so the rebuild renders text
-        formRenderedForId = null;    // force form rebuild so the right-pane name reflects the edit
-        dispatch({ entity: 'task', action: 'update', id: task.id, field: 'name', value: val });
+        formRenderedForId = null;    // force form rebuild so the right-pane reflects the edit
+        const value = isDate ? (val === '' ? null : val) : val;   // empty date → null; name as-is
+        dispatch({ entity: 'task', action: 'update', id: task.id, field, value });
       });
       // attachCommitHandlers reverts the value on Escape but has no teardown hook;
       // an inline cell (unlike a persistent form input) must revert to a text cell.
@@ -589,7 +592,10 @@ function renderTasksNavTable(selectedId) {
       // The table is detached when this runs (the caller appends it afterward),
       // so a synchronous focus() would no-op. Defer to a microtask, by which
       // point renderDataPanel's appendChild + scrollTop restore have completed.
-      queueMicrotask(() => { input.focus({ preventScroll: true }); input.select(); });
+      queueMicrotask(() => {
+        input.focus({ preventScroll: true });
+        if (!isDate) input.select();   // select-all on text only; not meaningful on a date input
+      });
     }
   }
 
