@@ -518,18 +518,55 @@ function renderTasksNavTable(selectedId) {
       const taskId = parseInt(tr.dataset.id, 10);
       if (!Number.isFinite(taskId)) return;
       if (taskId === entitySelections.tasks) return;
-      nextSelectionIntent = { entity: 'tasks', id: taskId };
       const active = document.activeElement;
       const inForm = active && active.closest && active.closest('.entity-form');
       if (inForm) {
-        active.blur();   // commit-on-blur → dispatch → renderDataPanel consumes intent
+        // Commit-on-blur path (UNCHANGED): a focused form input must commit before
+        // selection moves; the dispatch's post-hook render consumes this intent.
+        nextSelectionIntent = { entity: 'tasks', id: taskId };
+        active.blur();
       } else {
-        renderDataPanel();
+        // Pure selection: non-destructive, preserves nav-table scroll + DOM.
+        selectTask(taskId);
       }
     });
   });
 
   return table;
+}
+
+// Non-destructive Tasks selection: updates selection state, highlight, toolbar,
+// and form in place WITHOUT rebuilding the nav table, so the scroll container's
+// scrollTop and the row DOM survive. Called only for a pure row-click when no
+// form input is mid-edit (the commit-on-blur path is handled in the listener).
+function selectTask(taskId) {
+  if (taskId === entitySelections.tasks) return;
+  const area = document.getElementById('entityArea');
+  if (!area) return;
+  const left  = area.querySelector('.entity-left');
+  const right = area.querySelector('.entity-right');
+  if (!left || !right) return;
+
+  // selectTask is authoritative for selection, so any pending intent left by a
+  // silent dispatch no-op is now obsolete — clear it so the next full render
+  // can't override the row the user just clicked.
+  nextSelectionIntent = null;
+  entitySelections.tasks = taskId;
+
+  // Highlight: move .selected from the old row to the clicked row.
+  const prev = left.querySelector('tbody tr.selected');
+  if (prev) prev.classList.remove('selected');
+  const next = left.querySelector('tbody tr[data-id="' + String(taskId) + '"]');
+  if (next) next.classList.add('selected');
+
+  // Toolbar rebuilt in place — button enablement is selection-dependent.
+  // Replacing the toolbar element leaves the nav-table sibling untouched, so
+  // scrollTop is preserved.
+  const oldToolbar = left.querySelector('.entity-toolbar');
+  if (oldToolbar) left.replaceChild(renderTasksToolbar(taskId), oldToolbar);
+
+  // Form rebuilds because the id changed (renderTasksForm's same-id guard).
+  renderTasksForm(right, taskId);
 }
 
 // ── Tasks edit form ────────────────────────────────────────────────────────────
