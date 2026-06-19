@@ -1887,10 +1887,10 @@ const ISSUE_SEVERITIES = ['errors', 'warnings', 'notices'];
 const ISSUE_SEVERITY_RANK   = { errors: 0, warnings: 1, notices: 2 };
 const ISSUE_SEVERITY_PLURAL = { errors: 'Errors', warnings: 'Warnings', notices: 'Notices' };
 const ISSUE_SEVERITY_PILL   = { errors: 'Error',  warnings: 'Warning',  notices: 'Notice'  };
-const ISSUE_ENTITY_ORDER = ['task', 'swimlane', 'link', 'pipe', 'curtain', 'note', 'config'];
+const ISSUE_ENTITY_ORDER = ['task', 'swimlane', 'link', 'pipe', 'curtain', 'note', 'baseline', 'config'];
 const ISSUE_ENTITY_RANK  = {};
 ISSUE_ENTITY_ORDER.forEach((e, i) => { ISSUE_ENTITY_RANK[e] = i; });
-const ISSUE_ENTITY_LABEL = { task:'Task', swimlane:'Swimlane', link:'Link', pipe:'Pipe', curtain:'Curtain', note:'Note', config:'Config' };
+const ISSUE_ENTITY_LABEL = { task:'Task', swimlane:'Swimlane', link:'Link', pipe:'Pipe', curtain:'Curtain', note:'Note', baseline:'Baseline', config:'Config' };
 const ISSUE_COLUMNS = [
   { key: 'severity', label: 'Severity' },
   { key: 'entity',   label: 'Entity'   },

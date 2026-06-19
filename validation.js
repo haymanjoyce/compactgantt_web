@@ -577,6 +577,20 @@ function validateNotes(projectData) {
   return { errors, warnings, notices };
 }
 
+// ── Baseline ───────────────────────────────────────────────────────────────────
+function validateBaseline(projectData) {
+  const errors = [], warnings = [], notices = [];
+  const taskIds = new Set(projectData.tasks.filter(t => t.id != null).map(t => t.id));
+
+  for (const b of projectData.baseline) {
+    if (b.id !== null && !taskIds.has(b.id)) {
+      notices.push(mkIssue('baseline', b.id, 'id', 'No current task matches this baseline id', b.id));
+    }
+  }
+
+  return { errors, warnings, notices };
+}
+
 // ── Config: Layout ─────────────────────────────────────────────────────────────
 function validateLayout(projectData) {
   const errors = [], warnings = [], notices = [];
@@ -892,6 +906,7 @@ function validateProject(projectData) {
   const all = { errors: [], warnings: [], notices: [] };
   const fns = [
     validateTasks, validateSwimlanes, validateLinks, validatePipes, validateCurtains, validateNotes,
+    validateBaseline,
     validateLayout, validateBars, validateTimeline, validateTitles, validateStyle, validateTypography,
     validatePreferences, validateRendering,
   ];
