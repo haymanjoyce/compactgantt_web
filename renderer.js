@@ -603,6 +603,8 @@ function renderChart(projectData, opts = {}) {
     if (!b.startDate || !b.finishDate) continue;
     if (b.finishDate < b.startDate) continue;
     if (b.startDate > chartEndDate || b.finishDate < chartStartDate) continue;  // off-chart
+    // "Only moved" filter: skip baselines whose dates match the live task's (no slip).
+    if (opts.showOnlyMoved && b.startDate === geom.startDate && b.finishDate === geom.finishDate) continue;
 
     const tint = geom.fillColor;
     if (b.startDate === b.finishDate) {

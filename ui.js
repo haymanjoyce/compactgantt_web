@@ -12,6 +12,12 @@ let activeTab = 'data';
 // and on baseline load, so a toggled-off state never carries into a new project.
 let showBaseline = true;
 
+// Chart-tab "only moved" baseline filter. Transient (never written to the
+// workbook): an opt-in view filter that hides baselines whose dates match the
+// live task's (zero delta). Reset to false on file-load / New Project (via
+// resetDataPanelState).
+let showOnlyMoved = false;
+
 // Data-panel state — second-tier entity tab, per-entity selection, and the
 // transient next-selection-intent used by toolbar actions and row clicks to
 // communicate the intended post-mutation selection to renderDataPanel.
@@ -41,6 +47,7 @@ function resetDataPanelState() {
   activeConfigBlock       = 'layout';
   configBlockRenderedFor  = null;
   showBaseline            = true;
+  showOnlyMoved           = false;
 }
 
 // ── Table renderers ────────────────────────────────────────────────────────────
@@ -113,12 +120,13 @@ function activateTab(name) {
 }
 
 // ── Chart panel renderer ───────────────────────────────────────────────────────
-// "No project loaded" when there are no tasks; otherwise a fixed control row (a
-// "Show baseline" checkbox, present only when a baseline exists) above the chart
-// SVG, which lives in an inner .chart-scroll container so the control row stays
-// put as the chart scrolls. Called on chart-tab activation and re-entrantly by
-// the checkbox listener; the showBaseline flag flows into renderChart and the
-// Save SVG export so screen and file stay WYSIWYG.
+// "No project loaded" when there are no tasks; otherwise a fixed control strip
+// ("Show baseline" and "Only moved" checkboxes, present only when a baseline
+// exists) above the chart SVG, which lives in an inner .chart-scroll container
+// so the control strip stays put as the chart scrolls. Called on chart-tab
+// activation and re-entrantly by the checkbox listeners; the showBaseline and
+// showOnlyMoved flags flow into renderChart and the Save SVG export so screen
+// and file stay WYSIWYG.
 function renderChartPanel() {
   const panel = document.getElementById('chartPanel');
   if (projectData.tasks.length === 0) {
@@ -128,14 +136,25 @@ function renderChartPanel() {
 
   const hasBaseline = projectData.baseline.length > 0;
   const controlRow = hasBaseline
-    ? `<div class="chart-controls"><label><input type="checkbox" id="showBaselineToggle"${showBaseline ? ' checked' : ''}> Show baseline</label></div>`
+    ? `<div class="chart-controls">`
+      + `<label><input type="checkbox" id="showBaselineToggle"${showBaseline ? ' checked' : ''}> Show baseline</label>`
+      + `<label><input type="checkbox" id="showOnlyMovedToggle"${showOnlyMoved ? ' checked' : ''}> Only moved</label>`
+      + `</div>`
     : '';
-  panel.innerHTML = `${controlRow}<div class="chart-scroll">${renderChart(projectData, { showBaseline })}</div>`;
+  panel.innerHTML = `${controlRow}<div class="chart-scroll">${renderChart(projectData, { showBaseline, showOnlyMoved })}</div>`;
 
   const toggle = document.getElementById('showBaselineToggle');
   if (toggle) {
     toggle.addEventListener('change', function(e) {
       showBaseline = e.target.checked;
+      renderChartPanel();
+    });
+  }
+
+  const onlyMovedToggle = document.getElementById('showOnlyMovedToggle');
+  if (onlyMovedToggle) {
+    onlyMovedToggle.addEventListener('change', function(e) {
+      showOnlyMoved = e.target.checked;
       renderChartPanel();
     });
   }
@@ -2565,7 +2584,7 @@ function initUI() {
       ? (loadedFilename.includes('.') ? loadedFilename.slice(0, loadedFilename.lastIndexOf('.')) : loadedFilename)
       : 'compactgantt_chart';
     const filename = base + '.svg';
-    const svg  = renderChart(projectData, { showBaseline });
+    const svg  = renderChart(projectData, { showBaseline, showOnlyMoved });
     const blob = new Blob([svg], { type: 'image/svg+xml' });
     const url  = URL.createObjectURL(blob);
     const a    = document.createElement('a');
