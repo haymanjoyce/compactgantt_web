@@ -654,13 +654,13 @@ function validateLayout(projectData) {
 // ── Config: Bars ───────────────────────────────────────────────────────────────
 function validateBars(projectData) {
   const errors = [], warnings = [], notices = [];
-  const OWNED = new Set(['taskBarHeightFactor','milestoneSizeFactor','milestoneShape','milestoneCornerRadius','taskCornerRadius']);
+  const OWNED = new Set(['taskBarHeightFactor','milestoneSizeFactor','taskBarVerticalOffsetFactor','milestoneVerticalOffsetFactor','milestoneShape','milestoneCornerRadius','taskCornerRadius']);
   const pN = (projectData._parseNotices || []).filter(n => n.entity === 'config' && OWNED.has(n.field));
   const consumed = new Set();
   const bars = projectData.config.bars;
 
   // Errors
-  for (const f of ['taskBarHeightFactor','milestoneSizeFactor','milestoneCornerRadius','taskCornerRadius']) {
+  for (const f of ['taskBarHeightFactor','milestoneSizeFactor','taskBarVerticalOffsetFactor','milestoneVerticalOffsetFactor','milestoneCornerRadius','taskCornerRadius']) {
     const n = consumeNotice(pN, consumed, 'config', null, f, 'unparseable_number');
     if (n) errors.push(mkIssue('config', null, f, noticeMessage(n.reason), n.rawValue));
   }

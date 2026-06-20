@@ -97,6 +97,8 @@ function writeWorkbook(projectData) {
     ['Field', 'Value'],
     ['Task Bar Height Factor',  bars.taskBarHeightFactor],
     ['Milestone Size Factor',   bars.milestoneSizeFactor],
+    ['Task Bar Vertical Offset Factor',   bars.taskBarVerticalOffsetFactor],
+    ['Milestone Vertical Offset Factor', bars.milestoneVerticalOffsetFactor],
     ['Milestone Shape',         bars.milestoneShape],
     ['Milestone Corner Radius', bars.milestoneCornerRadius],
     ['Task Corner Radius',      bars.taskCornerRadius],

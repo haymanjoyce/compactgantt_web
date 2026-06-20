@@ -320,6 +320,8 @@ function createEmptyProjectData() {
       bars: {
         taskBarHeightFactor:       0.7,
         milestoneSizeFactor:       0.7,
+        taskBarVerticalOffsetFactor:   0,
+        milestoneVerticalOffsetFactor: 0,
         milestoneShape:            'diamond',
         milestoneCornerRadius:     0,
         taskCornerRadius:          2,
@@ -752,6 +754,8 @@ function parseWorkbook(workbook) {
   projectData.config.bars = {
     taskBarHeightFactor:       kvFloat(barsKV, 'Task Bar Height Factor',     0.7, undefined, cfg('taskBarHeightFactor')),
     milestoneSizeFactor:       kvFloat(barsKV, 'Milestone Size Factor',      0.7, undefined, cfg('milestoneSizeFactor')),
+    taskBarVerticalOffsetFactor:   kvFloat(barsKV, 'Task Bar Vertical Offset Factor',   0, undefined, cfg('taskBarVerticalOffsetFactor')),
+    milestoneVerticalOffsetFactor: kvFloat(barsKV, 'Milestone Vertical Offset Factor', 0, undefined, cfg('milestoneVerticalOffsetFactor')),
     milestoneShape:            normalizeMilestoneShape(barsKV['Milestone Shape'], cfg('milestoneShape')),
     milestoneCornerRadius:     kvFloat(barsKV, 'Milestone Corner Radius',    0,   undefined, cfg('milestoneCornerRadius')),
     taskCornerRadius:          kvInt(barsKV,   'Task Corner Radius',          2,  undefined, cfg('taskCornerRadius')),

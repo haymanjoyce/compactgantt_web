@@ -1770,6 +1770,8 @@ function renderBarsConfigForm(container) {
 
   addNumberRow(form, 'taskBarHeightFactor',   bars.taskBarHeightFactor,   commitFloat(upd, 'taskBarHeightFactor'),   { step: '0.1' });
   addNumberRow(form, 'milestoneSizeFactor',   bars.milestoneSizeFactor,   commitFloat(upd, 'milestoneSizeFactor'),   { step: '0.1' });
+  addNumberRow(form, 'taskBarVerticalOffsetFactor',   bars.taskBarVerticalOffsetFactor,   commitFloat(upd, 'taskBarVerticalOffsetFactor'),   { step: '0.01' });
+  addNumberRow(form, 'milestoneVerticalOffsetFactor', bars.milestoneVerticalOffsetFactor, commitFloat(upd, 'milestoneVerticalOffsetFactor'), { step: '0.01' });
   addNumberRow(form, 'taskCornerRadius',      bars.taskCornerRadius,      commitInt  (upd, 'taskCornerRadius'));
   addSelectRow(form, 'milestoneShape',        bars.milestoneShape,
     MILESTONE_SHAPE_OPTIONS.map(o => ({ value: o, label: o })),

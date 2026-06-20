@@ -485,8 +485,9 @@ function renderChart(projectData, opts = {}) {
     const color      = task.fillColor;
 
     if (task.isMilestone) {
+      const msOffset = bars.milestoneVerticalOffsetFactor * rowH;
       const cx   = xFor(task.startDate);
-      const cy   = rowCenterY;
+      const cy   = rowCenterY + msOffset;
       const half = milestoneHalf;
 
       if (bars.milestoneShape === 'circle') {
@@ -525,7 +526,7 @@ function renderChart(projectData, opts = {}) {
       if (milestoneLabel) {
         const rightEdge = cx + half;
         const lx = n(rightEdge + rendering.outsideLabelKissingGap + task.labelOffset);
-        const ly = n(rowY + rowH * typography.taskAlignmentFactor);
+        const ly = n(rowY + rowH * typography.taskAlignmentFactor + msOffset);
         if (task.labelOffset > 0) {
           taskLabelsSvg += `<line x1="${n(rightEdge)}" y1="${n(cy)}" x2="${n(rightEdge + task.labelOffset)}" y2="${n(cy)}" stroke="${style.leaderLineColor}" stroke-width="${rendering.leaderLineStrokeWidth}"/>`;
         }
@@ -536,7 +537,9 @@ function renderChart(projectData, opts = {}) {
       const x2   = Math.min(innerX2, xFor(task.finishDate));
       const bw   = x2 - x1;
       if (bw <= 0) continue;
-      const barY = rowY + (rowH - barH) / 2;
+      const barOffset   = bars.taskBarVerticalOffsetFactor * rowH;
+      const barY        = rowY + (rowH - barH) / 2 + barOffset;
+      const barCenterY  = barY + barH / 2;
       const barFill = PATTERN_TYPES.has(task.fillPattern)
         ? `url(#${makePatternId(task.fillPattern, task.fillColor, task.patternColor)})`
         : color;
@@ -544,7 +547,7 @@ function renderChart(projectData, opts = {}) {
 
       taskGeom.set(task.id, {
         absRow,
-        rowCenterY,
+        rowCenterY:  barCenterY,
         barTopY:     barY,
         barBottomY:  barY + barH,
         originX:     xFor(task.finishDate),
@@ -561,15 +564,15 @@ function renderChart(projectData, opts = {}) {
           const truncated = truncateLabel(barLabel, availW, typography.taskFontSize, rendering.charWidthFactor);
           if (truncated) {
             const lx = n(x1 + rendering.insideLabelPadding);
-            const ly = n(rowY + rowH * typography.taskAlignmentFactor);
+            const ly = n(rowY + rowH * typography.taskAlignmentFactor + barOffset);
             taskLabelsSvg += `<text x="${lx}" y="${ly}" text-anchor="start" font-family="'${escapeXml(typography.fontFamily)}'" font-size="${typography.taskFontSize}" fill="${style.insideLabelTextColor}">${escapeXml(truncated)}</text>`;
           }
         } else {
           const rightEdge = xFor(task.finishDate);
           const lx = n(rightEdge + rendering.outsideLabelKissingGap + task.labelOffset);
-          const ly = n(rowY + rowH * typography.taskAlignmentFactor);
+          const ly = n(rowY + rowH * typography.taskAlignmentFactor + barOffset);
           if (task.labelOffset > 0) {
-            taskLabelsSvg += `<line x1="${n(rightEdge)}" y1="${n(rowCenterY)}" x2="${n(rightEdge + task.labelOffset)}" y2="${n(rowCenterY)}" stroke="${style.leaderLineColor}" stroke-width="${rendering.leaderLineStrokeWidth}"/>`;
+            taskLabelsSvg += `<line x1="${n(rightEdge)}" y1="${n(barCenterY)}" x2="${n(rightEdge + task.labelOffset)}" y2="${n(barCenterY)}" stroke="${style.leaderLineColor}" stroke-width="${rendering.leaderLineStrokeWidth}"/>`;
           }
           taskLabelsSvg += `<text x="${lx}" y="${ly}" text-anchor="start" font-family="'${escapeXml(typography.fontFamily)}'" font-size="${typography.taskFontSize}" fill="${style.outsideLabelTextColor}">${escapeXml(barLabel)}</text>`;
         }
