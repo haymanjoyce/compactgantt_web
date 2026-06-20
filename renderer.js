@@ -606,17 +606,15 @@ function renderChart(projectData, opts = {}) {
 
     const tint = geom.fillColor;
     if (b.startDate === b.finishDate) {
-      // Overlay milestone — sharp shape from the baseline's date, no rounded arcs.
+      // Overlay milestone — always an upward triangle (the top half of a diamond),
+      // a distinct baseline marker independent of bars.milestoneShape (which still
+      // drives the live milestone, diamond or circle).
       const half = rowH * bars.baselineMilestoneSizeFactor / 2;
       const cy   = geom.rowCenterY + bars.baselineMilestoneVerticalOffsetFactor * rowH;
       const cx   = xFor(b.startDate);
       const attrs = `fill="${tint}" fill-opacity="${bars.baselineFillOpacity}" stroke="${tint}" stroke-width="${rendering.milestoneStrokeWidth}"`;
-      if (bars.milestoneShape === 'circle') {
-        baselineSvg += `<circle cx="${n(cx)}" cy="${n(cy)}" r="${n(half)}" ${attrs}/>`;
-      } else {
-        const pts = `${n(cx)},${n(cy - half)} ${n(cx + half)},${n(cy)} ${n(cx)},${n(cy + half)} ${n(cx - half)},${n(cy)}`;
-        baselineSvg += `<polygon points="${pts}" ${attrs}/>`;
-      }
+      const pts = `${n(cx)},${n(cy - half)} ${n(cx + half)},${n(cy + half)} ${n(cx - half)},${n(cy + half)}`;
+      baselineSvg += `<polygon points="${pts}" ${attrs}/>`;
     } else {
       // Overlay bar — its own height/offset, reusing the live corner radius.
       const x1 = Math.max(innerX1, xFor(b.startDate));
