@@ -654,13 +654,13 @@ function validateLayout(projectData) {
 // ── Config: Bars ───────────────────────────────────────────────────────────────
 function validateBars(projectData) {
   const errors = [], warnings = [], notices = [];
-  const OWNED = new Set(['taskBarHeightFactor','milestoneSizeFactor','taskBarVerticalOffsetFactor','milestoneVerticalOffsetFactor','milestoneShape','milestoneCornerRadius','taskCornerRadius']);
+  const OWNED = new Set(['taskBarHeightFactor','milestoneSizeFactor','taskBarVerticalOffsetFactor','milestoneVerticalOffsetFactor','baselineBarHeightFactor','baselineBarVerticalOffsetFactor','baselineMilestoneSizeFactor','baselineMilestoneVerticalOffsetFactor','baselineFillOpacity','milestoneShape','milestoneCornerRadius','taskCornerRadius']);
   const pN = (projectData._parseNotices || []).filter(n => n.entity === 'config' && OWNED.has(n.field));
   const consumed = new Set();
   const bars = projectData.config.bars;
 
   // Errors
-  for (const f of ['taskBarHeightFactor','milestoneSizeFactor','taskBarVerticalOffsetFactor','milestoneVerticalOffsetFactor','milestoneCornerRadius','taskCornerRadius']) {
+  for (const f of ['taskBarHeightFactor','milestoneSizeFactor','taskBarVerticalOffsetFactor','milestoneVerticalOffsetFactor','baselineBarHeightFactor','baselineBarVerticalOffsetFactor','baselineMilestoneSizeFactor','baselineMilestoneVerticalOffsetFactor','baselineFillOpacity','milestoneCornerRadius','taskCornerRadius']) {
     const n = consumeNotice(pN, consumed, 'config', null, f, 'unparseable_number');
     if (n) errors.push(mkIssue('config', null, f, noticeMessage(n.reason), n.rawValue));
   }
@@ -669,6 +669,12 @@ function validateBars(projectData) {
   }
   if (isFiniteNumber(bars.milestoneSizeFactor) && bars.milestoneSizeFactor <= 0) {
     errors.push(mkIssue('config', null, 'milestoneSizeFactor', 'milestoneSizeFactor ≤ 0', bars.milestoneSizeFactor));
+  }
+  if (isFiniteNumber(bars.baselineBarHeightFactor) && bars.baselineBarHeightFactor <= 0) {
+    errors.push(mkIssue('config', null, 'baselineBarHeightFactor', 'baselineBarHeightFactor ≤ 0', bars.baselineBarHeightFactor));
+  }
+  if (isFiniteNumber(bars.baselineMilestoneSizeFactor) && bars.baselineMilestoneSizeFactor <= 0) {
+    errors.push(mkIssue('config', null, 'baselineMilestoneSizeFactor', 'baselineMilestoneSizeFactor ≤ 0', bars.baselineMilestoneSizeFactor));
   }
   if (isInteger(bars.taskCornerRadius) && bars.taskCornerRadius < 0) {
     errors.push(mkIssue('config', null, 'taskCornerRadius', 'taskCornerRadius < 0', bars.taskCornerRadius));
@@ -680,6 +686,15 @@ function validateBars(projectData) {
   }
   if (isFiniteNumber(bars.milestoneSizeFactor) && bars.milestoneSizeFactor > 1) {
     warnings.push(mkIssue('config', null, 'milestoneSizeFactor', 'milestoneSizeFactor > 1', bars.milestoneSizeFactor));
+  }
+  if (isFiniteNumber(bars.baselineBarHeightFactor) && bars.baselineBarHeightFactor > 1) {
+    warnings.push(mkIssue('config', null, 'baselineBarHeightFactor', 'baselineBarHeightFactor > 1', bars.baselineBarHeightFactor));
+  }
+  if (isFiniteNumber(bars.baselineMilestoneSizeFactor) && bars.baselineMilestoneSizeFactor > 1) {
+    warnings.push(mkIssue('config', null, 'baselineMilestoneSizeFactor', 'baselineMilestoneSizeFactor > 1', bars.baselineMilestoneSizeFactor));
+  }
+  if (isFiniteNumber(bars.baselineFillOpacity) && (bars.baselineFillOpacity < 0 || bars.baselineFillOpacity > 1)) {
+    warnings.push(mkIssue('config', null, 'baselineFillOpacity', 'baselineFillOpacity out of [0, 1]', bars.baselineFillOpacity));
   }
   {
     const n = consumeNotice(pN, consumed, 'config', null, 'milestoneShape', 'unrecognised_enum');

@@ -131,7 +131,7 @@ function renderChart(projectData, opts = {}) {
       dividersSvg = '',    // 6  swimlane dividers
       pipesSvg = '',       // 7  pipes
       curtainEdgesSvg = '', //    curtain boundary lines and badges
-      ghostSvg = '',      //    baseline ghost bars/milestones (lowest foreground layer)
+      baselineSvg = '',   //    baseline overlay bars/milestones (above live, below link heads)
       linkBodySvg = '',   // 8  link bodies (path segments, no heads)
       barsSvg = '',       // 9  task bars
       milestonesSvg = '', // 10 milestones
@@ -520,6 +520,7 @@ function renderChart(projectData, opts = {}) {
         startDate:   task.startDate,
         finishDate:  task.finishDate,
         isMilestone: true,
+        fillColor:   color,
       });
 
       const milestoneLabel = buildLabelText(task, config.preferences.chartDateFormat);
@@ -555,6 +556,7 @@ function renderChart(projectData, opts = {}) {
         startDate:   task.startDate,
         finishDate:  task.finishDate,
         isMilestone: false,
+        fillColor:   color,
       });
 
       const barLabel = buildLabelText(task, config.preferences.chartDateFormat);
@@ -580,17 +582,21 @@ function renderChart(projectData, opts = {}) {
     }
   }
 
-  // ── Baseline ghosts ──────────────────────────────────────────────────────────
-  // A pale backdrop of each baseline record behind its matched live task, so a
-  // slipped task shows its baseline position as a grey shadow. Runs after the
-  // task loop so taskGeom is fully populated. Matching rule: taskGeom.get(b.id) —
-  // an orphan baseline id, or a live task that was skipped/out-of-range/orphaned,
-  // simply yields no geom and so no ghost. Vertical placement borrows the live
-  // task's rowCenterY; the ghost's SHAPE comes from the baseline's own dates, so
-  // a task that became a milestone (or vice versa) still ghosts correctly.
-  // opts.showBaseline gates the whole pass — the toggle (slice 3b) and Save SVG
-  // pass it through; it defaults to shown so omitted-arg callers are unaffected.
-  const ghostAttrs = `fill="${rendering.ghostFillColor}" fill-opacity="${rendering.ghostFillOpacity}" stroke="${rendering.ghostStrokeColor}" stroke-width="${rendering.ghostStrokeWidth}"`;
+  // ── Baseline overlay ─────────────────────────────────────────────────────────
+  // A smaller, tinted overlay drawn ABOVE each matched live task (see the
+  // baseline-overlay slot in the assembly array) so a slipped task shows its
+  // baseline position paired with the live shape. Runs after the task loop so
+  // taskGeom is fully populated. Matching rule: taskGeom.get(b.id) — an orphan
+  // baseline id, or a live task that was skipped/out-of-range/orphaned, yields no
+  // geom and so no overlay. Vertical placement borrows the live task's
+  // rowCenterY (plus the baseline offset factor); the overlay's SHAPE comes from
+  // the baseline's own dates, so a task that became a milestone (or vice versa)
+  // still overlays correctly. The fill is tinted from the live element's own
+  // colour at baselineFillOpacity, with a full-opacity same-hue stroke — the
+  // crisp hue edge that does the pairing (a patterned live bar tints from its
+  // base colour; the pattern is ignored). opts.showBaseline gates the whole pass
+  // — the toggle (slice 3b) and Save SVG pass it through; it defaults to shown so
+  // omitted-arg callers are unaffected.
   if (opts.showBaseline !== false) for (const b of (projectData.baseline || [])) {
     const geom = taskGeom.get(b.id);
     if (!geom) continue;                                    // unmatched
@@ -598,24 +604,30 @@ function renderChart(projectData, opts = {}) {
     if (b.finishDate < b.startDate) continue;
     if (b.startDate > chartEndDate || b.finishDate < chartStartDate) continue;  // off-chart
 
-    const cy = geom.rowCenterY;
+    const tint = geom.fillColor;
     if (b.startDate === b.finishDate) {
-      // Ghost milestone — sharp shape from the baseline's date, no rounded arcs.
-      const cx = xFor(b.startDate);
+      // Overlay milestone — sharp shape from the baseline's date, no rounded arcs.
+      const half = rowH * bars.baselineMilestoneSizeFactor / 2;
+      const cy   = geom.rowCenterY + bars.baselineMilestoneVerticalOffsetFactor * rowH;
+      const cx   = xFor(b.startDate);
+      const attrs = `fill="${tint}" fill-opacity="${bars.baselineFillOpacity}" stroke="${tint}" stroke-width="${rendering.milestoneStrokeWidth}"`;
       if (bars.milestoneShape === 'circle') {
-        ghostSvg += `<circle cx="${n(cx)}" cy="${n(cy)}" r="${n(milestoneHalf)}" ${ghostAttrs}/>`;
+        baselineSvg += `<circle cx="${n(cx)}" cy="${n(cy)}" r="${n(half)}" ${attrs}/>`;
       } else {
-        const pts = `${n(cx)},${n(cy - milestoneHalf)} ${n(cx + milestoneHalf)},${n(cy)} ${n(cx)},${n(cy + milestoneHalf)} ${n(cx - milestoneHalf)},${n(cy)}`;
-        ghostSvg += `<polygon points="${pts}" ${ghostAttrs}/>`;
+        const pts = `${n(cx)},${n(cy - half)} ${n(cx + half)},${n(cy)} ${n(cx)},${n(cy + half)} ${n(cx - half)},${n(cy)}`;
+        baselineSvg += `<polygon points="${pts}" ${attrs}/>`;
       }
     } else {
-      // Ghost bar — same vertical band and corner radius as a live bar.
+      // Overlay bar — its own height/offset, reusing the live corner radius.
       const x1 = Math.max(innerX1, xFor(b.startDate));
       const x2 = Math.min(innerX2, xFor(b.finishDate));
       const bw = x2 - x1;
       if (bw <= 0) continue;
-      const barY = cy - barH / 2;
-      ghostSvg += `<rect x="${n(x1)}" y="${n(barY)}" width="${n(bw)}" height="${n(barH)}" rx="${bars.taskCornerRadius}" ${ghostAttrs}/>`;
+      const bh   = rowH * bars.baselineBarHeightFactor;
+      const cy   = geom.rowCenterY + bars.baselineBarVerticalOffsetFactor * rowH;
+      const barY = cy - bh / 2;
+      const attrs = `fill="${tint}" fill-opacity="${bars.baselineFillOpacity}" stroke="${tint}" stroke-width="${rendering.taskStrokeWidth}"`;
+      baselineSvg += `<rect x="${n(x1)}" y="${n(barY)}" width="${n(bw)}" height="${n(bh)}" rx="${bars.taskCornerRadius}" ${attrs}/>`;
     }
   }
 
@@ -867,10 +879,10 @@ function renderChart(projectData, opts = {}) {
     `<g id="swimlane-dividers">${dividersSvg}</g>`,
     `<g id="pipes">${pipesSvg}</g>`,
     `<g id="curtain-edges">${curtainEdgesSvg}</g>`,
-    `<g id="baseline-ghosts">${ghostSvg}</g>`,
     `<g id="link-bodies">${linkBodySvg}</g>`,
     `<g id="task-bars">${barsSvg}</g>`,
     `<g id="milestones">${milestonesSvg}</g>`,
+    `<g id="baseline-overlay">${baselineSvg}</g>`,
     `<g id="link-heads">${linkHeadSvg}</g>`,
     `<g id="task-labels">${taskLabelsSvg}</g>`,
     `<g id="swimlane-labels">${labelsSvg}</g>`,

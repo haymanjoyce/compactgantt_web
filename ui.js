@@ -6,8 +6,8 @@ let loadedFilename = null;
 // dispatcher's post-mutation hook to know which panel to re-render.
 let activeTab = 'data';
 
-// Chart-tab baseline ghost visibility. Transient (never written to the workbook):
-// a non-destructive view toggle over the 3a ghost overlay, distinct from Clear
+// Chart-tab baseline overlay visibility. Transient (never written to the workbook):
+// a non-destructive view toggle over the baseline overlay, distinct from Clear
 // Baseline. Reset to true on file-load / New Project (via resetDataPanelState)
 // and on baseline load, so a toggled-off state never carries into a new project.
 let showBaseline = true;
@@ -1772,6 +1772,11 @@ function renderBarsConfigForm(container) {
   addNumberRow(form, 'milestoneSizeFactor',   bars.milestoneSizeFactor,   commitFloat(upd, 'milestoneSizeFactor'),   { step: '0.1' });
   addNumberRow(form, 'taskBarVerticalOffsetFactor',   bars.taskBarVerticalOffsetFactor,   commitFloat(upd, 'taskBarVerticalOffsetFactor'),   { step: '0.01' });
   addNumberRow(form, 'milestoneVerticalOffsetFactor', bars.milestoneVerticalOffsetFactor, commitFloat(upd, 'milestoneVerticalOffsetFactor'), { step: '0.01' });
+  addNumberRow(form, 'baselineBarHeightFactor',           bars.baselineBarHeightFactor,           commitFloat(upd, 'baselineBarHeightFactor'),           { step: '0.01' });
+  addNumberRow(form, 'baselineBarVerticalOffsetFactor',   bars.baselineBarVerticalOffsetFactor,   commitFloat(upd, 'baselineBarVerticalOffsetFactor'),   { step: '0.01' });
+  addNumberRow(form, 'baselineMilestoneSizeFactor',       bars.baselineMilestoneSizeFactor,       commitFloat(upd, 'baselineMilestoneSizeFactor'),       { step: '0.01' });
+  addNumberRow(form, 'baselineMilestoneVerticalOffsetFactor', bars.baselineMilestoneVerticalOffsetFactor, commitFloat(upd, 'baselineMilestoneVerticalOffsetFactor'), { step: '0.01' });
+  addNumberRow(form, 'baselineFillOpacity',               bars.baselineFillOpacity,               commitFloat(upd, 'baselineFillOpacity'),               { step: '0.01' });
   addNumberRow(form, 'taskCornerRadius',      bars.taskCornerRadius,      commitInt  (upd, 'taskCornerRadius'));
   addSelectRow(form, 'milestoneShape',        bars.milestoneShape,
     MILESTONE_SHAPE_OPTIONS.map(o => ({ value: o, label: o })),
