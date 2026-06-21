@@ -364,8 +364,10 @@ function renderChart(projectData, opts = {}) {
       const badgeX     = px + rendering.pipeStrokeWidth / 2;
       const textCX     = badgeX + badgeW / 2;
       const textY      = n(badgeTopY + badgeH * typography.pipeAlignmentFactor);
-      pipeBadgesSvg += `<path d="${roundedRightRectPath(badgeX, badgeTopY, badgeW, badgeH, bars.taskCornerRadius)}" fill="${style.chartBackgroundColor}" stroke="${pipe.color}" stroke-width="${rendering.pipeStrokeWidth * rendering.pipeBadgeStrokeWidthFactor}"/>`;
-      pipeBadgesSvg += `<text x="${n(textCX)}" y="${textY}" text-anchor="middle" font-family="'${escapeXml(typography.fontFamily)}'" font-size="${fontSize}" fill="${pipe.color}">${escapeXml(pipe.name)}</text>`;
+      const badgeFill  = pipe.invertLabel ? pipe.color : style.chartBackgroundColor;
+      const badgeText  = pipe.invertLabel ? style.chartBackgroundColor : pipe.color;
+      pipeBadgesSvg += `<path d="${roundedRightRectPath(badgeX, badgeTopY, badgeW, badgeH, bars.taskCornerRadius)}" fill="${badgeFill}" stroke="${pipe.color}" stroke-width="${rendering.pipeStrokeWidth * rendering.pipeBadgeStrokeWidthFactor}"/>`;
+      pipeBadgesSvg += `<text x="${n(textCX)}" y="${textY}" text-anchor="middle" font-family="'${escapeXml(typography.fontFamily)}'" font-size="${fontSize}" fill="${badgeText}">${escapeXml(pipe.name)}</text>`;
     }
   }
 
@@ -397,8 +399,10 @@ function renderChart(projectData, opts = {}) {
         const badgeX    = anchorX + rendering.curtainStrokeWidth / 2;
         const textCX    = badgeX + badgeW / 2;
         const textY     = n(badgeTopY + badgeH * typography.curtainAlignmentFactor);
-        curtainBadgesSvg += `<path d="${roundedRightRectPath(badgeX, badgeTopY, badgeW, badgeH, bars.taskCornerRadius)}" fill="${style.chartBackgroundColor}" stroke="${curtain.color}" stroke-width="${rendering.curtainStrokeWidth * rendering.curtainBadgeStrokeWidthFactor}"/>`;
-        curtainBadgesSvg += `<text x="${n(textCX)}" y="${textY}" text-anchor="middle" font-family="'${escapeXml(typography.fontFamily)}'" font-size="${fontSize}" fill="${curtain.color}">${escapeXml(curtain.name)}</text>`;
+        const badgeFill = curtain.invertLabel ? curtain.color : style.chartBackgroundColor;
+        const badgeText = curtain.invertLabel ? style.chartBackgroundColor : curtain.color;
+        curtainBadgesSvg += `<path d="${roundedRightRectPath(badgeX, badgeTopY, badgeW, badgeH, bars.taskCornerRadius)}" fill="${badgeFill}" stroke="${curtain.color}" stroke-width="${rendering.curtainStrokeWidth * rendering.curtainBadgeStrokeWidthFactor}"/>`;
+        curtainBadgesSvg += `<text x="${n(textCX)}" y="${textY}" text-anchor="middle" font-family="'${escapeXml(typography.fontFamily)}'" font-size="${fontSize}" fill="${badgeText}">${escapeXml(curtain.name)}</text>`;
       }
     }
   }

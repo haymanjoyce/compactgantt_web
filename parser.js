@@ -42,6 +42,21 @@ function toFloat(val, def = null, ctx) {
   return def;
 }
 
+// Value-level boolean coercion (mirrors kvBool): native boolean passes through;
+// 'yes'/'no' → true/false; blank/null → def; any other non-empty string → def
+// plus an 'unrecognised_boolean' notice.
+function toBool(val, def = false, ctx) {
+  if (val == null || val === '') return def;
+  if (typeof val === 'boolean') return val;
+  const trimmed = String(val).trim().toLowerCase();
+  if (trimmed === 'yes') return true;
+  if (trimmed === 'no')  return false;
+  if (ctx && isNoticeableInput(val)) {
+    recordNotice({ ...ctx, rawValue: val, reason: 'unrecognised_boolean' });
+  }
+  return def;
+}
+
 // ── Date helper ────────────────────────────────────────────────────────────────
 // Wraps toISODate (dates.js) and emits 'unparseable_date' when a non-empty
 // meaningful input does not produce a valid YYYY-MM-DD result. toISODate
@@ -480,6 +495,7 @@ function createEmptyPipe() {
     color:         'black',
     lineStyle:     'solid',
     labelPosition: 1,
+    invertLabel:   false,
   };
 }
 
@@ -493,6 +509,7 @@ function createEmptyCurtain() {
     opacity:       0.2,
     labelPosition: 1,
     labelAnchor:   'start',
+    invertLabel:   false,
   };
 }
 
@@ -631,6 +648,7 @@ function parseWorkbook(workbook) {
       'Color':          { key: 'color',         def: 'black' },
       'Line Style':     { key: 'lineStyle',     def: 'solid' },
       'Label Position': { key: 'labelPosition', def: 1       },
+      'Invert Label':   { key: 'invertLabel',   def: false   },
     });
     const assignPipeId = makeIdAssigner(raw, 'pipe');
     projectData.pipes = raw.map((p, i) => {
@@ -639,6 +657,7 @@ function parseWorkbook(workbook) {
       const date          = parseDate(p.date, c('date'));
       const lineStyle     = normalizeLineStylePipe(p.lineStyle, c('lineStyle'));
       const labelPosition = toFloat(p.labelPosition, 1, c('labelPosition'));
+      const invertLabel   = toBool(p.invertLabel, false, c('invertLabel'));
       return {
         id,
         date,
@@ -646,6 +665,7 @@ function parseWorkbook(workbook) {
         color:         p.color,
         lineStyle,
         labelPosition,
+        invertLabel,
       };
     });
   }
@@ -662,6 +682,7 @@ function parseWorkbook(workbook) {
       'Opacity':        { key: 'opacity',       def: 0.2     },
       'Label Position': { key: 'labelPosition', def: 1       },
       'Label Anchor':   { key: 'labelAnchor',   def: 'start' },
+      'Invert Label':   { key: 'invertLabel',   def: false   },
     });
     const assignCurtainId = makeIdAssigner(raw, 'curtain');
     projectData.curtains = raw.map((cu, i) => {
@@ -672,6 +693,7 @@ function parseWorkbook(workbook) {
       const opacity       = toFloat(cu.opacity, 0.2, c('opacity'));
       const labelPosition = toFloat(cu.labelPosition, 1, c('labelPosition'));
       const labelAnchor   = normalizeLabelAnchor(cu.labelAnchor, c('labelAnchor'));
+      const invertLabel   = toBool(cu.invertLabel, false, c('invertLabel'));
       return {
         id,
         startDate, endDate,
@@ -680,6 +702,7 @@ function parseWorkbook(workbook) {
         opacity,
         labelPosition,
         labelAnchor,
+        invertLabel,
       };
     });
   }

@@ -1436,6 +1436,7 @@ function renderPipesForm(container, selectedId) {
     const n = parseFloat(val);
     if (Number.isFinite(n)) upd('labelPosition', n);
   }, { step: '0.1', min: '0', max: '1' });
+  addCheckboxRow(form, 'invertLabel', pipe.invertLabel, val => upd('invertLabel', val));
 }
 
 // ── Curtains entity panel ──────────────────────────────────────────────────────
@@ -1533,6 +1534,7 @@ function renderCurtainsForm(container, selectedId) {
   addSelectRow(form, 'labelAnchor', cu.labelAnchor,
     CURTAIN_LABEL_ANCHOR_OPTIONS.map(o => ({ value: o, label: o })),
     val => upd('labelAnchor', val));
+  addCheckboxRow(form, 'invertLabel', cu.invertLabel, val => upd('invertLabel', val));
 }
 
 // ── Notes entity panel ─────────────────────────────────────────────────────────

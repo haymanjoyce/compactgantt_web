@@ -45,17 +45,17 @@ function writeWorkbook(projectData) {
 
   // ── 4. Pipes ──────────────────────────────────────────────────────────────────
   addSheet('Pipes', [
-    ['ID', 'Date', 'Name', 'Color', 'Line Style', 'Label Position'],
+    ['ID', 'Date', 'Name', 'Color', 'Line Style', 'Label Position', 'Invert Label'],
     ...pipes.map(p => [
-      p.id, toJsDate(p.date), p.name, p.color, p.lineStyle, p.labelPosition,
+      p.id, toJsDate(p.date), p.name, p.color, p.lineStyle, p.labelPosition, boolStr(p.invertLabel),
     ]),
   ]);
 
   // ── 5. Curtains ───────────────────────────────────────────────────────────────
   addSheet('Curtains', [
-    ['ID', 'Start Date', 'End Date', 'Name', 'Color', 'Opacity', 'Label Position', 'Label Anchor'],
+    ['ID', 'Start Date', 'End Date', 'Name', 'Color', 'Opacity', 'Label Position', 'Label Anchor', 'Invert Label'],
     ...curtains.map(c => [
-      c.id, toJsDate(c.startDate), toJsDate(c.endDate), c.name, c.color, c.opacity, c.labelPosition, c.labelAnchor,
+      c.id, toJsDate(c.startDate), toJsDate(c.endDate), c.name, c.color, c.opacity, c.labelPosition, c.labelAnchor, boolStr(c.invertLabel),
     ]),
   ]);
 

@@ -423,6 +423,10 @@ function validatePipes(projectData) {
       const n = consumeNotice(pN, consumed, 'pipe', id, 'lineStyle', 'unrecognised_enum');
       if (n) warnings.push(mkIssue('pipe', id, 'lineStyle', noticeMessage(n.reason), n.rawValue));
     }
+    {
+      const n = consumeNotice(pN, consumed, 'pipe', id, 'invertLabel', 'unrecognised_boolean');
+      if (n) warnings.push(mkIssue('pipe', id, 'invertLabel', noticeMessage(n.reason), n.rawValue));
+    }
     if (isFiniteNumber(p.labelPosition) && (p.labelPosition < 0 || p.labelPosition > 1)) {
       warnings.push(mkIssue('pipe', id, 'labelPosition', 'labelPosition out of [0, 1]', p.labelPosition));
     }
@@ -495,6 +499,10 @@ function validateCurtains(projectData) {
     {
       const n = consumeNotice(pN, consumed, 'curtain', id, 'labelAnchor', 'unrecognised_enum');
       if (n) warnings.push(mkIssue('curtain', id, 'labelAnchor', noticeMessage(n.reason), n.rawValue));
+    }
+    {
+      const n = consumeNotice(pN, consumed, 'curtain', id, 'invertLabel', 'unrecognised_boolean');
+      if (n) warnings.push(mkIssue('curtain', id, 'invertLabel', noticeMessage(n.reason), n.rawValue));
     }
     if (cs !== null && ce !== null && c.startDate !== null && c.endDate !== null) {
       if (c.endDate < cs || c.startDate > ce) {
