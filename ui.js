@@ -1075,18 +1075,56 @@ function renderSwimlanesNavTable(selectedId) {
       const swId = parseInt(tr.dataset.id, 10);
       if (!Number.isFinite(swId)) return;
       if (swId === entitySelections.swimlanes) return;
-      nextSelectionIntent = { entity: 'swimlanes', id: swId };
       const active = document.activeElement;
       const inForm = active && active.closest && active.closest('.entity-form');
       if (inForm) {
+        // Commit-on-blur path: a focused form must commit before selection
+        // moves; the dispatch's post-hook render consumes this intent.
+        nextSelectionIntent = { entity: 'swimlanes', id: swId };
         active.blur();
       } else {
-        renderDataPanel();
+        // Pure selection: non-destructive, preserves nav-table scroll + DOM.
+        selectSwimlane(swId);
       }
     });
   });
 
   return table;
+}
+
+// Non-destructive Swimlanes selection: updates selection state, highlight,
+// toolbar, and form in place WITHOUT rebuilding the nav table, so the scroll
+// container's scrollTop and the row DOM survive. Mirrors selectTask; called
+// only for a pure row-click when no form input is mid-edit (the commit-on-blur
+// path is handled in the listener).
+function selectSwimlane(swimlaneId) {
+  if (swimlaneId === entitySelections.swimlanes) return;
+  const area = document.getElementById('entityArea');
+  if (!area) return;
+  const left  = area.querySelector('.entity-left');
+  const right = area.querySelector('.entity-right');
+  if (!left || !right) return;
+
+  // selectSwimlane is authoritative for selection, so any pending intent left
+  // by a silent dispatch no-op is now obsolete — clear it so the next full
+  // render can't override the row the user just clicked.
+  nextSelectionIntent = null;
+  entitySelections.swimlanes = swimlaneId;
+
+  // Highlight: move .selected from the old row to the clicked row.
+  const prev = left.querySelector('tbody tr.selected');
+  if (prev) prev.classList.remove('selected');
+  const next = left.querySelector('tbody tr[data-id="' + String(swimlaneId) + '"]');
+  if (next) next.classList.add('selected');
+
+  // Toolbar rebuilt in place — button enablement is selection-dependent.
+  // Replacing the toolbar element leaves the nav-table sibling untouched, so
+  // scrollTop is preserved.
+  const oldToolbar = left.querySelector('.entity-toolbar');
+  if (oldToolbar) left.replaceChild(renderSwimlanesToolbar(swimlaneId), oldToolbar);
+
+  // Form rebuilds because the id changed (renderSwimlanesForm's same-id guard).
+  renderSwimlanesForm(right, swimlaneId);
 }
 
 const LABEL_POSITION_OPTIONS = ['top-right', 'top-left', 'bottom-right', 'bottom-left'];
