@@ -243,7 +243,9 @@ function renderTasksPanel(area) {
 
   // Drop a stale inline-edit marker if its task no longer exists (e.g. deleted
   // out from under an open editor) so the mount block below never targets it.
-  if (editingCell && !tasks.some(t => t.id === editingCell.taskId)) editingCell = null;
+  // Entity-scoped: a swimlane marker is left alone here.
+  if (editingCell && editingCell.entity === 'task' &&
+      !tasks.some(t => t.id === editingCell.id)) editingCell = null;
 
   const left  = area.querySelector('.entity-left');
   const right = area.querySelector('.entity-right');
@@ -575,18 +577,19 @@ function renderTasksNavTable(selectedId) {
       const taskId = parseInt(td.closest('tr').dataset.id, 10);
       const field = td.dataset.field;
       if (!Number.isFinite(taskId)) return;
-      if (editingCell && editingCell.taskId === taskId && editingCell.field === field) return;
+      if (editingCell && editingCell.entity === 'task' &&
+          editingCell.id === taskId && editingCell.field === field) return;
       if (!projectData.tasks.some(t => t.id === taskId)) return;
-      editingCell = { taskId, field };
+      editingCell = { entity: 'task', id: taskId, field };
       renderDataPanel();
     });
   });
 
   // Mount the editor when editingCell points at a row in this table. Runs on
   // every render so the editor survives the rebuild that edit-entry triggers.
-  if (editingCell) {
-    const tr = table.querySelector('tbody tr[data-id="' + String(editingCell.taskId) + '"]');
-    const task = projectData.tasks.find(t => t.id === editingCell.taskId);
+  if (editingCell && editingCell.entity === 'task') {
+    const tr = table.querySelector('tbody tr[data-id="' + String(editingCell.id) + '"]');
+    const task = projectData.tasks.find(t => t.id === editingCell.id);
     const td = tr && tr.querySelector('td[data-field="' + editingCell.field + '"]');
     if (td && task) {
       const field = editingCell.field;
@@ -949,12 +952,22 @@ function renderSwimlanesPanel(area) {
   if (selectedId === null && swimlanes.length > 0) selectedId = swimlanes[0].id;
   entitySelections.swimlanes = selectedId;
 
+  // Drop a stale inline-edit marker if its swimlane no longer exists (e.g.
+  // deleted out from under an open editor) so the mount block never targets it.
+  // Entity-scoped: a task marker is left alone here.
+  if (editingCell && editingCell.entity === 'swimlane' &&
+      !swimlanes.some(s => s.id === editingCell.id)) editingCell = null;
+
   const left  = area.querySelector('.entity-left');
   const right = area.querySelector('.entity-right');
 
+  // Left pane now hosts a focusable inline-edit input, so preserve the scroll
+  // container's position across the rebuild (no-op on a freshly created pane).
+  const prevScroll = left.scrollTop;
   left.innerHTML = '';
   left.appendChild(renderSwimlanesToolbar(selectedId));
   left.appendChild(renderSwimlanesNavTable(selectedId));
+  left.scrollTop = prevScroll;
 
   renderSwimlanesForm(right, selectedId);
 }
@@ -1062,6 +1075,7 @@ function renderSwimlanesNavTable(selectedId) {
         if (c === 'color')         html += `<td${colorBg}></td>`;
         else if (c === 'order')    html += `<td class="swimlane-order-col">${escapeHtml(String(s.order == null ? '' : s.order))}</td>`;
         else if (c === 'rowCount') html += `<td class="swimlane-rowcount-col">${escapeHtml(String(s.rowCount == null ? '' : s.rowCount))}</td>`;
+        else if (c === 'name')     html += `<td data-field="name">${escapeHtml(String(s.name == null ? '' : s.name))}</td>`;
         else                       html += `<td>${escapeHtml(String(s[c] == null ? '' : s[c]))}</td>`;
       });
       html += '</tr>';
@@ -1075,11 +1089,15 @@ function renderSwimlanesNavTable(selectedId) {
       const swId = parseInt(tr.dataset.id, 10);
       if (!Number.isFinite(swId)) return;
       if (swId === entitySelections.swimlanes) return;
+      // An active editor counts as mid-edit whether it's a right-pane form input
+      // or our inline nav-cell editor — the only focusable thing inside
+      // .entity-nav-table is .nav-cell-input, so this cleanly detects either.
       const active = document.activeElement;
-      const inForm = active && active.closest && active.closest('.entity-form');
-      if (inForm) {
-        // Commit-on-blur path: a focused form must commit before selection
-        // moves; the dispatch's post-hook render consumes this intent.
+      const inEdit = active && active.closest &&
+                     (active.closest('.entity-form') || active.closest('.entity-nav-table'));
+      if (inEdit) {
+        // Commit-on-blur path: a focused form OR inline editor must commit before
+        // selection moves; the dispatch's post-hook render consumes this intent.
         nextSelectionIntent = { entity: 'swimlanes', id: swId };
         active.blur();
       } else {
@@ -1088,6 +1106,56 @@ function renderSwimlanesNavTable(selectedId) {
       }
     });
   });
+
+  // Inline-edit entry: double-click the name cell (the only one carrying
+  // data-field) to edit in place. Re-renders through renderDataPanel so editor
+  // creation lives in one place (the mount block below); scroll is preserved.
+  table.querySelectorAll('tbody tr[data-id] td[data-field]').forEach(td => {
+    td.addEventListener('dblclick', () => {
+      const swId = parseInt(td.closest('tr').dataset.id, 10);
+      const field = td.dataset.field;
+      if (!Number.isFinite(swId)) return;
+      if (editingCell && editingCell.entity === 'swimlane' &&
+          editingCell.id === swId && editingCell.field === field) return;
+      if (!projectData.swimlanes.some(s => s.id === swId)) return;
+      editingCell = { entity: 'swimlane', id: swId, field };
+      renderDataPanel();
+    });
+  });
+
+  // Mount the editor when editingCell points at a swimlane in this table. Runs
+  // on every render so the editor survives the rebuild that edit-entry triggers.
+  if (editingCell && editingCell.entity === 'swimlane') {
+    const tr = table.querySelector('tbody tr[data-id="' + String(editingCell.id) + '"]');
+    const sw = projectData.swimlanes.find(s => s.id === editingCell.id);
+    const td = tr && tr.querySelector('td[data-field="' + editingCell.field + '"]');
+    if (td && sw) {
+      const field = editingCell.field;   // 'name' (the only inline-editable swimlane field)
+      td.textContent = '';
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.className = 'nav-cell-input';
+      input.value = sw[field] == null ? '' : String(sw[field]);
+      td.appendChild(input);
+      attachCommitHandlers(input, () => input.value, val => {
+        editingCell = null;          // clear BEFORE dispatch so the rebuild renders text
+        formRenderedForId = null;    // force form rebuild so the right-pane reflects the edit
+        dispatch({ entity: 'swimlane', action: 'update', id: sw.id, field, value: val });
+      });
+      // attachCommitHandlers reverts the value on Escape but has no teardown hook;
+      // an inline cell (unlike a persistent form input) must revert to a text cell.
+      input.addEventListener('keydown', ev => {
+        if (ev.key === 'Escape') { editingCell = null; renderDataPanel(); }
+      });
+      // The table is detached when this runs (the caller appends it afterward),
+      // so a synchronous focus() would no-op. Defer to a microtask, by which
+      // point renderDataPanel's appendChild + scrollTop restore have completed.
+      queueMicrotask(() => {
+        input.focus({ preventScroll: true });
+        input.select();
+      });
+    }
+  }
 
   return table;
 }
