@@ -85,7 +85,7 @@ Reason values:
 |---|---|
 | `'unparseable_date'` | non-empty value that didn't yield a valid YYYY-MM-DD. `parseDate`/`kvDate` validate `toISODate`'s result against `/^\d{4}-\d{2}-\d{2}$/` (so raw `"garbage"` is rejected here, not at `toISODate`). |
 | `'unparseable_number'` | non-empty value `parseInt`/`parseFloat` returned `NaN` for; from `toInt`/`toFloat`/`kvInt`/`kvFloat`. |
-| `'unrecognised_boolean'` | non-empty boolean-field string that, trimmed+lowercased, is neither `'yes'` nor `'no'`; from `kvBool`. Native booleans pass silently. |
+| `'unrecognised_boolean'` | non-empty boolean-field string that, trimmed+lowercased, is neither `'yes'` nor `'no'`; from `kvBool` (config) / `toBool` (entity, e.g. pipe/curtain `invertLabel`). Native booleans pass silently. |
 | `'unrecognised_enum'` | non-empty value a `normalize*` function didn't recognise. |
 | `'id_assigned'` | id cell blank/missing/unparseable; parser assigned `max(existing) + 1`. Suppresses the upstream `unparseable_number` for id cells (one notice per row). Fires on empty id cells too — exception to "empty produces no notice". |
 
@@ -158,9 +158,11 @@ Finish-to-Start dependency arrows.
 
 ## Pipes / Curtains / Notes rendering
 
-**Pipes** (slot 7): vertical reference line at a date with optional badge. Skipped if `date` null or off-chart. Dasharray from `pipe.lineStyle`. Badge only when `name` non-empty; `labelPosition` (float, default `1`) pins top (`1`) / bottom (`0`).
+**Pipes** (line in slot 7, badge in `pipe-badges`): vertical reference line at a date with optional badge. Skipped if `date` null or off-chart. Dasharray from `pipe.lineStyle`. Badge only when `name` non-empty; `labelPosition` (float, default `1`) pins top (`1`) / bottom (`0`).
 
-**Curtains** (slots 3 and 7): tinted band + optional boundary lines + name badge. Skipped if `startDate`/`endDate` null, `endDate <= startDate`, or fully off-chart. Slot 3 `<rect>` clamped to `[innerX1, innerX2]`; boundary lines emit only in-range; badge anchors at `xFor(startDate)` (or `xFor(endDate)` if `labelAnchor === 'end'`).
+**Curtains** (slots 3 and 7, badge in `curtain-badges`): tinted band + optional boundary lines + name badge. Skipped if `startDate`/`endDate` null, `endDate <= startDate`, or fully off-chart. Slot 3 `<rect>` clamped to `[innerX1, innerX2]`; boundary lines emit only in-range; badge anchors at `xFor(startDate)` (or `xFor(endDate)` if `labelAnchor === 'end'`).
+
+**Badges** (shared shape, pipes + curtains): emitted into dedicated `<g>` groups `pipe-badges` then `curtain-badges`, inserted after `curtain-edges` and before `link-bodies` — above every pipe line, curtain edge, and the slot-3 curtain fill, still below tasks/links (pipe badges below curtain badges). Shape via `roundedRightRectPath` (module-level beside `n`): an **open-left tab** (no closing `Z`, so the line-side edge is unstroked but SVG still fills the implied closed subpath), square left corners, right corners rounded to `bars.taskCornerRadius` (clamped to `min(r, h/2, w)`; `0` → plain rect). Border width = line stroke × `rendering.{pipe,curtain}BadgeStrokeWidthFactor` (both `0.5`, code-tier). Badge left x and text centre inset right by half the line's stroke width so the fill butts flush to the line's outer edge (self-scales with line width). Per-entity `invertLabel` (boolean, default `false`): off → background fill + `color` border/text; on → solid `color` fill + background text (border merges into fill). Empty `name` suppresses the badge regardless.
 
 **Notes** (slot 14, above swimlane labels, below header/footer): free-positioned text annotations.
 
@@ -225,7 +227,7 @@ Timeline date fields commit two dispatches — the date AND the paired (non-user
 
 `addNumberRow` parsing is the caller's job (`commitFn` does `parseInt`/`parseFloat`); float call sites pass `step: '0.1'` (fine-tuning factors — the live/baseline vertical-offset and baseline appearance `*Factor` keys — pass `step: '0.01'`). Enum `<select>` options use the canonical lowercase values the parser stores, not Excel casing.
 
-`addCheckboxRow` auto-commits on `'change'` (atomic, no Escape-to-revert) and — unlike the raw-string helpers — passes the parsed boolean directly. Config tab only.
+`addCheckboxRow` auto-commits on `'change'` (atomic, no Escape-to-revert) and — unlike the raw-string helpers — passes the parsed boolean directly. Config tab plus the pipe/curtain `invertLabel` side-form checkbox (the same-id form guard preserves its state across re-render).
 
 `addColorRow` — text input (source of truth) + native color swatch; `opts.allowEmpty` appends a clear ✕. Text→`#rrggbb` sync via `parseTextToHex6` (hex fast-path, else a transient probe element); alpha stripped from the swatch but preserved verbatim in the stored text. Swatch/✕ auto-commit and update `preEditValue` so a later Escape doesn't desync.
 
