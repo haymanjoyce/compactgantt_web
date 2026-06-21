@@ -31,6 +31,18 @@ let formRenderedForId = null;
 // vs text rendering in renderTasksNavTable; cleared on commit/cancel.
 let editingCell = null;
 
+// Registry for the four shared-handler entities (Links / Pipes / Curtains /
+// Notes), keyed by plural. Each entry maps to its singular name, a getter for
+// its live array (a getter — not a captured reference — because projectData is
+// replaced wholesale on file load / New Project), and its form renderer. Drives
+// selectSimpleEntity's parameterised fast path.
+const SIMPLE_ENTITY_REGISTRY = {
+  links:    { singular: 'link',    arr: () => projectData.links,    renderForm: renderLinksForm },
+  pipes:    { singular: 'pipe',    arr: () => projectData.pipes,    renderForm: renderPipesForm },
+  curtains: { singular: 'curtain', arr: () => projectData.curtains, renderForm: renderCurtainsForm },
+  notes:    { singular: 'note',    arr: () => projectData.notes,    renderForm: renderNotesForm },
+};
+
 // Config-panel state — active sub-tab and a per-block form-rebuild gate parallel
 // to formRenderedForId. Reset on file load / New Project alongside data-panel
 // state (function name is a soft misnomer kept for low-churn consistency with
@@ -1315,6 +1327,43 @@ function renderSimpleEntityToolbar(entitySingular, entityPlural, arr, selectedId
   return toolbar;
 }
 
+// Non-destructive selection for the four shared-handler entities: updates
+// selection state, highlight, toolbar, and form in place WITHOUT rebuilding the
+// nav table, so the scroll container's scrollTop and the row DOM survive. A
+// parameterised mirror of selectSwimlane; called only for a pure row-click when
+// no form input is mid-edit (the commit-on-blur path is handled in the listener).
+function selectSimpleEntity(entityPlural, id) {
+  if (id === entitySelections[entityPlural]) return;
+  const reg = SIMPLE_ENTITY_REGISTRY[entityPlural];
+  if (!reg) return;
+  const area = document.getElementById('entityArea');
+  if (!area) return;
+  const left  = area.querySelector('.entity-left');
+  const right = area.querySelector('.entity-right');
+  if (!left || !right) return;
+
+  // This helper is authoritative for selection, so any pending intent left by a
+  // silent dispatch no-op is now obsolete — clear it so the next full render
+  // can't override the row the user just clicked.
+  nextSelectionIntent = null;
+  entitySelections[entityPlural] = id;
+
+  // Highlight: move .selected from the old row to the clicked row.
+  const prev = left.querySelector('tbody tr.selected');
+  if (prev) prev.classList.remove('selected');
+  const next = left.querySelector('tbody tr[data-id="' + String(id) + '"]');
+  if (next) next.classList.add('selected');
+
+  // Toolbar rebuilt in place — button enablement is selection-dependent.
+  // Replacing the toolbar element leaves the nav-table sibling untouched, so
+  // scrollTop is preserved.
+  const oldToolbar = left.querySelector('.entity-toolbar');
+  if (oldToolbar) left.replaceChild(renderSimpleEntityToolbar(reg.singular, entityPlural, reg.arr(), id), oldToolbar);
+
+  // Form rebuilds because the id changed (the form's same-id guard).
+  reg.renderForm(right, id);
+}
+
 // mousedown rather than click so the natural focus shift doesn't commit the
 // in-progress edit through the wrong code path — same reason Tasks/Swimlanes
 // use mousedown. See renderTasksNavTable for the original rationale.
@@ -1324,13 +1373,13 @@ function attachNavTableRowHandlers(table, entityPlural) {
       const id = parseInt(tr.dataset.id, 10);
       if (!Number.isFinite(id)) return;
       if (id === entitySelections[entityPlural]) return;
-      nextSelectionIntent = { entity: entityPlural, id };
       const active = document.activeElement;
       const inForm = active && active.closest && active.closest('.entity-form');
       if (inForm) {
+        nextSelectionIntent = { entity: entityPlural, id };
         active.blur();
       } else {
-        renderDataPanel();
+        selectSimpleEntity(entityPlural, id);
       }
     });
   });
