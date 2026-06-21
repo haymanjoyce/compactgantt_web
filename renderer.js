@@ -40,12 +40,14 @@ function truncateLabel(text, availWidth, fontSize, charWidthFactor) {
 // Format a number to at most 2 decimal places, dropping trailing zeros.
 function n(v) { return parseFloat(v.toFixed(2)); }
 
-// Rectangle with square left corners and rounded right corners (radius r).
+// Tab with an open (unstroked) left edge and rounded right corners (radius r).
+// No closing Z: the left edge isn't stroked, but SVG still fills the implied
+// closed subpath — so the badge sits flush against its line with no left border.
 function roundedRightRectPath(x, y, w, h, r) {
   r = Math.max(0, Math.min(r, h / 2, w));
-  if (r === 0) return `M${n(x)},${n(y)} H${n(x + w)} V${n(y + h)} H${n(x)} Z`;
+  if (r === 0) return `M${n(x)},${n(y)} H${n(x + w)} V${n(y + h)} H${n(x)}`;
   return `M${n(x)},${n(y)} H${n(x + w - r)} A${n(r)},${n(r)} 0 0 1 ${n(x + w)},${n(y + r)}`
-       + ` V${n(y + h - r)} A${n(r)},${n(r)} 0 0 1 ${n(x + w - r)},${n(y + h)} H${n(x)} Z`;
+       + ` V${n(y + h - r)} A${n(r)},${n(r)} 0 0 1 ${n(x + w - r)},${n(y + h)} H${n(x)}`;
 }
 
 const PATTERN_TYPES = new Set(['hatch', 'cross-hatch', 'horizontal', 'vertical', 'dots']);
@@ -359,9 +361,10 @@ function renderChart(projectData, opts = {}) {
       const badgeH     = fontSize + 2 * rendering.pipeBadgePaddingY;
       const areaH      = taskRowY2 - taskRowY1;
       const badgeTopY  = taskRowY1 + (1 - pipe.labelPosition) * (areaH - badgeH);
-      const textCX     = px + badgeW / 2;
+      const badgeX     = px + rendering.pipeStrokeWidth / 2;
+      const textCX     = badgeX + badgeW / 2;
       const textY      = n(badgeTopY + badgeH * typography.pipeAlignmentFactor);
-      pipeBadgesSvg += `<path d="${roundedRightRectPath(px, badgeTopY, badgeW, badgeH, bars.taskCornerRadius)}" fill="${style.chartBackgroundColor}" stroke="${pipe.color}" stroke-width="${rendering.pipeStrokeWidth * rendering.pipeBadgeStrokeWidthFactor}"/>`;
+      pipeBadgesSvg += `<path d="${roundedRightRectPath(badgeX, badgeTopY, badgeW, badgeH, bars.taskCornerRadius)}" fill="${style.chartBackgroundColor}" stroke="${pipe.color}" stroke-width="${rendering.pipeStrokeWidth * rendering.pipeBadgeStrokeWidthFactor}"/>`;
       pipeBadgesSvg += `<text x="${n(textCX)}" y="${textY}" text-anchor="middle" font-family="'${escapeXml(typography.fontFamily)}'" font-size="${fontSize}" fill="${pipe.color}">${escapeXml(pipe.name)}</text>`;
     }
   }
@@ -391,9 +394,10 @@ function renderChart(projectData, opts = {}) {
         const badgeH    = fontSize + 2 * rendering.curtainBadgePaddingY;
         const areaH     = taskRowY2 - taskRowY1;
         const badgeTopY = taskRowY1 + (1 - curtain.labelPosition) * (areaH - badgeH);
-        const textCX    = anchorX + badgeW / 2;
+        const badgeX    = anchorX + rendering.curtainStrokeWidth / 2;
+        const textCX    = badgeX + badgeW / 2;
         const textY     = n(badgeTopY + badgeH * typography.curtainAlignmentFactor);
-        curtainBadgesSvg += `<path d="${roundedRightRectPath(anchorX, badgeTopY, badgeW, badgeH, bars.taskCornerRadius)}" fill="${style.chartBackgroundColor}" stroke="${curtain.color}" stroke-width="${rendering.curtainStrokeWidth * rendering.curtainBadgeStrokeWidthFactor}"/>`;
+        curtainBadgesSvg += `<path d="${roundedRightRectPath(badgeX, badgeTopY, badgeW, badgeH, bars.taskCornerRadius)}" fill="${style.chartBackgroundColor}" stroke="${curtain.color}" stroke-width="${rendering.curtainStrokeWidth * rendering.curtainBadgeStrokeWidthFactor}"/>`;
         curtainBadgesSvg += `<text x="${n(textCX)}" y="${textY}" text-anchor="middle" font-family="'${escapeXml(typography.fontFamily)}'" font-size="${fontSize}" fill="${curtain.color}">${escapeXml(curtain.name)}</text>`;
       }
     }
