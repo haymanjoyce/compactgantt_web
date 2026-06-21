@@ -35,11 +35,14 @@ let editingCell = null;
 // Notes), keyed by plural. Each entry maps to its singular name, a getter for
 // its live array (a getter — not a captured reference — because projectData is
 // replaced wholesale on file load / New Project), and its form renderer. Drives
-// selectSimpleEntity's parameterised fast path.
+// selectSimpleEntity's parameterised fast path. `inlineField` (when present)
+// names the free-text nav-cell that attachInlineNameEditor makes double-click
+// editable — Pipes/Curtains only; Links has no free-text cell and Notes needs a
+// textarea editor, so both omit it (the editor is inert for them).
 const SIMPLE_ENTITY_REGISTRY = {
   links:    { singular: 'link',    arr: () => projectData.links,    renderForm: renderLinksForm },
-  pipes:    { singular: 'pipe',    arr: () => projectData.pipes,    renderForm: renderPipesForm },
-  curtains: { singular: 'curtain', arr: () => projectData.curtains, renderForm: renderCurtainsForm },
+  pipes:    { singular: 'pipe',    arr: () => projectData.pipes,    renderForm: renderPipesForm,    inlineField: 'name' },
+  curtains: { singular: 'curtain', arr: () => projectData.curtains, renderForm: renderCurtainsForm, inlineField: 'name' },
   notes:    { singular: 'note',    arr: () => projectData.notes,    renderForm: renderNotesForm },
 };
 
@@ -1373,9 +1376,14 @@ function attachNavTableRowHandlers(table, entityPlural) {
       const id = parseInt(tr.dataset.id, 10);
       if (!Number.isFinite(id)) return;
       if (id === entitySelections[entityPlural]) return;
+      // An active editor counts as mid-edit whether it's a right-pane form input
+      // or our inline nav-cell editor — the only focusable thing inside
+      // .entity-nav-table is .nav-cell-input, so this cleanly detects either
+      // (harmless for Links/Notes — nothing focusable lives in their nav tables).
       const active = document.activeElement;
-      const inForm = active && active.closest && active.closest('.entity-form');
-      if (inForm) {
+      const inEdit = active && active.closest &&
+                     (active.closest('.entity-form') || active.closest('.entity-nav-table'));
+      if (inEdit) {
         nextSelectionIntent = { entity: entityPlural, id };
         active.blur();
       } else {
@@ -1383,6 +1391,67 @@ function attachNavTableRowHandlers(table, entityPlural) {
       }
     });
   });
+}
+
+// Shared inline `name` editor for the shared-handler tabs — the inline-editing
+// parallel to selectSimpleEntity, registry-driven and modelled on the Swimlanes
+// `name` editor (text field only). Inert for entities without an inlineField
+// (Links/Notes). Wires double-click entry on td[data-field] cells and, on every
+// render, mounts the editor when editingCell points at a row in this table (so
+// the editor survives the rebuild that edit-entry triggers).
+function attachInlineNameEditor(table, entityPlural) {
+  const reg = SIMPLE_ENTITY_REGISTRY[entityPlural];
+  if (!reg || !reg.inlineField) return;
+
+  // Inline-edit entry: double-click the name cell (the only one carrying
+  // data-field) to edit in place. Re-renders through renderDataPanel so editor
+  // creation lives in one place (the mount block below); scroll is preserved.
+  table.querySelectorAll('tbody tr[data-id] td[data-field]').forEach(td => {
+    td.addEventListener('dblclick', () => {
+      const id = parseInt(td.closest('tr').dataset.id, 10);
+      const field = td.dataset.field;
+      if (!Number.isFinite(id)) return;
+      if (editingCell && editingCell.entity === reg.singular &&
+          editingCell.id === id && editingCell.field === field) return;
+      if (!reg.arr().some(o => o.id === id)) return;
+      editingCell = { entity: reg.singular, id, field };
+      renderDataPanel();
+    });
+  });
+
+  // Mount the editor when editingCell points at a row in this table. Runs on
+  // every render so the editor survives the rebuild that edit-entry triggers.
+  if (editingCell && editingCell.entity === reg.singular) {
+    const tr = table.querySelector('tbody tr[data-id="' + String(editingCell.id) + '"]');
+    const obj = reg.arr().find(o => o.id === editingCell.id);
+    const td = tr && tr.querySelector('td[data-field="' + editingCell.field + '"]');
+    if (td && obj) {
+      const field = editingCell.field;   // reg.inlineField ('name')
+      td.textContent = '';
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.className = 'nav-cell-input';
+      input.value = obj[field] == null ? '' : String(obj[field]);
+      td.appendChild(input);
+      attachCommitHandlers(input, () => input.value, val => {
+        editingCell = null;          // clear BEFORE dispatch so the rebuild renders text
+        formRenderedForId = null;    // force form rebuild so the right-pane reflects the edit
+        dispatch({ entity: reg.singular, action: 'update', id: obj.id, field, value: val });
+      });
+      // attachCommitHandlers reverts the value on Escape but has no teardown hook;
+      // an inline cell (unlike a persistent form input) must revert to a text cell.
+      input.addEventListener('keydown', ev => {
+        if (ev.key === 'Escape') { editingCell = null; renderDataPanel(); }
+      });
+      // The table is detached when this runs (the caller appends it afterward),
+      // so a synchronous focus() would no-op. Defer to a microtask, by which
+      // point renderDataPanel's appendChild + scrollTop restore have completed.
+      queueMicrotask(() => {
+        input.focus({ preventScroll: true });
+        input.select();
+      });
+    }
+  }
 }
 
 // ── Links entity panel ─────────────────────────────────────────────────────────
@@ -1510,12 +1579,22 @@ function renderPipesPanel(area) {
   if (selectedId === null && pipes.length > 0) selectedId = pipes[0].id;
   entitySelections.pipes = selectedId;
 
+  // Drop a stale inline-edit marker if its pipe no longer exists (e.g. deleted
+  // out from under an open editor) so the mount block never targets it.
+  // Entity-scoped: other entities' markers are left alone here.
+  if (editingCell && editingCell.entity === 'pipe' &&
+      !pipes.some(p => p.id === editingCell.id)) editingCell = null;
+
   const left  = area.querySelector('.entity-left');
   const right = area.querySelector('.entity-right');
 
+  // Left pane now hosts a focusable inline-edit input, so preserve the scroll
+  // container's position across the rebuild (no-op on a freshly created pane).
+  const prevScroll = left.scrollTop;
   left.innerHTML = '';
   left.appendChild(renderSimpleEntityToolbar('pipe', 'pipes', pipes, selectedId));
   left.appendChild(renderPipesNavTable(selectedId));
+  left.scrollTop = prevScroll;
 
   renderPipesForm(right, selectedId);
 }
@@ -1543,8 +1622,9 @@ function renderPipesNavTable(selectedId) {
         let v;
         if (c === 'date') v = formatNavTableDateCell(p.date);
         else              v = p[c] == null ? '' : p[c];
-        if (c === 'labelPosition') html += `<td class="pipe-labelposition-col">${escapeHtml(String(v))}</td>`;
-        else                       html += `<td>${escapeHtml(String(v))}</td>`;
+        if (c === 'name')               html += `<td data-field="name">${escapeHtml(String(v))}</td>`;
+        else if (c === 'labelPosition') html += `<td class="pipe-labelposition-col">${escapeHtml(String(v))}</td>`;
+        else                            html += `<td>${escapeHtml(String(v))}</td>`;
       });
       html += '</tr>';
     });
@@ -1553,6 +1633,7 @@ function renderPipesNavTable(selectedId) {
   table.innerHTML = html;
 
   attachNavTableRowHandlers(table, 'pipes');
+  attachInlineNameEditor(table, 'pipes');
   return table;
 }
 
@@ -1603,12 +1684,22 @@ function renderCurtainsPanel(area) {
   if (selectedId === null && curtains.length > 0) selectedId = curtains[0].id;
   entitySelections.curtains = selectedId;
 
+  // Drop a stale inline-edit marker if its curtain no longer exists (e.g.
+  // deleted out from under an open editor) so the mount block never targets it.
+  // Entity-scoped: other entities' markers are left alone here.
+  if (editingCell && editingCell.entity === 'curtain' &&
+      !curtains.some(c => c.id === editingCell.id)) editingCell = null;
+
   const left  = area.querySelector('.entity-left');
   const right = area.querySelector('.entity-right');
 
+  // Left pane now hosts a focusable inline-edit input, so preserve the scroll
+  // container's position across the rebuild (no-op on a freshly created pane).
+  const prevScroll = left.scrollTop;
   left.innerHTML = '';
   left.appendChild(renderSimpleEntityToolbar('curtain', 'curtains', curtains, selectedId));
   left.appendChild(renderCurtainsNavTable(selectedId));
+  left.scrollTop = prevScroll;
 
   renderCurtainsForm(right, selectedId);
 }
@@ -1636,8 +1727,9 @@ function renderCurtainsNavTable(selectedId) {
         let v;
         if (c === 'startDate' || c === 'endDate') v = formatNavTableDateCell(cu[c]);
         else                                      v = cu[c] == null ? '' : cu[c];
-        if (c === 'opacity') html += `<td class="curtain-opacity-col">${escapeHtml(String(v))}</td>`;
-        else                 html += `<td>${escapeHtml(String(v))}</td>`;
+        if (c === 'name')         html += `<td data-field="name">${escapeHtml(String(v))}</td>`;
+        else if (c === 'opacity') html += `<td class="curtain-opacity-col">${escapeHtml(String(v))}</td>`;
+        else                      html += `<td>${escapeHtml(String(v))}</td>`;
       });
       html += '</tr>';
     });
@@ -1646,6 +1738,7 @@ function renderCurtainsNavTable(selectedId) {
   table.innerHTML = html;
 
   attachNavTableRowHandlers(table, 'curtains');
+  attachInlineNameEditor(table, 'curtains');
   return table;
 }
 
