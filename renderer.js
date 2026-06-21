@@ -40,6 +40,14 @@ function truncateLabel(text, availWidth, fontSize, charWidthFactor) {
 // Format a number to at most 2 decimal places, dropping trailing zeros.
 function n(v) { return parseFloat(v.toFixed(2)); }
 
+// Rectangle with square left corners and rounded right corners (radius r).
+function roundedRightRectPath(x, y, w, h, r) {
+  r = Math.max(0, Math.min(r, h / 2, w));
+  if (r === 0) return `M${n(x)},${n(y)} H${n(x + w)} V${n(y + h)} H${n(x)} Z`;
+  return `M${n(x)},${n(y)} H${n(x + w - r)} A${n(r)},${n(r)} 0 0 1 ${n(x + w)},${n(y + r)}`
+       + ` V${n(y + h - r)} A${n(r)},${n(r)} 0 0 1 ${n(x + w - r)},${n(y + h)} H${n(x)} Z`;
+}
+
 const PATTERN_TYPES = new Set(['hatch', 'cross-hatch', 'horizontal', 'vertical', 'dots']);
 
 function makePatternId(fillPattern, fillColor, patternColor) {
@@ -130,7 +138,9 @@ function renderChart(projectData, opts = {}) {
       scaleSvg = '',       // 5  scale bands
       dividersSvg = '',    // 6  swimlane dividers
       pipesSvg = '',       // 7  pipes
-      curtainEdgesSvg = '', //    curtain boundary lines and badges
+      curtainEdgesSvg = '', //    curtain boundary lines
+      pipeBadgesSvg = '',  //    pipe badges (above pipe lines/curtain edges/fill)
+      curtainBadgesSvg = '', //  curtain badges
       baselineSvg = '',   //    baseline overlay bars/milestones (above live, below link heads)
       linkBodySvg = '',   // 8  link bodies (path segments, no heads)
       barsSvg = '',       // 9  task bars
@@ -351,12 +361,12 @@ function renderChart(projectData, opts = {}) {
       const badgeTopY  = taskRowY1 + (1 - pipe.labelPosition) * (areaH - badgeH);
       const textCX     = px + badgeW / 2;
       const textY      = n(badgeTopY + badgeH * typography.pipeAlignmentFactor);
-      pipesSvg += `<rect x="${n(px)}" y="${n(badgeTopY)}" width="${n(badgeW)}" height="${n(badgeH)}" fill="${style.chartBackgroundColor}" stroke="${pipe.color}" stroke-width="${rendering.pipeStrokeWidth}"/>`;
-      pipesSvg += `<text x="${n(textCX)}" y="${textY}" text-anchor="middle" font-family="'${escapeXml(typography.fontFamily)}'" font-size="${fontSize}" fill="${pipe.color}">${escapeXml(pipe.name)}</text>`;
+      pipeBadgesSvg += `<path d="${roundedRightRectPath(px, badgeTopY, badgeW, badgeH, bars.taskCornerRadius)}" fill="${style.chartBackgroundColor}" stroke="${pipe.color}" stroke-width="${rendering.pipeStrokeWidth * rendering.pipeBadgeStrokeWidthFactor}"/>`;
+      pipeBadgesSvg += `<text x="${n(textCX)}" y="${textY}" text-anchor="middle" font-family="'${escapeXml(typography.fontFamily)}'" font-size="${fontSize}" fill="${pipe.color}">${escapeXml(pipe.name)}</text>`;
     }
   }
 
-  // ── 7. Curtain boundary lines and badges ─────────────────────────────────────
+  // ── 7. Curtain boundary lines (badges → curtainBadgesSvg, above) ─────────────
   for (const curtain of curtains) {
     if (!curtain.startDate || !curtain.endDate) continue;
     if (curtain.endDate <= curtain.startDate) continue;
@@ -383,8 +393,8 @@ function renderChart(projectData, opts = {}) {
         const badgeTopY = taskRowY1 + (1 - curtain.labelPosition) * (areaH - badgeH);
         const textCX    = anchorX + badgeW / 2;
         const textY     = n(badgeTopY + badgeH * typography.curtainAlignmentFactor);
-        curtainEdgesSvg += `<rect x="${n(anchorX)}" y="${n(badgeTopY)}" width="${n(badgeW)}" height="${n(badgeH)}" fill="${style.chartBackgroundColor}" stroke="${curtain.color}" stroke-width="${rendering.curtainStrokeWidth}"/>`;
-        curtainEdgesSvg += `<text x="${n(textCX)}" y="${textY}" text-anchor="middle" font-family="'${escapeXml(typography.fontFamily)}'" font-size="${fontSize}" fill="${curtain.color}">${escapeXml(curtain.name)}</text>`;
+        curtainBadgesSvg += `<path d="${roundedRightRectPath(anchorX, badgeTopY, badgeW, badgeH, bars.taskCornerRadius)}" fill="${style.chartBackgroundColor}" stroke="${curtain.color}" stroke-width="${rendering.curtainStrokeWidth * rendering.curtainBadgeStrokeWidthFactor}"/>`;
+        curtainBadgesSvg += `<text x="${n(textCX)}" y="${textY}" text-anchor="middle" font-family="'${escapeXml(typography.fontFamily)}'" font-size="${fontSize}" fill="${curtain.color}">${escapeXml(curtain.name)}</text>`;
       }
     }
   }
@@ -879,6 +889,8 @@ function renderChart(projectData, opts = {}) {
     `<g id="swimlane-dividers">${dividersSvg}</g>`,
     `<g id="pipes">${pipesSvg}</g>`,
     `<g id="curtain-edges">${curtainEdgesSvg}</g>`,
+    `<g id="pipe-badges">${pipeBadgesSvg}</g>`,
+    `<g id="curtain-badges">${curtainBadgesSvg}</g>`,
     `<g id="link-bodies">${linkBodySvg}</g>`,
     `<g id="task-bars">${barsSvg}</g>`,
     `<g id="milestones">${milestonesSvg}</g>`,
