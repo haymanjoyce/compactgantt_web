@@ -35,15 +35,29 @@ let editingCell = null;
 // Notes), keyed by plural. Each entry maps to its singular name, a getter for
 // its live array (a getter — not a captured reference — because projectData is
 // replaced wholesale on file load / New Project), and its form renderer. Drives
-// selectSimpleEntity's parameterised fast path. `inlineField` (when present)
-// names the free-text nav-cell that attachInlineNameEditor makes double-click
-// editable — Pipes/Curtains only; Links has no free-text cell and Notes needs a
-// textarea editor, so both omit it (the editor is inert for them).
+// selectSimpleEntity's parameterised fast path. (Inline cell editing is no
+// longer driven from here — see INLINE_EDIT_REGISTRY / attachInlineEditor.)
 const SIMPLE_ENTITY_REGISTRY = {
   links:    { singular: 'link',    arr: () => projectData.links,    renderForm: renderLinksForm },
-  pipes:    { singular: 'pipe',    arr: () => projectData.pipes,    renderForm: renderPipesForm,    inlineField: 'name' },
-  curtains: { singular: 'curtain', arr: () => projectData.curtains, renderForm: renderCurtainsForm, inlineField: 'name' },
+  pipes:    { singular: 'pipe',    arr: () => projectData.pipes,    renderForm: renderPipesForm },
+  curtains: { singular: 'curtain', arr: () => projectData.curtains, renderForm: renderCurtainsForm },
   notes:    { singular: 'note',    arr: () => projectData.notes,    renderForm: renderNotesForm },
+};
+
+// Registry for inline nav-cell editing, keyed by SINGULAR entity (matching
+// editingCell.entity and the dispatch entity, so the mount code needs no
+// plural↔singular translation). `arr` is a getter — not a captured reference —
+// because projectData is replaced wholesale on file load / New Project. `fields`
+// maps each inline-editable field to its editor type ('text' | 'date'). Tasks
+// and Swimlanes have bespoke (non-shared) row handlers, so they live here rather
+// than in SIMPLE_ENTITY_REGISTRY; Links (no free-text cell) and Notes (multi-line
+// text needs a textarea) are deliberately absent — attachInlineEditor is inert
+// for any entity not listed.
+const INLINE_EDIT_REGISTRY = {
+  task:     { arr: () => projectData.tasks,     fields: { name: 'text', startDate: 'date', finishDate: 'date' } },
+  swimlane: { arr: () => projectData.swimlanes, fields: { name: 'text' } },
+  pipe:     { arr: () => projectData.pipes,     fields: { name: 'text', date: 'date' } },
+  curtain:  { arr: () => projectData.curtains,  fields: { name: 'text', startDate: 'date', endDate: 'date' } },
 };
 
 // Config-panel state — active sub-tab and a per-block form-rebuild gate parallel
@@ -584,57 +598,7 @@ function renderTasksNavTable(selectedId) {
     });
   });
 
-  // Inline-edit entry: double-click an editable cell (those carrying data-field)
-  // to edit in place. Re-renders through renderDataPanel so editor creation
-  // lives in one place (the mount block below); scroll is preserved.
-  table.querySelectorAll('tbody tr[data-id] td[data-field]').forEach(td => {
-    td.addEventListener('dblclick', () => {
-      const taskId = parseInt(td.closest('tr').dataset.id, 10);
-      const field = td.dataset.field;
-      if (!Number.isFinite(taskId)) return;
-      if (editingCell && editingCell.entity === 'task' &&
-          editingCell.id === taskId && editingCell.field === field) return;
-      if (!projectData.tasks.some(t => t.id === taskId)) return;
-      editingCell = { entity: 'task', id: taskId, field };
-      renderDataPanel();
-    });
-  });
-
-  // Mount the editor when editingCell points at a row in this table. Runs on
-  // every render so the editor survives the rebuild that edit-entry triggers.
-  if (editingCell && editingCell.entity === 'task') {
-    const tr = table.querySelector('tbody tr[data-id="' + String(editingCell.id) + '"]');
-    const task = projectData.tasks.find(t => t.id === editingCell.id);
-    const td = tr && tr.querySelector('td[data-field="' + editingCell.field + '"]');
-    if (td && task) {
-      const field = editingCell.field;
-      const isDate = (field === 'startDate' || field === 'finishDate');
-      td.textContent = '';
-      const input = document.createElement('input');
-      input.type = isDate ? 'date' : 'text';
-      input.className = 'nav-cell-input';
-      input.value = task[field] == null ? '' : String(task[field]);   // canonical ISO for dates, raw for name
-      td.appendChild(input);
-      attachCommitHandlers(input, () => input.value, val => {
-        editingCell = null;          // clear BEFORE dispatch so the rebuild renders text
-        formRenderedForId = null;    // force form rebuild so the right-pane reflects the edit
-        const value = isDate ? (val === '' ? null : val) : val;   // empty date → null; name as-is
-        dispatch({ entity: 'task', action: 'update', id: task.id, field, value });
-      });
-      // attachCommitHandlers reverts the value on Escape but has no teardown hook;
-      // an inline cell (unlike a persistent form input) must revert to a text cell.
-      input.addEventListener('keydown', ev => {
-        if (ev.key === 'Escape') { editingCell = null; renderDataPanel(); }
-      });
-      // The table is detached when this runs (the caller appends it afterward),
-      // so a synchronous focus() would no-op. Defer to a microtask, by which
-      // point renderDataPanel's appendChild + scrollTop restore have completed.
-      queueMicrotask(() => {
-        input.focus({ preventScroll: true });
-        if (!isDate) input.select();   // select-all on text only; not meaningful on a date input
-      });
-    }
-  }
+  attachInlineEditor(table, 'task');
 
   return table;
 }
@@ -1122,55 +1086,7 @@ function renderSwimlanesNavTable(selectedId) {
     });
   });
 
-  // Inline-edit entry: double-click the name cell (the only one carrying
-  // data-field) to edit in place. Re-renders through renderDataPanel so editor
-  // creation lives in one place (the mount block below); scroll is preserved.
-  table.querySelectorAll('tbody tr[data-id] td[data-field]').forEach(td => {
-    td.addEventListener('dblclick', () => {
-      const swId = parseInt(td.closest('tr').dataset.id, 10);
-      const field = td.dataset.field;
-      if (!Number.isFinite(swId)) return;
-      if (editingCell && editingCell.entity === 'swimlane' &&
-          editingCell.id === swId && editingCell.field === field) return;
-      if (!projectData.swimlanes.some(s => s.id === swId)) return;
-      editingCell = { entity: 'swimlane', id: swId, field };
-      renderDataPanel();
-    });
-  });
-
-  // Mount the editor when editingCell points at a swimlane in this table. Runs
-  // on every render so the editor survives the rebuild that edit-entry triggers.
-  if (editingCell && editingCell.entity === 'swimlane') {
-    const tr = table.querySelector('tbody tr[data-id="' + String(editingCell.id) + '"]');
-    const sw = projectData.swimlanes.find(s => s.id === editingCell.id);
-    const td = tr && tr.querySelector('td[data-field="' + editingCell.field + '"]');
-    if (td && sw) {
-      const field = editingCell.field;   // 'name' (the only inline-editable swimlane field)
-      td.textContent = '';
-      const input = document.createElement('input');
-      input.type = 'text';
-      input.className = 'nav-cell-input';
-      input.value = sw[field] == null ? '' : String(sw[field]);
-      td.appendChild(input);
-      attachCommitHandlers(input, () => input.value, val => {
-        editingCell = null;          // clear BEFORE dispatch so the rebuild renders text
-        formRenderedForId = null;    // force form rebuild so the right-pane reflects the edit
-        dispatch({ entity: 'swimlane', action: 'update', id: sw.id, field, value: val });
-      });
-      // attachCommitHandlers reverts the value on Escape but has no teardown hook;
-      // an inline cell (unlike a persistent form input) must revert to a text cell.
-      input.addEventListener('keydown', ev => {
-        if (ev.key === 'Escape') { editingCell = null; renderDataPanel(); }
-      });
-      // The table is detached when this runs (the caller appends it afterward),
-      // so a synchronous focus() would no-op. Defer to a microtask, by which
-      // point renderDataPanel's appendChild + scrollTop restore have completed.
-      queueMicrotask(() => {
-        input.focus({ preventScroll: true });
-        input.select();
-      });
-    }
-  }
+  attachInlineEditor(table, 'swimlane');
 
   return table;
 }
@@ -1393,50 +1309,52 @@ function attachNavTableRowHandlers(table, entityPlural) {
   });
 }
 
-// Shared inline `name` editor for the shared-handler tabs — the inline-editing
-// parallel to selectSimpleEntity, registry-driven and modelled on the Swimlanes
-// `name` editor (text field only). Inert for entities without an inlineField
-// (Links/Notes). Wires double-click entry on td[data-field] cells and, on every
-// render, mounts the editor when editingCell points at a row in this table (so
-// the editor survives the rebuild that edit-entry triggers).
-function attachInlineNameEditor(table, entityPlural) {
-  const reg = SIMPLE_ENTITY_REGISTRY[entityPlural];
-  if (!reg || !reg.inlineField) return;
+// Canonical inline nav-cell editor, shared by all four inline-edit tabs (Tasks,
+// Swimlanes, Pipes, Curtains) and driven by INLINE_EDIT_REGISTRY. Inert for any
+// entity not in the registry (Links/Notes). Wires double-click entry on
+// td[data-field] cells and, on every render, mounts the editor when editingCell
+// points at a row in this table (so the editor survives the rebuild that
+// edit-entry triggers). Per-field 'text'/'date' type comes from the registry.
+function attachInlineEditor(table, entitySingular) {
+  const reg = INLINE_EDIT_REGISTRY[entitySingular];
+  if (!reg) return;
 
-  // Inline-edit entry: double-click the name cell (the only one carrying
-  // data-field) to edit in place. Re-renders through renderDataPanel so editor
-  // creation lives in one place (the mount block below); scroll is preserved.
+  // Inline-edit entry: double-click an editable cell (those carrying data-field)
+  // to edit in place. Re-renders through renderDataPanel so editor creation
+  // lives in one place (the mount block below); scroll is preserved.
   table.querySelectorAll('tbody tr[data-id] td[data-field]').forEach(td => {
     td.addEventListener('dblclick', () => {
       const id = parseInt(td.closest('tr').dataset.id, 10);
       const field = td.dataset.field;
       if (!Number.isFinite(id)) return;
-      if (editingCell && editingCell.entity === reg.singular &&
+      if (editingCell && editingCell.entity === entitySingular &&
           editingCell.id === id && editingCell.field === field) return;
       if (!reg.arr().some(o => o.id === id)) return;
-      editingCell = { entity: reg.singular, id, field };
+      editingCell = { entity: entitySingular, id, field };
       renderDataPanel();
     });
   });
 
   // Mount the editor when editingCell points at a row in this table. Runs on
   // every render so the editor survives the rebuild that edit-entry triggers.
-  if (editingCell && editingCell.entity === reg.singular) {
+  if (editingCell && editingCell.entity === entitySingular) {
     const tr = table.querySelector('tbody tr[data-id="' + String(editingCell.id) + '"]');
     const obj = reg.arr().find(o => o.id === editingCell.id);
     const td = tr && tr.querySelector('td[data-field="' + editingCell.field + '"]');
     if (td && obj) {
-      const field = editingCell.field;   // reg.inlineField ('name')
+      const field = editingCell.field;
+      const isDate = reg.fields[field] === 'date';
       td.textContent = '';
       const input = document.createElement('input');
-      input.type = 'text';
+      input.type = isDate ? 'date' : 'text';
       input.className = 'nav-cell-input';
-      input.value = obj[field] == null ? '' : String(obj[field]);
+      input.value = obj[field] == null ? '' : String(obj[field]);   // canonical ISO for dates, raw for text
       td.appendChild(input);
       attachCommitHandlers(input, () => input.value, val => {
         editingCell = null;          // clear BEFORE dispatch so the rebuild renders text
         formRenderedForId = null;    // force form rebuild so the right-pane reflects the edit
-        dispatch({ entity: reg.singular, action: 'update', id: obj.id, field, value: val });
+        const value = isDate ? (val === '' ? null : val) : val;   // empty date → null; text as-is
+        dispatch({ entity: entitySingular, action: 'update', id: obj.id, field, value });
       });
       // attachCommitHandlers reverts the value on Escape but has no teardown hook;
       // an inline cell (unlike a persistent form input) must revert to a text cell.
@@ -1448,7 +1366,7 @@ function attachInlineNameEditor(table, entityPlural) {
       // point renderDataPanel's appendChild + scrollTop restore have completed.
       queueMicrotask(() => {
         input.focus({ preventScroll: true });
-        input.select();
+        if (!isDate) input.select();   // select-all on text only; not meaningful on a date input
       });
     }
   }
@@ -1623,6 +1541,7 @@ function renderPipesNavTable(selectedId) {
         if (c === 'date') v = formatNavTableDateCell(p.date);
         else              v = p[c] == null ? '' : p[c];
         if (c === 'name')               html += `<td data-field="name">${escapeHtml(String(v))}</td>`;
+        else if (c === 'date')          html += `<td data-field="date">${escapeHtml(String(v))}</td>`;
         else if (c === 'labelPosition') html += `<td class="pipe-labelposition-col">${escapeHtml(String(v))}</td>`;
         else                            html += `<td>${escapeHtml(String(v))}</td>`;
       });
@@ -1633,7 +1552,7 @@ function renderPipesNavTable(selectedId) {
   table.innerHTML = html;
 
   attachNavTableRowHandlers(table, 'pipes');
-  attachInlineNameEditor(table, 'pipes');
+  attachInlineEditor(table, 'pipe');
   return table;
 }
 
@@ -1727,7 +1646,8 @@ function renderCurtainsNavTable(selectedId) {
         let v;
         if (c === 'startDate' || c === 'endDate') v = formatNavTableDateCell(cu[c]);
         else                                      v = cu[c] == null ? '' : cu[c];
-        if (c === 'name')         html += `<td data-field="name">${escapeHtml(String(v))}</td>`;
+        if (c === 'name')                         html += `<td data-field="name">${escapeHtml(String(v))}</td>`;
+        else if (c === 'startDate' || c === 'endDate') html += `<td data-field="${c}">${escapeHtml(String(v))}</td>`;
         else if (c === 'opacity') html += `<td class="curtain-opacity-col">${escapeHtml(String(v))}</td>`;
         else                      html += `<td>${escapeHtml(String(v))}</td>`;
       });
@@ -1738,7 +1658,7 @@ function renderCurtainsNavTable(selectedId) {
   table.innerHTML = html;
 
   attachNavTableRowHandlers(table, 'curtains');
-  attachInlineNameEditor(table, 'curtains');
+  attachInlineEditor(table, 'curtain');
   return table;
 }
 
