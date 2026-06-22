@@ -326,11 +326,11 @@ function renderTasksToolbar(selectedId) {
     btnDelete.disabled = btnDuplicate.disabled = btnMoveUp.disabled = btnMoveDown.disabled = true;
     btnDelete.title = btnDuplicate.title = btnMoveUp.title = btnMoveDown.title = 'No row selected';
   } else {
-    const blockReason = whyCannotDeleteTask(selectedId);
-    if (blockReason !== null) {
-      btnDelete.disabled = true;
-      btnDelete.title = blockReason;
-    }
+    // Delete is always allowed for a selected task (referential integrity for
+    // link FKs is advisory, not enforced — a deleted task's links orphan and
+    // are flagged by validation, the renderer skips them, and the user
+    // re-points / clears / deletes the link). "No row selected" above is the
+    // only Delete disable, matching the simple-entity tabs.
     // Move Up / Down operate on task.row, not array order — see §2 of the
     // slice-2a patch. Enablement is row-vs-rowCount, with orphan tasks
     // (swimlaneId pointing to a missing swimlane, or null) explicitly tooltipped.
@@ -404,18 +404,6 @@ function renderTasksToolbar(selectedId) {
   toolbar.appendChild(btnMoveUp);
   toolbar.appendChild(btnMoveDown);
   return toolbar;
-}
-
-// UI-only message for the disabled Delete button. canDeleteTask is the pure
-// boolean the dispatcher consults; this returns the human-readable reason (or
-// null when delete is allowed).
-function whyCannotDeleteTask(id) {
-  const task = projectData.tasks.find(t => t.id === id);
-  if (!task) return null;
-  if (projectData.links.some(l => l.fromTaskId === id || l.toTaskId === id)) {
-    return 'Cannot delete: task has links pointing to or from it';
-  }
-  return null;
 }
 
 // Sorted display order for the Tasks navigation table. Returns a shallow copy
@@ -877,7 +865,9 @@ function addSelectRow(form, fieldName, value, options, commitFn) {
   if (options.length === 0) select.disabled = true;
   // Placeholder for null values — gives the user a visible "no selection"
   // state instead of the browser silently displaying the first real option.
-  if (value === null || value === undefined) {
+  // Suppressed when the options already supply a '' option (e.g. the FK builder's
+  // clear option doubles as the placeholder), so there's never a duplicate.
+  if ((value === null || value === undefined) && !options.some(o => o.value === '')) {
     const placeholder = document.createElement('option');
     placeholder.value = '';
     placeholder.textContent = '—';
@@ -1359,15 +1349,16 @@ function attachInlineEditor(table, entitySingular) {
 
       if (type === 'select') {
         // Build the dropdown exactly as addSelectRow does, so inline ≡ form:
-        // a leading '—' placeholder only when the value is unset, options from
-        // the registry's getter (buildTaskRefOptions already prepends a "{id} —
-        // (missing)" option for an orphan current value), seeded from the
-        // canonical id (not the formatted display cell).
+        // options from the registry's getter (buildTaskRefOptions supplies a
+        // leading '' clear option and a "{id} — (missing)" option for an orphan
+        // current value), a when-null '—' placeholder only if the options don't
+        // already carry a '' option, seeded from the canonical id (not the
+        // formatted display cell).
         const select = document.createElement('select');
         select.className = 'nav-cell-input';
         const options = reg.options(field, obj);
         if (options.length === 0) select.disabled = true;
-        if (obj[field] == null) {
+        if (obj[field] == null && !options.some(o => o.value === '')) {
           const placeholder = document.createElement('option');
           placeholder.value = '';
           placeholder.textContent = '—';
@@ -1384,10 +1375,11 @@ function attachInlineEditor(table, entitySingular) {
         attachCommitHandlers(select, () => select.value, val => {
           editingCell = null;          // clear BEFORE dispatch so the rebuild renders text
           formRenderedForId = null;    // force form rebuild so the right-pane reflects the edit
-          // Mirror the form's FK commit: '' is a no-op (NO clear-to-null), a
-          // finite id re-points, anything else reverts. No dispatch fires on the
-          // no-op / revert paths, so re-render explicitly to restore the text cell.
-          if (val === '') { renderDataPanel(); return; }
+          // Mirror the form's FK commit: '' clears to null, a finite id
+          // re-points, anything else reverts. Both null and id dispatch (the
+          // post-mutation hook re-renders); only the revert path needs an
+          // explicit re-render to restore the text cell.
+          if (val === '') { dispatch({ entity: entitySingular, action: 'update', id: obj.id, field, value: null }); return; }
           const n = parseInt(val, 10);
           if (Number.isFinite(n)) dispatch({ entity: entitySingular, action: 'update', id: obj.id, field, value: n });
           else renderDataPanel();
@@ -1469,12 +1461,19 @@ function formatTaskRefCell(taskId) {
 // Build the option list for a fromTaskId / toTaskId <select>. If currentValue
 // is an orphan id (non-null, no matching task), prepend a "{id} — (missing)"
 // option so the orphan state is visible and the user can re-point or save with
-// the orphan persisting.
+// the orphan persisting. A leading, always-present, selectable clear option
+// (value '', label "— (none)") lets a non-null FK be set back to null — null is
+// the initial state of every link and a tolerated/flagged state validation
+// already errors on, so the editor must be able to return to it (referential
+// integrity for FKs is advisory, not enforced). Its '' value also serves as the
+// unset placeholder, so addSelectRow / the inline editor suppress their own
+// when-null placeholder once a '' option is present (no duplicate).
 function buildTaskRefOptions(currentValue) {
   const opts = projectData.tasks.map(t => ({ value: String(t.id), label: `${t.id} — ${t.name}` }));
   if (currentValue != null && !projectData.tasks.some(t => t.id === currentValue)) {
     opts.unshift({ value: String(currentValue), label: `${currentValue} — (missing)` });
   }
+  opts.unshift({ value: '', label: '— (none)' });
   return opts;
 }
 
@@ -1541,12 +1540,12 @@ function renderLinksForm(container, selectedId) {
 
   addReadonlyRow(form, 'id', link.id);
   addSelectRow(form, 'fromTaskId', link.fromTaskId, buildTaskRefOptions(link.fromTaskId), val => {
-    if (val === '') return;
+    if (val === '') { upd('fromTaskId', null); return; }
     const n = parseInt(val, 10);
     if (Number.isFinite(n)) upd('fromTaskId', n);
   });
   addSelectRow(form, 'toTaskId', link.toTaskId, buildTaskRefOptions(link.toTaskId), val => {
-    if (val === '') return;
+    if (val === '') { upd('toTaskId', null); return; }
     const n = parseInt(val, 10);
     if (Number.isFinite(n)) upd('toTaskId', n);
   });
@@ -2658,7 +2657,6 @@ function dispatch({ entity, action, id, block, field, value, index } = {}) {
     if (id == null) { console.warn('[dispatch] delete missing id'); return; }
     const idx = arr.findIndex(r => r.id === id);
     if (idx === -1) { console.warn('[dispatch] delete: no', entity, 'with id', id); return; }
-    if (entity === 'task' && !canDeleteTask(id)) return;  // referential-integrity no-op
     arr.splice(idx, 1);
     if (entity === 'swimlane') recomputeSwimlaneOrders();
     runPostMutationHook();
@@ -2742,15 +2740,6 @@ function recomputeTaskDerived(task) {
 
 function recomputeSwimlaneOrders() {
   projectData.swimlanes.forEach((s, i) => { s.order = i + 1; });
-}
-
-// Deletion blocking rule. Returns false to signal "block" (silent no-op): a
-// task with a link pointing to or from it cannot be deleted.
-function canDeleteTask(id) {
-  const task = projectData.tasks.find(t => t.id === id);
-  if (!task) return true;
-  if (projectData.links.some(l => l.fromTaskId === id || l.toTaskId === id)) return false;
-  return true;
 }
 
 function runPostMutationHook() {
