@@ -48,14 +48,19 @@ const SIMPLE_ENTITY_REGISTRY = {
 // editingCell.entity and the dispatch entity, so the mount code needs no
 // plural↔singular translation). `arr` is a getter — not a captured reference —
 // because projectData is replaced wholesale on file load / New Project. `fields`
-// maps each inline-editable field to its editor type ('text' | 'date'). Tasks
-// and Swimlanes have bespoke (non-shared) row handlers, so they live here rather
-// than in SIMPLE_ENTITY_REGISTRY; Links (no free-text cell) and Notes (multi-line
-// text needs a textarea) are deliberately absent — attachInlineEditor is inert
-// for any entity not listed.
+// maps each inline-editable field to its editor type ('text' | 'date' | 'select').
+// A 'select' field also needs an `options` getter `(field, obj) => [{value,label}]`
+// supplying the dropdown contents (so attachInlineEditor stays generic and a
+// future select field — e.g. an inline Tasks swimlaneId — can reuse the type);
+// Links' FKs use buildTaskRefOptions. Tasks and Swimlanes have bespoke
+// (non-shared) row handlers, so they live here rather than in
+// SIMPLE_ENTITY_REGISTRY; Notes is deliberately absent (multi-line text needs a
+// textarea) — attachInlineEditor is inert for any entity not listed.
 const INLINE_EDIT_REGISTRY = {
   task:     { arr: () => projectData.tasks,     fields: { name: 'text', startDate: 'date', finishDate: 'date' } },
   swimlane: { arr: () => projectData.swimlanes, fields: { name: 'text' } },
+  link:     { arr: () => projectData.links,     fields: { fromTaskId: 'select', toTaskId: 'select' },
+              options: (field, obj) => buildTaskRefOptions(obj[field]) },
   pipe:     { arr: () => projectData.pipes,     fields: { name: 'text', date: 'date' } },
   curtain:  { arr: () => projectData.curtains,  fields: { name: 'text', startDate: 'date', endDate: 'date' } },
 };
@@ -1293,9 +1298,10 @@ function attachNavTableRowHandlers(table, entityPlural) {
       if (!Number.isFinite(id)) return;
       if (id === entitySelections[entityPlural]) return;
       // An active editor counts as mid-edit whether it's a right-pane form input
-      // or our inline nav-cell editor — the only focusable thing inside
-      // .entity-nav-table is .nav-cell-input, so this cleanly detects either
-      // (harmless for Links/Notes — nothing focusable lives in their nav tables).
+      // or our inline nav-cell editor (.nav-cell-input — an <input> for text/date
+      // fields, a <select> for Links' FK cells), so this closest() check cleanly
+      // detects either. Harmless for Notes — nothing focusable lives in its nav
+      // table yet.
       const active = document.activeElement;
       const inEdit = active && active.closest &&
                      (active.closest('.entity-form') || active.closest('.entity-nav-table'));
@@ -1343,31 +1349,82 @@ function attachInlineEditor(table, entitySingular) {
     const td = tr && tr.querySelector('td[data-field="' + editingCell.field + '"]');
     if (td && obj) {
       const field = editingCell.field;
-      const isDate = reg.fields[field] === 'date';
+      const type = reg.fields[field];   // 'text' | 'date' | 'select'
       td.textContent = '';
-      const input = document.createElement('input');
-      input.type = isDate ? 'date' : 'text';
-      input.className = 'nav-cell-input';
-      input.value = obj[field] == null ? '' : String(obj[field]);   // canonical ISO for dates, raw for text
-      td.appendChild(input);
-      attachCommitHandlers(input, () => input.value, val => {
-        editingCell = null;          // clear BEFORE dispatch so the rebuild renders text
-        formRenderedForId = null;    // force form rebuild so the right-pane reflects the edit
-        const value = isDate ? (val === '' ? null : val) : val;   // empty date → null; text as-is
-        dispatch({ entity: entitySingular, action: 'update', id: obj.id, field, value });
-      });
+
       // attachCommitHandlers reverts the value on Escape but has no teardown hook;
-      // an inline cell (unlike a persistent form input) must revert to a text cell.
-      input.addEventListener('keydown', ev => {
-        if (ev.key === 'Escape') { editingCell = null; renderDataPanel(); }
-      });
-      // The table is detached when this runs (the caller appends it afterward),
-      // so a synchronous focus() would no-op. Defer to a microtask, by which
-      // point renderDataPanel's appendChild + scrollTop restore have completed.
-      queueMicrotask(() => {
-        input.focus({ preventScroll: true });
-        if (!isDate) input.select();   // select-all on text only; not meaningful on a date input
-      });
+      // an inline cell (unlike a persistent form input) must revert to a text
+      // cell. Also reused by select's no-commit paths (empty / non-finite).
+      const revert = () => { editingCell = null; renderDataPanel(); };
+
+      if (type === 'select') {
+        // Build the dropdown exactly as addSelectRow does, so inline ≡ form:
+        // a leading '—' placeholder only when the value is unset, options from
+        // the registry's getter (buildTaskRefOptions already prepends a "{id} —
+        // (missing)" option for an orphan current value), seeded from the
+        // canonical id (not the formatted display cell).
+        const select = document.createElement('select');
+        select.className = 'nav-cell-input';
+        const options = reg.options(field, obj);
+        if (options.length === 0) select.disabled = true;
+        if (obj[field] == null) {
+          const placeholder = document.createElement('option');
+          placeholder.value = '';
+          placeholder.textContent = '—';
+          select.appendChild(placeholder);
+        }
+        options.forEach(o => {
+          const opt = document.createElement('option');
+          opt.value = o.value;
+          opt.textContent = o.label;
+          select.appendChild(opt);
+        });
+        select.value = obj[field] == null ? '' : String(obj[field]);
+        td.appendChild(select);
+        attachCommitHandlers(select, () => select.value, val => {
+          editingCell = null;          // clear BEFORE dispatch so the rebuild renders text
+          formRenderedForId = null;    // force form rebuild so the right-pane reflects the edit
+          // Mirror the form's FK commit: '' is a no-op (NO clear-to-null), a
+          // finite id re-points, anything else reverts. No dispatch fires on the
+          // no-op / revert paths, so re-render explicitly to restore the text cell.
+          if (val === '') { renderDataPanel(); return; }
+          const n = parseInt(val, 10);
+          if (Number.isFinite(n)) dispatch({ entity: entitySingular, action: 'update', id: obj.id, field, value: n });
+          else renderDataPanel();
+        });
+        select.addEventListener('keydown', ev => {
+          if (ev.key === 'Escape') revert();
+        });
+        queueMicrotask(() => {
+          select.focus({ preventScroll: true });
+          // Best-effort auto-open of the dropdown; not implemented for <select>
+          // in every browser and may throw — harmless either way.
+          try { select.showPicker(); } catch (e) { /* unsupported */ }
+        });
+      } else {
+        const isDate = type === 'date';
+        const input = document.createElement('input');
+        input.type = isDate ? 'date' : 'text';
+        input.className = 'nav-cell-input';
+        input.value = obj[field] == null ? '' : String(obj[field]);   // canonical ISO for dates, raw for text
+        td.appendChild(input);
+        attachCommitHandlers(input, () => input.value, val => {
+          editingCell = null;          // clear BEFORE dispatch so the rebuild renders text
+          formRenderedForId = null;    // force form rebuild so the right-pane reflects the edit
+          const value = isDate ? (val === '' ? null : val) : val;   // empty date → null; text as-is
+          dispatch({ entity: entitySingular, action: 'update', id: obj.id, field, value });
+        });
+        input.addEventListener('keydown', ev => {
+          if (ev.key === 'Escape') revert();
+        });
+        // The table is detached when this runs (the caller appends it afterward),
+        // so a synchronous focus() would no-op. Defer to a microtask, by which
+        // point renderDataPanel's appendChild + scrollTop restore have completed.
+        queueMicrotask(() => {
+          input.focus({ preventScroll: true });
+          if (!isDate) input.select();   // select-all on text only; not meaningful on a date input
+        });
+      }
     }
   }
 }
@@ -1381,12 +1438,22 @@ function renderLinksPanel(area) {
   if (selectedId === null && links.length > 0) selectedId = links[0].id;
   entitySelections.links = selectedId;
 
+  // Drop a stale inline-edit marker if its link no longer exists (e.g. deleted
+  // out from under an open editor) so the mount block never targets it.
+  // Entity-scoped: other entities' markers are left alone here.
+  if (editingCell && editingCell.entity === 'link' &&
+      !links.some(l => l.id === editingCell.id)) editingCell = null;
+
   const left  = area.querySelector('.entity-left');
   const right = area.querySelector('.entity-right');
 
+  // Left pane now hosts a focusable inline-edit select, so preserve the scroll
+  // container's position across the rebuild (no-op on a freshly created pane).
+  const prevScroll = left.scrollTop;
   left.innerHTML = '';
   left.appendChild(renderSimpleEntityToolbar('link', 'links', links, selectedId));
   left.appendChild(renderLinksNavTable(selectedId));
+  left.scrollTop = prevScroll;
 
   renderLinksForm(right, selectedId);
 }
@@ -1429,9 +1496,12 @@ function renderLinksNavTable(selectedId) {
       html += `<tr data-id="${l.id}"${isSelected ? ' class="selected"' : ''}>`;
       COLS.forEach(c => {
         let v;
-        if (c === 'fromTaskId' || c === 'toTaskId') v = formatTaskRefCell(l[c]);
-        else                                        v = l[c] == null ? '' : l[c];
-        html += `<td>${escapeHtml(String(v))}</td>`;
+        // FK cells carry data-field so attachInlineEditor's dblclick + mount
+        // targeting works; they still DISPLAY via formatTaskRefCell.
+        const isFk = (c === 'fromTaskId' || c === 'toTaskId');
+        if (isFk) v = formatTaskRefCell(l[c]);
+        else      v = l[c] == null ? '' : l[c];
+        html += `<td${isFk ? ` data-field="${c}"` : ''}>${escapeHtml(String(v))}</td>`;
       });
       html += '</tr>';
     });
@@ -1440,6 +1510,7 @@ function renderLinksNavTable(selectedId) {
   table.innerHTML = html;
 
   attachNavTableRowHandlers(table, 'links');
+  attachInlineEditor(table, 'link');
   return table;
 }
 
