@@ -351,7 +351,7 @@ function renderTasksToolbar(selectedId) {
   }
 
   btnAdd.addEventListener('click', () => {
-    const newId = nextIdFor(tasks);
+    const newId = predictId('task');
     nextSelectionIntent = { entity: 'tasks', id: newId };
     dispatch({ entity: 'task', action: 'add' });
   });
@@ -369,7 +369,7 @@ function renderTasksToolbar(selectedId) {
     dispatch({ entity: 'task', action: 'delete', id: selectedId });
   });
   btnDuplicate.addEventListener('click', () => {
-    const newId = nextIdFor(tasks);
+    const newId = predictId('task');
     nextSelectionIntent = { entity: 'tasks', id: newId };
     dispatch({ entity: 'task', action: 'duplicate', id: selectedId });
   });
@@ -979,7 +979,7 @@ function renderSwimlanesToolbar(selectedId) {
   }
 
   btnAdd.addEventListener('click', () => {
-    const newId = nextIdFor(swimlanes);
+    const newId = predictId('swimlane');
     nextSelectionIntent = { entity: 'swimlanes', id: newId };
     dispatch({ entity: 'swimlane', action: 'add' });
   });
@@ -994,7 +994,7 @@ function renderSwimlanesToolbar(selectedId) {
     dispatch({ entity: 'swimlane', action: 'delete', id: selectedId });
   });
   btnDuplicate.addEventListener('click', () => {
-    const newId = nextIdFor(swimlanes);
+    const newId = predictId('swimlane');
     nextSelectionIntent = { entity: 'swimlanes', id: newId };
     dispatch({ entity: 'swimlane', action: 'duplicate', id: selectedId });
   });
@@ -1208,7 +1208,7 @@ function renderSimpleEntityToolbar(entitySingular, entityPlural, arr, selectedId
   }
 
   btnAdd.addEventListener('click', () => {
-    const newId = nextIdFor(arr);
+    const newId = predictId(entitySingular);
     nextSelectionIntent = { entity: entityPlural, id: newId };
     dispatch({ entity: entitySingular, action: 'add' });
   });
@@ -1223,7 +1223,7 @@ function renderSimpleEntityToolbar(entitySingular, entityPlural, arr, selectedId
     dispatch({ entity: entitySingular, action: 'delete', id: selectedId });
   });
   btnDuplicate.addEventListener('click', () => {
-    const newId = nextIdFor(arr);
+    const newId = predictId(entitySingular);
     nextSelectionIntent = { entity: entityPlural, id: newId };
     dispatch({ entity: entitySingular, action: 'duplicate', id: selectedId });
   });
@@ -2575,7 +2575,7 @@ function dispatch({ entity, action, id, block, field, value, index } = {}) {
 
   if (action === 'add') {
     const rec = ENTITY_FACTORY[entity]();
-    rec.id = nextIdFor(arr);
+    rec.id = issueId(entity);
     const insertAt = (typeof index === 'number' && index >= 0 && index <= arr.length) ? index : arr.length;
     arr.splice(insertAt, 0, rec);
     if (entity === 'swimlane') recomputeSwimlaneOrders();
@@ -2599,7 +2599,7 @@ function dispatch({ entity, action, id, block, field, value, index } = {}) {
     const rec = arr.find(r => r.id === id);
     if (!rec) { console.warn('[dispatch] duplicate: no', entity, 'with id', id); return; }
     const clone = { ...rec };
-    clone.id = nextIdFor(arr);
+    clone.id = issueId(entity);
     arr.push(clone);
     if (entity === 'swimlane') recomputeSwimlaneOrders();
     runPostMutationHook();
@@ -2620,9 +2620,46 @@ function dispatch({ entity, action, id, block, field, value, index } = {}) {
   }
 }
 
-function nextIdFor(arr) {
+// ── Id issuance (monotonic, counter-backed) ─────────────────────────────────
+// New ids come from projectData.counters[entity] (singular key — matches the
+// dispatch entity and editingCell.entity, no plural↔singular translation). The
+// counter is the NEXT id to issue and only ever advances, so deleting the
+// highest-id entity can't let a later add reuse that id (which would silently
+// re-point a baseline overlay record onto the wrong task). The counters are
+// seeded to 1 by createEmptyProjectData and healed to max(persisted, max+1) on
+// load, so both helpers' fallback paths are unreachable in normal flow.
+//
+// issueId reads-then-advances; predictId reads WITHOUT advancing. The toolbars
+// predictId to pre-set nextSelectionIntent, then synchronously dispatch an add
+// that issueIds — nothing mints between, so the two always agree.
+//
+// maxExistingId is the salvaged old-nextIdFor body (max numeric id + 1, or 1):
+// the fallback when a counter is somehow absent/non-numeric. Degrades to the
+// pre-counter behaviour; never throws, never reuses.
+function maxExistingId(arr) {
   const ids = arr.map(r => r.id).filter(n => typeof n === 'number');
   return ids.length === 0 ? 1 : Math.max(...ids) + 1;
+}
+
+function issueId(entity) {
+  const arr = projectData[ENTITY_ARRAY_KEY[entity]];
+  const next = projectData.counters && projectData.counters[entity];
+  if (Number.isInteger(next) && next >= 1) {
+    projectData.counters[entity] = next + 1;
+    return next;
+  }
+  // Should be unreachable (empty default + load-heal). Degrade to max+1 and
+  // self-heal the counter so the broken state can't recur or cause reuse.
+  console.warn('[issueId] counter missing/invalid for', entity, '— falling back to max+1');
+  const fallback = maxExistingId(arr);
+  if (projectData.counters) projectData.counters[entity] = fallback + 1;
+  return fallback;
+}
+
+function predictId(entity) {
+  const next = projectData.counters && projectData.counters[entity];
+  if (Number.isInteger(next) && next >= 1) return next;
+  return maxExistingId(projectData[ENTITY_ARRAY_KEY[entity]]);
 }
 
 // Derived-field maintenance. Task.isMilestone and Swimlane.order are computed

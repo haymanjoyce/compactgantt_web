@@ -5,7 +5,7 @@
 function boolStr(v) { return v ? 'Yes' : 'No'; }
 
 function writeWorkbook(projectData) {
-  const { tasks, swimlanes, links, pipes, curtains, notes, baseline, config } = projectData;
+  const { tasks, swimlanes, links, pipes, curtains, notes, baseline, counters, config } = projectData;
   const { layout, bars, timeline, titles, style, typography, preferences } = config;
 
   const wb = XLSX.utils.book_new();
@@ -79,6 +79,20 @@ function writeWorkbook(projectData) {
       ]),
     ]);
   }
+
+  // ── Counters ──────────────────────────────────────────────────────────────────
+  // Monotonic per-entity next-id-to-issue, persisted so a later add can't reuse
+  // the id of a deleted high-id entity. Always emitted. Key-value, mirroring the
+  // config sheets (col A = singular entity name, col B = next id).
+  addSheet('Counters', [
+    ['Field', 'Value'],
+    ['task',     counters.task],
+    ['swimlane', counters.swimlane],
+    ['link',     counters.link],
+    ['pipe',     counters.pipe],
+    ['curtain',  counters.curtain],
+    ['note',     counters.note],
+  ]);
 
   // ── 7. Layout ─────────────────────────────────────────────────────────────────
   addSheet('Layout', [

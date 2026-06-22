@@ -43,11 +43,21 @@ Exports `toISODate`, `toJsDate`, `daysBetween`, `formatDate`, `isoWeekLabel`, `w
 
 `createEmptyProjectData()` is the single source of truth for the `projectData` shape and all default config values — a pure function. `parseWorkbook` calls it, then overwrites entity arrays and config sections from the workbook.
 
+## Id issuance (monotonic, counter-backed)
+
+New entity ids are minted from `projectData.counters` — a top-level object (NOT under `config`), keyed by **singular** entity name (`task`/`swimlane`/`link`/`pipe`/`curtain`/`note`), each value the NEXT id to issue. Singular keys deliberately match the dispatch `entity` so there's no plural↔singular translation. Seeded to `1` each by `createEmptyProjectData`. The counter only ever advances, so deleting the highest-id entity can't let a later add reuse that id (which would silently re-point a baseline overlay record onto the wrong task — the bug this fixes).
+
+`ui.js` exposes `issueId(entity)` (read-then-advance, used by the dispatcher's `add`/`duplicate`) and `predictId(entity)` (read WITHOUT advancing, used by the Tasks/Swimlanes/shared-simple-entity toolbars to pre-set `nextSelectionIntent`). The toolbar predicts then synchronously dispatches an add that issues — nothing mints between, so they always agree. Fallback when a counter is somehow absent/non-numeric: `maxExistingId(arr)` (the salvaged old `nextIdFor` body — `max(numeric ids)+1` or `1`); `issueId` also self-heals the counter so the broken state can't recur. Never throws, never reuses.
+
+**Counters sheet** (key-value, `['Field','Value']` header, six singular-key rows): writer always emits it (position: after Baseline, before Layout); parser reads via `kvInt` gated to integer ≥ 1 (else treated as 0). **Load-heal** runs in `parseWorkbook` after every entity array is populated (including parser-assigned blank-cell ids): `counter = max(persisted, maxExistingId+1)`. Stale/absent values heal upward; a gap above max (left by a deleted high id) is KEPT — that gap is the point. Legacy files lack the sheet → `parseConfigSheet` returns `{}` → every counter falls back to `maxExisting+1` (byte-for-byte the pre-counter behaviour), so they load unchanged and gain the sheet on next save. No notices, no validation rule, no UI surface (the Inspector dynamic walk renders it read-only). `parser.js` keeps its own `maxExistingId` copy (the two files don't import each other).
+
+**Out of scope (v1):** the parser's blank-id-cell assignment (`id_assigned` notice path) still uses in-sheet `max+1`; the counter heals above whatever it assigns. The residual edge — a blank-cell-assigned id equalling a previously-deleted id — is consciously deferred.
+
 ## Mutation dispatcher (ui.js)
 
 `dispatch({ entity, action, id, block, field, value, index })` is the single-writer entry point for all in-app mutations — centralising it is what makes the post-mutation hook unbypassable.
 
-`entity` ∈ `task` / `swimlane` / `link` / `pipe` / `curtain` / `note` / `config` / `baseline`. `action` ∈ `update` / `add` / `delete` / `duplicate` / `moveUp` / `moveDown` (config: `update` only; baseline: `set` / `clear` only, handled before the `VALID_ACTIONS` gate). Unknown entity/action, missing field, or id miss → `console.warn` + no-op (never throws). `add`/`duplicate` use `parser.js` factories and assign a fresh `id = max(existing) + 1` (or `1`).
+`entity` ∈ `task` / `swimlane` / `link` / `pipe` / `curtain` / `note` / `config` / `baseline`. `action` ∈ `update` / `add` / `delete` / `duplicate` / `moveUp` / `moveDown` (config: `update` only; baseline: `set` / `clear` only, handled before the `VALID_ACTIONS` gate). Unknown entity/action, missing field, or id miss → `console.warn` + no-op (never throws). `add`/`duplicate` use `parser.js` factories and assign a fresh id via `issueId(entity)` (see Id issuance).
 
 **Deletion blocking** (silent no-op, no hook): a task delete is blocked if any link references it. No other delete is blocked — deleting the last task in a swimlane, or a swimlane that still has tasks, is allowed (orphans stay in `projectData`; validation flags, renderer skips).
 

@@ -243,6 +243,16 @@ function makeIdAssigner(raw, entitySingular) {
   };
 }
 
+// ── Next-id helper (counters load-heal) ─────────────────────────────────────────
+// Byte-identical to the dispatcher's salvaged nextIdFor body: returns
+// max(numeric existing ids) + 1, or 1 when none. Used only by the counters heal
+// in parseWorkbook; the same logic lives in ui.js as the counter fallback (the
+// two files don't import each other by design).
+function maxExistingId(arr) {
+  const ids = arr.map(r => r.id).filter(n => typeof n === 'number');
+  return ids.length === 0 ? 1 : Math.max(...ids) + 1;
+}
+
 // ── Config sheet parser ────────────────────────────────────────────────────────
 // Config sheets are key-value pairs: col A = field name, col B = value.
 // Returns a plain { key: value } map for use with the kv* extractors below.
@@ -325,6 +335,7 @@ function createEmptyProjectData() {
   return {
     tasks: [], swimlanes: [], links: [], pipes: [], curtains: [], notes: [],
     baseline: [],
+    counters: { task: 1, swimlane: 1, link: 1, pipe: 1, curtain: 1, note: 1 },
     _parseNotices: [],
     config: {
       layout: {
@@ -761,6 +772,31 @@ function parseWorkbook(workbook) {
       const finishDate = parseDate(b.finishDate, c('finishDate'));
       return { id, startDate, finishDate };
     });
+  }
+
+  // ── Counters ─────────────────────────────────────────────────────────────────
+  // Monotonic per-entity id issuance, persisted so deleting the highest-id
+  // entity can't let a later add reuse that id (which would silently re-point a
+  // baseline overlay record onto the wrong task). Read AFTER every entity array
+  // is populated — including parser-assigned blank-cell ids — so the heal sees
+  // final ids. Per entity: counter = max(persisted, maxExisting+1). A stale or
+  // absent value heals upward; a gap above maxExisting (left by a deleted high
+  // id) is preserved — that gap is the whole point. Persisted values are read
+  // via kvInt (house coercion, honours numeric text) then gated to integer ≥ 1;
+  // anything else (blank / NaN / non-integer / < 1) → 0, so max() falls back to
+  // maxExisting+1. Legacy files lack the sheet → parseConfigSheet returns {} →
+  // every counter falls back to maxExisting+1 (byte-for-byte the pre-counter
+  // behaviour), so they load unchanged and gain the sheet on next save.
+  const countersKV = parseConfigSheet(workbook.Sheets['Counters']);
+  const counterArrays = {
+    task:     projectData.tasks,    swimlane: projectData.swimlanes,
+    link:     projectData.links,    pipe:     projectData.pipes,
+    curtain:  projectData.curtains, note:     projectData.notes,
+  };
+  for (const [entity, arr] of Object.entries(counterArrays)) {
+    const raw = kvInt(countersKV, entity, 0);
+    const persisted = (Number.isInteger(raw) && raw >= 1) ? raw : 0;
+    projectData.counters[entity] = Math.max(persisted, maxExistingId(arr));
   }
 
   // ── Config: Layout ─────────────────────────────────────────────────────────
