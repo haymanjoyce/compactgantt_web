@@ -253,6 +253,20 @@ function maxExistingId(arr) {
   return ids.length === 0 ? 1 : Math.max(...ids) + 1;
 }
 
+// Derive the chart date extent from task dates. Single source of truth for the
+// derived config.timeline.chartStartDate/chartEndDate range, shared by
+// parseWorkbook (parse-time derivation) and ui.js (the task-gated post-mutation
+// recompute). Byte-identical to the former inline min/max: earliest non-empty
+// startDate, latest non-empty finishDate, each null when none exist.
+function taskDateExtents(tasks) {
+  const starts   = tasks.map(t => t.startDate).filter(Boolean).sort();
+  const finishes = tasks.map(t => t.finishDate).filter(Boolean).sort();
+  return {
+    earliestStart: starts[0] || null,
+    latestFinish:  finishes[finishes.length - 1] || null,
+  };
+}
+
 // ── Config sheet parser ────────────────────────────────────────────────────────
 // Config sheets are key-value pairs: col A = field name, col B = value.
 // Returns a plain { key: value } map for use with the kv* extractors below.
@@ -838,14 +852,9 @@ function parseWorkbook(workbook) {
   const chartStartDateExplicit = isNoticeableInput(timelineKV['Chart Start Date']);
   const chartEndDateExplicit   = isNoticeableInput(timelineKV['Chart End Date']);
   // Derive from task dates if absent or unparseable
-  if (!chartStartDate) {
-    const dates = projectData.tasks.map(t => t.startDate).filter(Boolean).sort();
-    chartStartDate = dates[0] || null;
-  }
-  if (!chartEndDate) {
-    const dates = projectData.tasks.map(t => t.finishDate).filter(Boolean).sort();
-    chartEndDate = dates[dates.length - 1] || null;
-  }
+  const extents = taskDateExtents(projectData.tasks);
+  if (!chartStartDate) chartStartDate = extents.earliestStart;
+  if (!chartEndDate)   chartEndDate   = extents.latestFinish;
   projectData.config.timeline = {
     chartStartDate,
     chartEndDate,

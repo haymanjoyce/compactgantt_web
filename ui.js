@@ -2060,10 +2060,14 @@ function renderTimelineConfigForm(container) {
   // The writer round-trips empty (explicit=false) as "auto-derive from tasks",
   // and non-empty (explicit=true) as the user's authoritative value. The flags
   // are derived state — not user-editable, not rendered as rows.
+  // Clearing reverts to auto-derived: drop the explicit flag AND set the value
+  // to the current task extent immediately. The task-gated post-mutation hook
+  // never fires on these config dispatches, so without seeding the value here a
+  // cleared field would leave the chart blank until the next task edit.
   addDateRow(form, 'chartStartDate', timeline.chartStartDate, val => {
     if (val === '') {
-      upd('chartStartDate', null);
       upd('chartStartDateExplicit', false);
+      upd('chartStartDate', taskDateExtents(projectData.tasks).earliestStart);
     } else {
       upd('chartStartDate', val);
       upd('chartStartDateExplicit', true);
@@ -2071,8 +2075,8 @@ function renderTimelineConfigForm(container) {
   });
   addDateRow(form, 'chartEndDate', timeline.chartEndDate, val => {
     if (val === '') {
-      upd('chartEndDate', null);
       upd('chartEndDateExplicit', false);
+      upd('chartEndDate', taskDateExtents(projectData.tasks).latestFinish);
     } else {
       upd('chartEndDate', val);
       upd('chartEndDateExplicit', true);
@@ -2638,7 +2642,7 @@ function dispatch({ entity, action, id, block, field, value, index } = {}) {
     const rec = arr.find(r => r.id === id);
     if (!rec) { console.warn('[dispatch] update: no', entity, 'with id', id); return; }
     rec[field] = value;
-    if (entity === 'task') recomputeTaskDerived(rec);
+    if (entity === 'task') { recomputeTaskDerived(rec); recomputeTaskDateRange(); }
     runPostMutationHook();
     return;
   }
@@ -2649,6 +2653,7 @@ function dispatch({ entity, action, id, block, field, value, index } = {}) {
     const insertAt = (typeof index === 'number' && index >= 0 && index <= arr.length) ? index : arr.length;
     arr.splice(insertAt, 0, rec);
     if (entity === 'swimlane') recomputeSwimlaneOrders();
+    if (entity === 'task') recomputeTaskDateRange();
     runPostMutationHook();
     return;
   }
@@ -2659,6 +2664,7 @@ function dispatch({ entity, action, id, block, field, value, index } = {}) {
     if (idx === -1) { console.warn('[dispatch] delete: no', entity, 'with id', id); return; }
     arr.splice(idx, 1);
     if (entity === 'swimlane') recomputeSwimlaneOrders();
+    if (entity === 'task') recomputeTaskDateRange();
     runPostMutationHook();
     return;
   }
@@ -2671,6 +2677,7 @@ function dispatch({ entity, action, id, block, field, value, index } = {}) {
     clone.id = issueId(entity);
     arr.push(clone);
     if (entity === 'swimlane') recomputeSwimlaneOrders();
+    if (entity === 'task') recomputeTaskDateRange();
     runPostMutationHook();
     return;
   }
@@ -2684,6 +2691,7 @@ function dispatch({ entity, action, id, block, field, value, index } = {}) {
     const swap = action === 'moveUp' ? idx - 1 : idx + 1;
     [arr[idx], arr[swap]] = [arr[swap], arr[idx]];
     if (entity === 'swimlane') recomputeSwimlaneOrders();
+    if (entity === 'task') recomputeTaskDateRange();
     runPostMutationHook();
     return;
   }
@@ -2736,6 +2744,20 @@ function predictId(entity) {
 // validation and re-render see correct state.
 function recomputeTaskDerived(task) {
   task.isMilestone = task.startDate !== null && task.startDate === task.finishDate;
+}
+
+// The chart date range is a derived field like task.isMilestone: min task
+// startDate / max finishDate, recomputed after any task-array mutation so an
+// in-app task edit fixes the range without a save+reload. Gated per-field on the
+// explicit flag — a user-set (explicit=true) date is authoritative and untouched.
+// Only ever called from task-entity dispatch branches; a config/Timeline
+// dispatch must NOT re-derive (it would clobber an explicit date in the gap
+// between its value and flag dispatches).
+function recomputeTaskDateRange() {
+  const ext = taskDateExtents(projectData.tasks);
+  const tl = projectData.config.timeline;
+  if (!tl.chartStartDateExplicit) tl.chartStartDate = ext.earliestStart;
+  if (!tl.chartEndDateExplicit)   tl.chartEndDate   = ext.latestFinish;
 }
 
 function recomputeSwimlaneOrders() {

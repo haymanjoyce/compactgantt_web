@@ -61,7 +61,7 @@ New entity ids are minted from `projectData.counters` — a top-level object (NO
 
 **No deletion blocking.** Every delete is allowed (referential integrity is advisory, not enforced — orphans stay in `projectData`, validation flags, renderer skips). A deleted task whose id a link still references just orphans those FKs (re-pointable / clearable / deletable). The former task-delete-if-referenced block — and its `canDeleteTask` / `whyCannotDeleteTask` helpers — were removed, the last survivors of the cleanup that earlier dropped `canDeleteSwimlane`.
 
-**Derived-field maintenance.** `task.isMilestone` recomputed on task `update`; `swimlane.order` recomputed (1-based index) after any swimlane array mutation.
+**Derived-field maintenance.** `task.isMilestone` recomputed on task `update`; `swimlane.order` recomputed (1-based index) after any swimlane array mutation. `config.timeline.chartStart/EndDate` recomputed via `recomputeTaskDateRange()` after ANY task-array mutation (`update`/`add`/`delete`/`duplicate`/`moveUp`/`moveDown`), each field gated on `!*Explicit` so a user-set date is never clobbered. **Task-gated by design** — a config/Timeline dispatch must NOT re-derive: Timeline date clears/sets are two dispatches (value + flag), and an unconditional recompute would fire in the gap before `explicit` is true and overwrite the user's value. The Timeline clear handler (`renderTimelineConfigForm`) therefore seeds the value to the current `taskDateExtents` extent itself when clearing (flag→false + value→derived), since the task-gated hook won't fire on that config dispatch.
 
 **Post-mutation hook** (in order): `validateProject` → `activateTab(activeTab)` → `updateIssuesTabLabel` (active tab in module-scope `activeTab`). `update` runs the hook unconditionally even if `value` is unchanged.
 
@@ -79,7 +79,7 @@ Schema asymmetry: Timeline has five `show*` fields (years/months/weeks/days/date
 
 - `task.isMilestone = startDate !== null && startDate === finishDate` (null-guard avoids a false positive when both dates are absent).
 - `swimlane.order` = 1-based array index (not stored in Excel).
-- `config.timeline.chartStartDate/chartEndDate` derived from `min(task.startDate)` / `max(task.finishDate)` when absent/unparseable in the Timeline sheet. `chart{Start,End}DateExplicit` record whether the user wrote a non-empty value (via `isNoticeableInput`) — drives the writer's emit-or-leave-empty choice. Deliberate asymmetry: a garbage cell is `explicit=true` with a task-derived date, so save round-trips it to a valid date.
+- `config.timeline.chartStartDate/chartEndDate` derived from `min(task.startDate)` / `max(task.finishDate)` via `taskDateExtents(tasks)` in `parser.js` (the single source of truth, shared by parse and the hook). `chart{Start,End}DateExplicit` record whether the user wrote a non-empty value (via `isNoticeableInput`) — drives the writer's emit-or-leave-empty choice. Deliberate asymmetry: a garbage cell is `explicit=true` with a task-derived date, so save round-trips it to a valid date. **Recomputed live, not parse-time-only:** the post-mutation hook re-derives each field after any task-array mutation, gated per-field on `!explicit` (see Mutation dispatcher → Derived-field maintenance), so New Project + add-task fills the range without a save/reload. The parser's gate derives on `!value`; the hook's on `!explicit` — distinct on purpose (the parser must overwrite a garbage-but-explicit cell, the hook must never touch an explicit one).
 
 ## Parse notices (`_parseNotices`)
 
