@@ -121,6 +121,8 @@ function writeWorkbook(projectData) {
     ['Milestone Shape',         bars.milestoneShape],
     ['Milestone Corner Radius', bars.milestoneCornerRadius],
     ['Task Corner Radius',      bars.taskCornerRadius],
+    ['Arrowhead Size Factor',    bars.arrowheadSizeFactor],
+    ['Origin Marker Size Factor', bars.originMarkerSizeFactor],
   ]);
 
   // ── 9. Timeline ───────────────────────────────────────────────────────────────

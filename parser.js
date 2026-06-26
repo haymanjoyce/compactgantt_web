@@ -370,6 +370,8 @@ function createEmptyProjectData() {
         milestoneShape:            'diamond',
         milestoneCornerRadius:     0,
         taskCornerRadius:          2,
+        arrowheadSizeFactor:       0.3,
+        originMarkerSizeFactor:    0.15,
       },
       timeline: {
         chartStartDate: null, chartEndDate: null,
@@ -422,8 +424,6 @@ function createEmptyProjectData() {
         chartDateFormat: 'dd MMM',
       },
       rendering: {
-        arrowheadSizeFactor:           0.3,
-        originMarkerSizeFactor:        0.15,
         linkArrowheadMilestoneGap:     2,
         swimlaneLabelPadding:       4,
         minScaleBandHeight:         20,
@@ -840,6 +840,8 @@ function parseWorkbook(workbook) {
     milestoneShape:            normalizeMilestoneShape(barsKV['Milestone Shape'], cfg('milestoneShape')),
     milestoneCornerRadius:     kvFloat(barsKV, 'Milestone Corner Radius',    0,   undefined, cfg('milestoneCornerRadius')),
     taskCornerRadius:          kvInt(barsKV,   'Task Corner Radius',          2,  undefined, cfg('taskCornerRadius')),
+    arrowheadSizeFactor:    kvFloat(barsKV, 'Arrowhead Size Factor',    0.3,  undefined, cfg('arrowheadSizeFactor')),
+    originMarkerSizeFactor: kvFloat(barsKV, 'Origin Marker Size Factor', 0.15, undefined, cfg('originMarkerSizeFactor')),
   };
 
   // ── Config: Timeline ───────────────────────────────────────────────────────

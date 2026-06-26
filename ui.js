@@ -1480,14 +1480,33 @@ function buildTaskRefOptions(currentValue) {
   return opts;
 }
 
+// Compact link-preview glyph for the Links nav table — mirrors the renderer's
+// same-row link (origin dot → styled line → arrowhead), surfacing lineColor /
+// lineStyle without a text column. lineColor is interpolated raw (browser judges
+// validity, matching the renderer + the swimlane color cell) but escaped into the
+// attribute. Returned markup is emitted RAW (it is SVG, not a text value).
+function buildLinkGlyph(lineColor, lineStyle) {
+  const stroke = escapeHtml(String(lineColor));
+  const dash = lineStyle === 'dashed' ? ' stroke-dasharray="4 3"' : '';
+  return `<svg class="link-glyph" viewBox="0 0 44 16" width="48" height="16" aria-hidden="true">` +
+         `<line x1="4" y1="8" x2="36" y2="8" stroke="${stroke}" stroke-width="1.5"${dash} />` +
+         `<circle cx="4" cy="8" r="2.5" fill="${stroke}" />` +
+         `<polygon points="36,4 44,8 36,12" fill="${stroke}" />` +
+         `</svg>`;
+}
+
 function renderLinksNavTable(selectedId) {
   const links = projectData.links;
   const table = document.createElement('table');
   table.className = 'entity-nav-table';
-  const COLS = ['id', 'fromTaskId', 'toTaskId'];
+  const COLS = ['id', 'fromTaskId', 'line', 'toTaskId'];
 
   let html = '<thead><tr>';
-  COLS.forEach(c => { html += `<th>${c}</th>`; });
+  COLS.forEach(c => {
+    if (c === 'line')                                 html += '<th class="link-glyph-col">line</th>';
+    else if (c === 'fromTaskId' || c === 'toTaskId')  html += `<th class="link-fk-col">${c}</th>`;
+    else                                              html += `<th>${c}</th>`;
+  });
   html += '</tr></thead><tbody>';
 
   if (links.length === 0) {
@@ -1497,13 +1516,19 @@ function renderLinksNavTable(selectedId) {
       const isSelected = l.id === selectedId;
       html += `<tr data-id="${l.id}"${isSelected ? ' class="selected"' : ''}>`;
       COLS.forEach(c => {
+        // The glyph column is non-editable (styling stays in the form) and emits
+        // raw SVG, so it bypasses the data-field / escapeHtml text path entirely.
+        if (c === 'line') {
+          html += `<td class="link-glyph-col">${buildLinkGlyph(l.lineColor, l.lineStyle)}</td>`;
+          return;
+        }
         let v;
         // FK cells carry data-field so attachInlineEditor's dblclick + mount
         // targeting works; they still DISPLAY via formatTaskRefCell.
         const isFk = (c === 'fromTaskId' || c === 'toTaskId');
         if (isFk) v = formatTaskRefCell(l[c]);
         else      v = l[c] == null ? '' : l[c];
-        html += `<td${isFk ? ` data-field="${c}"` : ''}>${escapeHtml(String(v))}</td>`;
+        html += `<td${isFk ? ` class="link-fk-col" data-field="${c}"` : ''}>${escapeHtml(String(v))}</td>`;
       });
       html += '</tr>';
     });
@@ -2036,6 +2061,8 @@ function renderBarsConfigForm(container) {
     MILESTONE_SHAPE_OPTIONS.map(o => ({ value: o, label: o })),
     val => upd('milestoneShape', val));
   addNumberRow(form, 'milestoneCornerRadius', bars.milestoneCornerRadius, commitFloat(upd, 'milestoneCornerRadius'), { step: '0.1' });
+  addNumberRow(form, 'arrowheadSizeFactor',    bars.arrowheadSizeFactor,    commitFloat(upd, 'arrowheadSizeFactor'),    { step: '0.1' });
+  addNumberRow(form, 'originMarkerSizeFactor', bars.originMarkerSizeFactor, commitFloat(upd, 'originMarkerSizeFactor'), { step: '0.1' });
 }
 
 function renderTimelineConfigForm(container) {

@@ -662,13 +662,13 @@ function validateLayout(projectData) {
 // ── Config: Bars ───────────────────────────────────────────────────────────────
 function validateBars(projectData) {
   const errors = [], warnings = [], notices = [];
-  const OWNED = new Set(['taskBarHeightFactor','milestoneSizeFactor','taskBarVerticalOffsetFactor','milestoneVerticalOffsetFactor','baselineBarHeightFactor','baselineBarVerticalOffsetFactor','baselineMilestoneSizeFactor','baselineMilestoneVerticalOffsetFactor','baselineFillOpacity','milestoneShape','milestoneCornerRadius','taskCornerRadius']);
+  const OWNED = new Set(['taskBarHeightFactor','milestoneSizeFactor','taskBarVerticalOffsetFactor','milestoneVerticalOffsetFactor','baselineBarHeightFactor','baselineBarVerticalOffsetFactor','baselineMilestoneSizeFactor','baselineMilestoneVerticalOffsetFactor','baselineFillOpacity','milestoneShape','milestoneCornerRadius','taskCornerRadius','arrowheadSizeFactor','originMarkerSizeFactor']);
   const pN = (projectData._parseNotices || []).filter(n => n.entity === 'config' && OWNED.has(n.field));
   const consumed = new Set();
   const bars = projectData.config.bars;
 
   // Errors
-  for (const f of ['taskBarHeightFactor','milestoneSizeFactor','taskBarVerticalOffsetFactor','milestoneVerticalOffsetFactor','baselineBarHeightFactor','baselineBarVerticalOffsetFactor','baselineMilestoneSizeFactor','baselineMilestoneVerticalOffsetFactor','baselineFillOpacity','milestoneCornerRadius','taskCornerRadius']) {
+  for (const f of ['taskBarHeightFactor','milestoneSizeFactor','taskBarVerticalOffsetFactor','milestoneVerticalOffsetFactor','baselineBarHeightFactor','baselineBarVerticalOffsetFactor','baselineMilestoneSizeFactor','baselineMilestoneVerticalOffsetFactor','baselineFillOpacity','milestoneCornerRadius','taskCornerRadius','arrowheadSizeFactor','originMarkerSizeFactor']) {
     const n = consumeNotice(pN, consumed, 'config', null, f, 'unparseable_number');
     if (n) errors.push(mkIssue('config', null, f, noticeMessage(n.reason), n.rawValue));
   }
@@ -686,6 +686,12 @@ function validateBars(projectData) {
   }
   if (isInteger(bars.taskCornerRadius) && bars.taskCornerRadius < 0) {
     errors.push(mkIssue('config', null, 'taskCornerRadius', 'taskCornerRadius < 0', bars.taskCornerRadius));
+  }
+  if (isFiniteNumber(bars.arrowheadSizeFactor) && bars.arrowheadSizeFactor <= 0) {
+    errors.push(mkIssue('config', null, 'arrowheadSizeFactor', 'arrowheadSizeFactor ≤ 0', bars.arrowheadSizeFactor));
+  }
+  if (isFiniteNumber(bars.originMarkerSizeFactor) && bars.originMarkerSizeFactor <= 0) {
+    errors.push(mkIssue('config', null, 'originMarkerSizeFactor', 'originMarkerSizeFactor ≤ 0', bars.originMarkerSizeFactor));
   }
 
   // Warnings
@@ -710,6 +716,12 @@ function validateBars(projectData) {
   }
   if (isFiniteNumber(bars.milestoneCornerRadius) && (bars.milestoneCornerRadius < 0 || bars.milestoneCornerRadius > 1)) {
     warnings.push(mkIssue('config', null, 'milestoneCornerRadius', 'milestoneCornerRadius out of [0, 1]', bars.milestoneCornerRadius));
+  }
+  if (isFiniteNumber(bars.arrowheadSizeFactor) && bars.arrowheadSizeFactor > 1) {
+    warnings.push(mkIssue('config', null, 'arrowheadSizeFactor', 'arrowheadSizeFactor > 1', bars.arrowheadSizeFactor));
+  }
+  if (isFiniteNumber(bars.originMarkerSizeFactor) && bars.originMarkerSizeFactor > 1) {
+    warnings.push(mkIssue('config', null, 'originMarkerSizeFactor', 'originMarkerSizeFactor > 1', bars.originMarkerSizeFactor));
   }
 
   return { errors, warnings, notices };
@@ -888,12 +900,6 @@ function validateRendering(projectData) {
     errors.push(mkIssue('config', null, 'monthLetters', 'monthLetters length ≠ 12',
       Array.isArray(r.monthLetters) ? r.monthLetters.length : r.monthLetters));
   }
-  if (isFiniteNumber(r.arrowheadSizeFactor) && r.arrowheadSizeFactor <= 0) {
-    errors.push(mkIssue('config', null, 'arrowheadSizeFactor', 'arrowheadSizeFactor ≤ 0', r.arrowheadSizeFactor));
-  }
-  if (isFiniteNumber(r.originMarkerSizeFactor) && r.originMarkerSizeFactor <= 0) {
-    errors.push(mkIssue('config', null, 'originMarkerSizeFactor', 'originMarkerSizeFactor ≤ 0', r.originMarkerSizeFactor));
-  }
   for (const f of RENDERING_STROKE_WIDTH_FIELDS) {
     if (isFiniteNumber(r[f]) && r[f] < 0) {
       errors.push(mkIssue('config', null, f, `${f} < 0`, r[f]));
@@ -911,12 +917,6 @@ function validateRendering(projectData) {
     errors.push(mkIssue('config', null, 'patternTileSize', 'patternTileSize ≤ 0', r.patternTileSize));
   }
 
-  if (isFiniteNumber(r.arrowheadSizeFactor) && r.arrowheadSizeFactor > 1) {
-    warnings.push(mkIssue('config', null, 'arrowheadSizeFactor', 'arrowheadSizeFactor > 1', r.arrowheadSizeFactor));
-  }
-  if (isFiniteNumber(r.originMarkerSizeFactor) && r.originMarkerSizeFactor > 1) {
-    warnings.push(mkIssue('config', null, 'originMarkerSizeFactor', 'originMarkerSizeFactor > 1', r.originMarkerSizeFactor));
-  }
   if (Array.isArray(r.monthLetters) && r.monthLetters.some(x => typeof x !== 'string')) {
     warnings.push(mkIssue('config', null, 'monthLetters', 'monthLetters contains non-string elements', r.monthLetters));
   }

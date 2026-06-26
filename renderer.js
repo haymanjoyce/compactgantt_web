@@ -652,8 +652,8 @@ function renderChart(projectData, opts = {}) {
   // ── 8 / 11. Links ────────────────────────────────────────────────────────────
   // Pre-compute all valid link geometry into renderedLinks, then emit bodies
   // (slot 8) and heads (slot 11) as separate passes to maintain z-order.
-  const aH            = rendering.arrowheadSizeFactor * rowH;
-  const oR            = rendering.originMarkerSizeFactor * rowH;
+  const aH            = bars.arrowheadSizeFactor * rowH;
+  const oR            = bars.originMarkerSizeFactor * rowH;
   const renderedLinks = [];
 
   for (const link of links) {

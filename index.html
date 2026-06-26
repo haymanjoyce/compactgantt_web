@@ -142,6 +142,15 @@
     }
     /* rowCount column (Swimlanes only) — numeric, right-aligned. */
     .entity-nav-table .swimlane-rowcount-col { text-align: right; }
+    /* line-glyph column (Links only) — fixed narrow width, centered SVG preview.
+       The glyph's stroke colors are independent, so it composes over the
+       selected-row background. */
+    .entity-nav-table .link-glyph-col { width: 48px; text-align: center; white-space: nowrap; }
+    .entity-nav-table .link-glyph { vertical-align: middle; }
+    /* from/to FK columns (Links only): equal proportional width — both claim 50%
+       so the browser splits the space left by the fixed id / line columns evenly
+       between them, keeping the two endpoint cells the same width. */
+    .entity-nav-table .link-fk-col { width: 50%; }
     .entity-empty {
       padding: 1.5rem; text-align: center; color: #777; font-size: 0.9rem;
     }
