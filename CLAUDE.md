@@ -202,9 +202,9 @@ A persisted snapshot of prior task dates, rendered as a tinted **overlay** above
 
 ## Current UI
 
-Five-tab layout (left to right): **Data → Chart → Issues → Config → Inspector**.
+Five-tab layout (left to right): **Chart → Data → Config → Issues → Inspector**. Visible order is DOM order of the `.tabs` buttons in `index.html`; show/hide and click wiring key off element id, so order is independent of the default. **Data remains the landing tab** (the `active` class travels with its button; it is not leftmost).
 
-**Data** tab hosts entity-entry panels behind a second-tier strip (Tasks / Swimlanes / Links / Pipes / Curtains / Notes). `renderDataPanel()` is the single entry point (tab activation, file load, New Project, every `dispatch()` via the hook). The two-pane skeleton rebuilds on second-tier switch only; the form container survives mutations so commit-on-blur keeps focus.
+**Data** tab hosts entity-entry panels behind a second-tier strip (Swimlanes / Tasks / Links / Pipes / Curtains / Notes — visible order is the `ENTITY_TABS` list order; default active is selected by entity name, so **Tasks stays the default** despite not being leftmost). `renderDataPanel()` is the single entry point (tab activation, file load, New Project, every `dispatch()` via the hook). The two-pane skeleton rebuilds on second-tier switch only; the form container survives mutations so commit-on-blur keeps focus.
 
 **Chart** tab calls `renderChart(projectData, { showBaseline, showOnlyMoved })` on every activation into a horizontally-scrollable container ("No project loaded" if no tasks); a `.chart-controls` strip with `Show baseline` / `Only moved` checkboxes precedes it when a baseline is loaded (see Baseline comparison).
 

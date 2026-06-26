@@ -201,8 +201,8 @@ function renderChartPanel() {
 // Tasks tab is fully implemented in slice 2a; other five tabs are stubs.
 
 const ENTITY_TABS = [
-  { key: 'tasks',     label: 'Tasks'     },
   { key: 'swimlanes', label: 'Swimlanes' },
+  { key: 'tasks',     label: 'Tasks'     },
   { key: 'links',     label: 'Links'     },
   { key: 'pipes',     label: 'Pipes'     },
   { key: 'curtains',  label: 'Curtains'  },
