@@ -452,12 +452,6 @@ function taskDays(t) {
   return Number.isFinite(d) ? d : null;
 }
 
-// Days column text — empty on null span (mirrors formatNavTableDateCell's empty-on-garbage posture).
-function formatTaskDaysCell(t) {
-  const d = taskDays(t);
-  return d == null ? '' : String(d);
-}
-
 // Symbol-column bar geometry. SYMBOL_COL_WIDTH_PX must match the .task-symbol-col
 // CSS width in index.html; the usable bar range is that minus end padding on each side.
 const SYMBOL_COL_WIDTH_PX = 64;
@@ -490,7 +484,7 @@ function renderTasksNavTable(selectedId) {
   const sortedTasks = buildTasksDisplayOrder();
   const table = document.createElement('table');
   table.className = 'entity-nav-table';
-  const COLS = ['id', 'row', 'symbol', 'name', 'days', 'startDate', 'finishDate'];
+  const COLS = ['id', 'symbol', 'name', 'startDate', 'finishDate'];
 
   // Bucket the cascade-sorted tasks by swimlane, preserving order. Defined
   // swimlanes get their own bucket; tasks with a null/empty swimlaneId go to
@@ -522,10 +516,8 @@ function renderTasksNavTable(selectedId) {
 
   let html = '<thead><tr>';
   COLS.forEach(c => {
-    if (c === 'row')         html += '<th class="task-row-col">row</th>';
-    else if (c === 'symbol') html += '<th class="task-symbol-col">symbol</th>';
-    else if (c === 'days')   html += '<th class="task-days-col" title="Calendar days">days</th>';
-    else                     html += `<th>${c}</th>`;
+    if (c === 'symbol') html += '<th class="task-symbol-col">symbol</th>';
+    else                html += `<th>${c}</th>`;
   });
   html += '</tr></thead><tbody>';
 
@@ -535,15 +527,14 @@ function renderTasksNavTable(selectedId) {
     const groupHeader = label =>
       `<tr class="entity-nav-table-group-header"><td colspan="${COLS.length}">${escapeHtml(String(label))}</td></tr>`;
 
-    const dataRow = t => {
+    const dataRow = (t, isChartRowStart) => {
       const isSelected = t.id === selectedId;
       const sw = projectData.swimlanes.find(s => s.id === t.swimlaneId);
       const symbolBg = sw ? ` style="background:${escapeHtml(String(sw.backgroundColor))}"` : '';
-      let row = `<tr data-id="${t.id}"${isSelected ? ' class="selected"' : ''}>`;
+      const cls = [isSelected ? 'selected' : '', isChartRowStart ? 'chart-row-start' : ''].filter(Boolean).join(' ');
+      let row = `<tr data-id="${t.id}"${cls ? ` class="${cls}"` : ''}>`;
       COLS.forEach(c => {
-        if (c === 'row')                             row += `<td class="task-row-col">${escapeHtml(String(t.row == null ? '' : t.row))}</td>`;
-        else if (c === 'symbol')                     row += `<td class="task-symbol-col"${symbolBg}>${taskSymbolMarkup(t, computeBarWidth(t, maxDays))}</td>`;
-        else if (c === 'days')                       row += `<td class="task-days-col">${escapeHtml(formatTaskDaysCell(t))}</td>`;
+        if (c === 'symbol')                          row += `<td class="task-symbol-col"${symbolBg}>${taskSymbolMarkup(t, computeBarWidth(t, maxDays))}</td>`;
         else if (c === 'startDate' || c === 'finishDate') row += `<td data-field="${c}">${escapeHtml(formatNavTableDateCell(t[c]))}</td>`;
         else if (c === 'name')                       row += `<td data-field="name">${escapeHtml(String(t.name == null ? '' : t.name))}</td>`;
         else                                         row += `<td>${escapeHtml(String(t[c] == null ? '' : t[c]))}</td>`;
@@ -551,15 +542,28 @@ function renderTasksNavTable(selectedId) {
       return row + '</tr>';
     };
 
+    // Emit a bucket's tasks, marking each chart-row boundary: a task is the start
+    // of a new chart-row group when it is NOT the first in the bucket AND its row
+    // differs from the previous task's row (null === null, so null-row tasks
+    // cluster together with a single divider above them).
+    const emitBucket = tasks => {
+      let prevRow;
+      tasks.forEach((t, i) => {
+        const isChartRowStart = i > 0 && t.row !== prevRow;
+        html += dataRow(t, isChartRowStart);
+        prevRow = t.row;
+      });
+    };
+
     // Defined swimlanes first, in swimlane.order sequence (array order).
     // Headers render even when the bucket is empty.
     projectData.swimlanes.forEach(s => {
       html += groupHeader(s.name);
-      (bySwimlane.get(s.id) || []).forEach(t => { html += dataRow(t); });
+      emitBucket(bySwimlane.get(s.id) || []);
     });
     // Synthetic groups, only when populated.
-    if (unassigned.length)  { html += groupHeader('Unassigned');  unassigned.forEach(t => { html += dataRow(t); }); }
-    if (misassigned.length) { html += groupHeader('Misassigned'); misassigned.forEach(t => { html += dataRow(t); }); }
+    if (unassigned.length)  { html += groupHeader('Unassigned');  emitBucket(unassigned); }
+    if (misassigned.length) { html += groupHeader('Misassigned'); emitBucket(misassigned); }
   }
   html += '</tbody></table>';
   table.innerHTML = html;
@@ -678,6 +682,7 @@ function renderTasksForm(container, selectedId) {
   addTextRow(form, 'name', task.name, val => upd('name', val));
   addDateRow(form, 'startDate',  task.startDate,  val => upd('startDate',  val === '' ? null : val));
   addDateRow(form, 'finishDate', task.finishDate, val => upd('finishDate', val === '' ? null : val));
+  addReadonlyRow(form, 'calendarDays', taskDays(task), ' (derived)');
   addReadonlyRow(form, 'isMilestone', task.isMilestone, ' (derived)');
 
   addSelectRow(form, 'labelContent', task.labelContent,

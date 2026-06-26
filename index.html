@@ -92,8 +92,25 @@
     .entity-nav-table { width: 100%; margin: 0; font-size: 0.85rem; }
     /* -1px is a deliberate overlap under the toolbar (z-index 2) to eliminate sub-pixel-rounding gaps during scroll. */
     .entity-nav-table th { position: sticky; top: calc(var(--cg-toolbar-height) - 1px); z-index: 1; }
+    /* Sticky th drops its collapsed border on scroll, so paint the header's bottom
+       rule as an inset box-shadow (1px #ccc) — survives sticking and matches the grid. */
+    .entity-nav-table th { box-shadow: inset 0 -1px 0 #ccc; }
     .entity-nav-table tbody tr { cursor: pointer; }
     .entity-nav-table tbody tr.selected { background: var(--cg-bg-selected); }
+    /* Chart-row boundary (Tasks only): a heavy dark line above the first task of
+       each new chart-row group within a swimlane. The ambient cell grid is a thin
+       1px #ccc; this is 2px #ccc, so under border-collapse the heavier border wins
+       at the boundary and reads as a distinct chart-row separator rather than just
+       another grid line. Still subordinate to the bold, filled swimlane group-header
+       band (swimlane > chart-row > ordinary row). Composes over the selected-row background. */
+    .entity-nav-table tbody tr.chart-row-start td { border-top: 2px solid #ccc; }
+    /* Display-only cells (no data-field) read muted vs near-black editable cells —
+       a gentle cue, not a disabled look. tr[data-id] excludes group-header and
+       empty-state rows. The id cell greys but stays readable (it's not editable). */
+    .entity-nav-table tbody tr[data-id] td:not([data-field]) { color: #666; }
+    /* Editable cells (data-field): subtle hover tint, light enough to compose over
+       the selected-row background. */
+    .entity-nav-table tbody tr[data-id] td[data-field]:hover { background: rgba(0, 0, 0, 0.04); }
     /* Inline cell editor (double-click a name cell). Fills the cell and inherits
        the table font; margin:-1px 0 absorbs the 1px border so the row height
        doesn't jump versus the plain text cell. */
@@ -123,10 +140,6 @@
     .entity-nav-table tbody tr:not(.entity-nav-table-group-header) td:first-child:not(.entity-empty) {
       text-align: right; width: 1px;
     }
-    /* Days column (Tasks only) — numeric, right-aligned. */
-    .entity-nav-table .task-days-col { text-align: right; }
-    /* row column (Tasks only) — numeric, right-aligned. */
-    .entity-nav-table .task-row-col { text-align: right; }
     /* order / rowCount columns (Swimlanes only) — numeric, right-aligned. */
     /* order: shrink to its 1–2 digit content; the small width forces the long
        "order (derived)" header to wrap at the space to order / (derived) (its
