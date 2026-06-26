@@ -140,19 +140,8 @@
     .entity-nav-table tbody tr:not(.entity-nav-table-group-header) td:first-child:not(.entity-empty) {
       text-align: right; width: 1px;
     }
-    /* order / rowCount columns (Swimlanes only) — numeric, right-aligned. */
-    /* order: shrink to its 1–2 digit content; the small width forces the long
-       "order (derived)" header to wrap at the space to order / (derived) (its
-       widest unbreakable word), so the column lands ~that wide and the reclaimed
-       space flows to the flexible name column. */
-    .entity-nav-table .swimlane-order-col { text-align: right; width: 1px; white-space: normal; }
+    /* rowCount column (Swimlanes only) — numeric, right-aligned. */
     .entity-nav-table .swimlane-rowcount-col { text-align: right; }
-    /* labelPosition column (Pipes only) — numeric, right-aligned; width: 1px shrinks
-       it to content so slack flows to name. Floor is the single-word header width;
-       the gap to the short right-aligned values is inherent and expected. */
-    .entity-nav-table .pipe-labelposition-col { text-align: right; width: 1px; }
-    /* opacity column (Curtains only) — numeric, right-aligned. */
-    .entity-nav-table .curtain-opacity-col { text-align: right; }
     .entity-empty {
       padding: 1.5rem; text-align: center; color: #777; font-size: 0.9rem;
     }

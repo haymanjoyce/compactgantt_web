@@ -1026,12 +1026,11 @@ function renderSwimlanesNavTable(selectedId) {
   const table = document.createElement('table');
   table.className = 'entity-nav-table';
   // Per-column emission (not a generic loop): the color column is text-free and
-  // style-bearing, and order/rowCount carry alignment classes on header + data cells.
-  const COLS = ['id', 'order', 'color', 'name', 'rowCount'];
+  // style-bearing, and rowCount carries alignment classes on header + data cells.
+  const COLS = ['id', 'color', 'name', 'rowCount'];
   const COL_COUNT = COLS.length;
 
   const headerCell = c => {
-    if (c === 'order')    return '<th class="swimlane-order-col">order (derived)</th>';
     if (c === 'rowCount') return '<th class="swimlane-rowcount-col">rowCount</th>';
     if (c === 'color')    return '<th>color</th>';
     return `<th>${c}</th>`;
@@ -1052,7 +1051,6 @@ function renderSwimlanesNavTable(selectedId) {
       html += `<tr data-id="${s.id}"${isSelected ? ' class="selected"' : ''}>`;
       COLS.forEach(c => {
         if (c === 'color')         html += `<td${colorBg}></td>`;
-        else if (c === 'order')    html += `<td class="swimlane-order-col">${escapeHtml(String(s.order == null ? '' : s.order))}</td>`;
         else if (c === 'rowCount') html += `<td class="swimlane-rowcount-col">${escapeHtml(String(s.rowCount == null ? '' : s.rowCount))}</td>`;
         else if (c === 'name')     html += `<td data-field="name">${escapeHtml(String(s.name == null ? '' : s.name))}</td>`;
         else                       html += `<td>${escapeHtml(String(s[c] == null ? '' : s[c]))}</td>`;
@@ -1486,7 +1484,7 @@ function renderLinksNavTable(selectedId) {
   const links = projectData.links;
   const table = document.createElement('table');
   table.className = 'entity-nav-table';
-  const COLS = ['id', 'fromTaskId', 'toTaskId', 'lineColor', 'lineStyle', 'routing'];
+  const COLS = ['id', 'fromTaskId', 'toTaskId'];
 
   let html = '<thead><tr>';
   COLS.forEach(c => { html += `<th>${c}</th>`; });
@@ -1596,13 +1594,10 @@ function renderPipesNavTable(selectedId) {
   const pipes = projectData.pipes;
   const table = document.createElement('table');
   table.className = 'entity-nav-table';
-  const COLS = ['id', 'date', 'name', 'color', 'lineStyle', 'labelPosition'];
+  const COLS = ['id', 'date', 'name'];
 
   let html = '<thead><tr>';
-  COLS.forEach(c => {
-    if (c === 'labelPosition') html += `<th class="pipe-labelposition-col">${c}</th>`;
-    else                       html += `<th>${c}</th>`;
-  });
+  COLS.forEach(c => { html += `<th>${c}</th>`; });
   html += '</tr></thead><tbody>';
 
   if (pipes.length === 0) {
@@ -1615,10 +1610,9 @@ function renderPipesNavTable(selectedId) {
         let v;
         if (c === 'date') v = formatNavTableDateCell(p.date);
         else              v = p[c] == null ? '' : p[c];
-        if (c === 'name')               html += `<td data-field="name">${escapeHtml(String(v))}</td>`;
-        else if (c === 'date')          html += `<td data-field="date">${escapeHtml(String(v))}</td>`;
-        else if (c === 'labelPosition') html += `<td class="pipe-labelposition-col">${escapeHtml(String(v))}</td>`;
-        else                            html += `<td>${escapeHtml(String(v))}</td>`;
+        if (c === 'name')      html += `<td data-field="name">${escapeHtml(String(v))}</td>`;
+        else if (c === 'date') html += `<td data-field="date">${escapeHtml(String(v))}</td>`;
+        else                   html += `<td>${escapeHtml(String(v))}</td>`;
       });
       html += '</tr>';
     });
@@ -1702,13 +1696,10 @@ function renderCurtainsNavTable(selectedId) {
   const curtains = projectData.curtains;
   const table = document.createElement('table');
   table.className = 'entity-nav-table';
-  const COLS = ['id', 'startDate', 'endDate', 'name', 'color', 'opacity', 'labelAnchor'];
+  const COLS = ['id', 'startDate', 'endDate', 'name'];
 
   let html = '<thead><tr>';
-  COLS.forEach(c => {
-    if (c === 'opacity') html += `<th class="curtain-opacity-col">${c}</th>`;
-    else                 html += `<th>${c}</th>`;
-  });
+  COLS.forEach(c => { html += `<th>${c}</th>`; });
   html += '</tr></thead><tbody>';
 
   if (curtains.length === 0) {
@@ -1721,10 +1712,9 @@ function renderCurtainsNavTable(selectedId) {
         let v;
         if (c === 'startDate' || c === 'endDate') v = formatNavTableDateCell(cu[c]);
         else                                      v = cu[c] == null ? '' : cu[c];
-        if (c === 'name')                         html += `<td data-field="name">${escapeHtml(String(v))}</td>`;
+        if (c === 'name')                              html += `<td data-field="name">${escapeHtml(String(v))}</td>`;
         else if (c === 'startDate' || c === 'endDate') html += `<td data-field="${c}">${escapeHtml(String(v))}</td>`;
-        else if (c === 'opacity') html += `<td class="curtain-opacity-col">${escapeHtml(String(v))}</td>`;
-        else                      html += `<td>${escapeHtml(String(v))}</td>`;
+        else                                           html += `<td>${escapeHtml(String(v))}</td>`;
       });
       html += '</tr>';
     });
