@@ -234,7 +234,7 @@ Timeline date fields commit two dispatches — the date AND the paired (non-user
 
 ### Form helper conventions
 
-`addNumberRow` parsing is the caller's job (`commitFn` does `parseInt`/`parseFloat`); float call sites pass `step: '0.1'`, fine-tuning `*Factor` keys (live/baseline vertical-offset, baseline appearance) `step: '0.01'`. Enum `<select>` options use the canonical lowercase values the parser stores, not Excel casing.
+`addNumberRow` parsing is the caller's job (`commitFn` does `parseInt`/`parseFloat`); float call sites pass `step: '0.1'`, fine-tuning `*Factor` keys (live/baseline vertical-offset, baseline appearance) `step: '0.01'`. Enum `<select>` options use the canonical lowercase values the parser stores, not Excel casing. `opts.decimals` (opt-in) is **display-only**: it `toFixed`s the initial input value (finite → fixed decimals, null/empty/non-finite → blank) so accepted precision is discoverable, never touching the stored value or commit/parse path; passed (`decimals: 2`) by the Typography alignment factors, the twelve Bars factor/opacity/radius fields, and the Pipe/Curtain `labelPosition`+`opacity` rows — `taskCornerRadius` (integer) and other callers omit it and are unaffected.
 
 `addCheckboxRow` auto-commits on `'change'` (atomic, no Escape-to-revert) and — unlike the raw-string helpers — passes the parsed boolean directly. Config tab plus the pipe/curtain `invertLabel` side-form checkbox (the same-id form guard preserves its state across re-render).
 
@@ -248,7 +248,7 @@ Read-only surface for `projectData._validation` — renders on tab activation, n
 
 - Sort is stable, tie-broken to parser-emission order — always from the canonical `flattenIssues` list, never the current view; ID/value place nulls/placeholders last regardless of direction.
 - Filter/sort/group state lives in `issuesFilterState`; persists across tab switches, resets on file load. Search keeps focus because only `#issuesBody` re-renders on filter changes.
-- Tab label: plain `Issues`, else `Issues (E/W/N)` tinted by the highest non-zero bucket.
+- Tab label: always the word `Issues`; when any issue exists a `.tab-dot` child span is appended, coloured by the worst severity present (error > warning > notice), and the tab `title` carries the non-zero-bucket breakdown (singular/plural, comma-separated). No issues / no `_validation` → text-only, title cleared. Dot is independent of the active tab.
 
 Non-gating: Save xlsx/SVG stay enabled regardless of `_validation`.
 
@@ -260,7 +260,9 @@ Non-gating: Save xlsx/SVG stay enabled regardless of `_validation`.
 
 ### Toolbar buttons
 
-Left to right: **New Project** → file input → **Save** (xlsx) → **Save SVG** → **Load Baseline** → **Clear Baseline**. New Project replaces `projectData`, clears `loadedFilename`, resets data-panel + issues-filter state, activates Data, then seeds `"Swimlane 1"`. Both Save buttons share the disabled gate (`tasks.length === 0 && swimlanes.length === 0`); Baseline buttons gate via `refreshBaselineButtons`. Save SVG calls `renderChart` (both toggles) regardless of active tab. Filenames: xlsx uses `loadedFilename` verbatim; SVG swaps the extension for `.svg`.
+Left to right: **New Project** → **Choose file** → **Save** (xlsx) → **Save SVG** → **Load Baseline** → **Clear Baseline**, wrapped in an `.app-toolbar` flex row (a `.app-toolbar-divider` splits project from baseline actions). **Choose file** drives the hidden `#fileInput` (`click()`), mirroring Load Baseline / `#baselineInput`; the change handler resets `e.target.value` so re-selecting the same file re-fires. New Project replaces `projectData`, clears `loadedFilename`, resets data-panel + issues-filter state, activates Data, then seeds `"Swimlane 1"`. Both Save buttons share the disabled gate (`tasks.length === 0 && swimlanes.length === 0`); Baseline buttons gate via `refreshBaselineButtons`. Save SVG calls `renderChart` (both toggles) regardless of active tab. Filenames: xlsx uses `loadedFilename` verbatim; SVG swaps the extension for `.svg`.
+
+**Status bar (`#status`).** `refreshStatusAndButtons(prefix)` composes it: a `.status-text` span (`<prefix> — <counts>`, set as textContent so a filename can't inject markup) + a right-aligned `.status-chip` reflecting `baseline.length` (present "✓ baseline" / absent "no baseline"). The prefix ("Loaded: <name>" / "New project") is remembered in module-scope `lastStatusPrefix` so a prefix-less recompose keeps it; Load/Clear Baseline now call `refreshStatusAndButtons()` (not bare `refreshBaselineButtons`) so the chip stays live after baseline changes, not just file-load / New Project. The HTML's initial "No file loaded" stays text-only (no chip — the chip is only added by the recompose).
 
 ## Excel export (writer.js)
 
