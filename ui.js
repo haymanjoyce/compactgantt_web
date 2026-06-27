@@ -828,7 +828,17 @@ function addNumberRow(form, fieldName, value, commitFn, opts) {
   input.step  = o.step != null ? String(o.step) : '1';
   if (o.min != null) input.min = String(o.min);
   if (o.max != null) input.max = String(o.max);
-  input.value = value == null ? '' : String(value);
+  // opts.decimals (opt-in): format the DISPLAYED value to a fixed number of
+  // decimals so finer precision is discoverable. Display-only — never alters
+  // the stored value or commit/parse behaviour. Non-finite/null → blank input.
+  if (o.decimals != null) {
+    const n = Number(value);
+    input.value = (value == null || value === '' || !Number.isFinite(n))
+      ? ''
+      : n.toFixed(o.decimals);
+  } else {
+    input.value = value == null ? '' : String(value);
+  }
   // data-field marker enables targeted DOM updates without rebuilding the form
   // (e.g. syncTaskRowInput after a Move Up / Move Down dispatch).
   input.dataset.field = fieldName;
@@ -1682,7 +1692,7 @@ function renderPipesForm(container, selectedId) {
   addNumberRow(form, 'labelPosition', pipe.labelPosition, val => {
     const n = parseFloat(val);
     if (Number.isFinite(n)) upd('labelPosition', n);
-  }, { step: '0.1', min: '0', max: '1' });
+  }, { step: '0.1', min: '0', max: '1', decimals: 2 });
   addCheckboxRow(form, 'invertLabel', pipe.invertLabel, val => upd('invertLabel', val));
 }
 
@@ -1782,11 +1792,11 @@ function renderCurtainsForm(container, selectedId) {
   addNumberRow(form, 'opacity', cu.opacity, val => {
     const n = parseFloat(val);
     if (Number.isFinite(n)) upd('opacity', n);
-  }, { step: '0.1', min: '0', max: '1' });
+  }, { step: '0.1', min: '0', max: '1', decimals: 2 });
   addNumberRow(form, 'labelPosition', cu.labelPosition, val => {
     const n = parseFloat(val);
     if (Number.isFinite(n)) upd('labelPosition', n);
-  }, { step: '0.1', min: '0', max: '1' });
+  }, { step: '0.1', min: '0', max: '1', decimals: 2 });
   addSelectRow(form, 'labelAnchor', cu.labelAnchor,
     CURTAIN_LABEL_ANCHOR_OPTIONS.map(o => ({ value: o, label: o })),
     val => upd('labelAnchor', val));
@@ -2045,22 +2055,22 @@ function renderBarsConfigForm(container) {
   const upd = (field, value) =>
     dispatch({ entity: 'config', action: 'update', block: 'bars', field, value });
 
-  addNumberRow(form, 'taskBarHeightFactor',   bars.taskBarHeightFactor,   commitFloat(upd, 'taskBarHeightFactor'),   { step: '0.1' });
-  addNumberRow(form, 'milestoneSizeFactor',   bars.milestoneSizeFactor,   commitFloat(upd, 'milestoneSizeFactor'),   { step: '0.1' });
-  addNumberRow(form, 'taskBarVerticalOffsetFactor',   bars.taskBarVerticalOffsetFactor,   commitFloat(upd, 'taskBarVerticalOffsetFactor'),   { step: '0.01' });
-  addNumberRow(form, 'milestoneVerticalOffsetFactor', bars.milestoneVerticalOffsetFactor, commitFloat(upd, 'milestoneVerticalOffsetFactor'), { step: '0.01' });
-  addNumberRow(form, 'baselineBarHeightFactor',           bars.baselineBarHeightFactor,           commitFloat(upd, 'baselineBarHeightFactor'),           { step: '0.01' });
-  addNumberRow(form, 'baselineBarVerticalOffsetFactor',   bars.baselineBarVerticalOffsetFactor,   commitFloat(upd, 'baselineBarVerticalOffsetFactor'),   { step: '0.01' });
-  addNumberRow(form, 'baselineMilestoneSizeFactor',       bars.baselineMilestoneSizeFactor,       commitFloat(upd, 'baselineMilestoneSizeFactor'),       { step: '0.01' });
-  addNumberRow(form, 'baselineMilestoneVerticalOffsetFactor', bars.baselineMilestoneVerticalOffsetFactor, commitFloat(upd, 'baselineMilestoneVerticalOffsetFactor'), { step: '0.01' });
-  addNumberRow(form, 'baselineFillOpacity',               bars.baselineFillOpacity,               commitFloat(upd, 'baselineFillOpacity'),               { step: '0.01' });
+  addNumberRow(form, 'taskBarHeightFactor',   bars.taskBarHeightFactor,   commitFloat(upd, 'taskBarHeightFactor'),   { step: '0.1', decimals: 2 });
+  addNumberRow(form, 'milestoneSizeFactor',   bars.milestoneSizeFactor,   commitFloat(upd, 'milestoneSizeFactor'),   { step: '0.1', decimals: 2 });
+  addNumberRow(form, 'taskBarVerticalOffsetFactor',   bars.taskBarVerticalOffsetFactor,   commitFloat(upd, 'taskBarVerticalOffsetFactor'),   { step: '0.01', decimals: 2 });
+  addNumberRow(form, 'milestoneVerticalOffsetFactor', bars.milestoneVerticalOffsetFactor, commitFloat(upd, 'milestoneVerticalOffsetFactor'), { step: '0.01', decimals: 2 });
+  addNumberRow(form, 'baselineBarHeightFactor',           bars.baselineBarHeightFactor,           commitFloat(upd, 'baselineBarHeightFactor'),           { step: '0.01', decimals: 2 });
+  addNumberRow(form, 'baselineBarVerticalOffsetFactor',   bars.baselineBarVerticalOffsetFactor,   commitFloat(upd, 'baselineBarVerticalOffsetFactor'),   { step: '0.01', decimals: 2 });
+  addNumberRow(form, 'baselineMilestoneSizeFactor',       bars.baselineMilestoneSizeFactor,       commitFloat(upd, 'baselineMilestoneSizeFactor'),       { step: '0.01', decimals: 2 });
+  addNumberRow(form, 'baselineMilestoneVerticalOffsetFactor', bars.baselineMilestoneVerticalOffsetFactor, commitFloat(upd, 'baselineMilestoneVerticalOffsetFactor'), { step: '0.01', decimals: 2 });
+  addNumberRow(form, 'baselineFillOpacity',               bars.baselineFillOpacity,               commitFloat(upd, 'baselineFillOpacity'),               { step: '0.01', decimals: 2 });
   addNumberRow(form, 'taskCornerRadius',      bars.taskCornerRadius,      commitInt  (upd, 'taskCornerRadius'));
   addSelectRow(form, 'milestoneShape',        bars.milestoneShape,
     MILESTONE_SHAPE_OPTIONS.map(o => ({ value: o, label: o })),
     val => upd('milestoneShape', val));
-  addNumberRow(form, 'milestoneCornerRadius', bars.milestoneCornerRadius, commitFloat(upd, 'milestoneCornerRadius'), { step: '0.1' });
-  addNumberRow(form, 'arrowheadSizeFactor',    bars.arrowheadSizeFactor,    commitFloat(upd, 'arrowheadSizeFactor'),    { step: '0.1' });
-  addNumberRow(form, 'originMarkerSizeFactor', bars.originMarkerSizeFactor, commitFloat(upd, 'originMarkerSizeFactor'), { step: '0.1' });
+  addNumberRow(form, 'milestoneCornerRadius', bars.milestoneCornerRadius, commitFloat(upd, 'milestoneCornerRadius'), { step: '0.1', decimals: 2 });
+  addNumberRow(form, 'arrowheadSizeFactor',    bars.arrowheadSizeFactor,    commitFloat(upd, 'arrowheadSizeFactor'),    { step: '0.1', decimals: 2 });
+  addNumberRow(form, 'originMarkerSizeFactor', bars.originMarkerSizeFactor, commitFloat(upd, 'originMarkerSizeFactor'), { step: '0.1', decimals: 2 });
 }
 
 function renderTimelineConfigForm(container) {
@@ -2190,7 +2200,7 @@ function renderTypographyConfigForm(container) {
     'swimlaneTopAlignmentFactor', 'swimlaneBottomAlignmentFactor',
   ];
   ALIGNMENT_FACTOR_FIELDS.forEach(f =>
-    addNumberRow(form, f, typo[f], commitFloat(upd, f), { step: '0.1' }));
+    addNumberRow(form, f, typo[f], commitFloat(upd, f), { step: '0.1', decimals: 2 }));
 }
 
 function renderPreferencesConfigForm(container) {
