@@ -378,6 +378,7 @@ function createEmptyProjectData() {
         chartStartDateExplicit: false, chartEndDateExplicit: false,
         showYears: true, showMonths: true, showWeeks: false, showDays: false, showDates: false,
         gridlineYears: true, gridlineMonths: true, gridlineWeeks: false, gridlineDays: false,
+        chartDateFormat: 'dd MMM',
       },
       titles: {
         headerHeight: 20, headerText: '', headerTextAlign: 'center',
@@ -418,9 +419,6 @@ function createEmptyProjectData() {
         noteAlignmentFactor:          0.7,
         swimlaneTopAlignmentFactor:   0.7,
         swimlaneBottomAlignmentFactor:0.7,
-      },
-      preferences: {
-        chartDateFormat: 'dd MMM',
       },
       rendering: {
         linkArrowheadMilestoneGap:     2,
@@ -844,6 +842,11 @@ function parseWorkbook(workbook) {
   };
 
   // ── Config: Timeline ───────────────────────────────────────────────────────
+  // chartDateFormat now lives in Timeline. Legacy files stored it in a separate
+  // Preferences sheet; read that here ONLY to seed the fallback default so old
+  // files round-trip. Non-empty Preferences value wins over the bare default,
+  // but a value present in the Timeline sheet wins over both (new files).
+  const legacyChartDateFormat = kvStr(parseConfigSheet(workbook.Sheets['Preferences']), 'Chart Date Format', 'dd MMM');
   const timelineKV = parseConfigSheet(workbook.Sheets['Timeline']);
   let chartStartDate = kvDate(timelineKV, 'Chart Start Date', undefined, cfg('chartStartDate'));
   let chartEndDate   = kvDate(timelineKV, 'Chart End Date',   undefined, cfg('chartEndDate'));
@@ -870,6 +873,7 @@ function parseWorkbook(workbook) {
     gridlineMonths: kvBool(timelineKV, 'Gridline Months', true,  'Vertical Gridline Months', cfg('gridlineMonths')),
     gridlineWeeks:  kvBool(timelineKV, 'Gridline Weeks',  false, 'Vertical Gridline Weeks',  cfg('gridlineWeeks')),
     gridlineDays:   kvBool(timelineKV, 'Gridline Days',   false, undefined,                  cfg('gridlineDays')),
+    chartDateFormat: kvStr(timelineKV, 'Chart Date Format', legacyChartDateFormat),
   };
 
   // ── Config: Titles ─────────────────────────────────────────────────────────
@@ -923,13 +927,6 @@ function parseWorkbook(workbook) {
     noteAlignmentFactor:          kvFloat(typographyKV, 'Note Alignment Factor',            0.7, undefined,                                   cfg('noteAlignmentFactor')),
     swimlaneTopAlignmentFactor:   kvFloat(typographyKV, 'Swimlane Top Alignment Factor',    0.7, 'Swimlane Top Vertical Alignment Factor',    cfg('swimlaneTopAlignmentFactor')),
     swimlaneBottomAlignmentFactor:kvFloat(typographyKV, 'Swimlane Bottom Alignment Factor', 0.7, 'Swimlane Bottom Vertical Alignment Factor', cfg('swimlaneBottomAlignmentFactor')),
-  };
-
-  // ── Config: Preferences ────────────────────────────────────────────────────
-  const prefsSheet = workbook.Sheets['Preferences'];
-  const prefsKV    = parseConfigSheet(prefsSheet);
-  projectData.config.preferences = {
-    chartDateFormat: kvStr(prefsKV, 'Chart Date Format', 'dd MMM'),
   };
 
   projectData._parseNotices = _notices;

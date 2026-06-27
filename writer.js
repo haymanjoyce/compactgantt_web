@@ -6,7 +6,7 @@ function boolStr(v) { return v ? 'Yes' : 'No'; }
 
 function writeWorkbook(projectData) {
   const { tasks, swimlanes, links, pipes, curtains, notes, baseline, counters, config } = projectData;
-  const { layout, bars, timeline, titles, style, typography, preferences } = config;
+  const { layout, bars, timeline, titles, style, typography } = config;
 
   const wb = XLSX.utils.book_new();
 
@@ -133,6 +133,7 @@ function writeWorkbook(projectData) {
     ['Field', 'Value'],
     ['Chart Start Date', timeline.chartStartDateExplicit ? toJsDate(timeline.chartStartDate) : null],
     ['Chart End Date',   timeline.chartEndDateExplicit   ? toJsDate(timeline.chartEndDate)   : null],
+    ['Chart Date Format', timeline.chartDateFormat],
     ['Show Years',    boolStr(timeline.showYears)],
     ['Show Months',   boolStr(timeline.showMonths)],
     ['Show Weeks',    boolStr(timeline.showWeeks)],
@@ -195,12 +196,6 @@ function writeWorkbook(projectData) {
     ['Note Alignment Factor',            typography.noteAlignmentFactor],
     ['Swimlane Top Alignment Factor',    typography.swimlaneTopAlignmentFactor],
     ['Swimlane Bottom Alignment Factor', typography.swimlaneBottomAlignmentFactor],
-  ]);
-
-  // ── 13. Preferences ───────────────────────────────────────────────────────────
-  addSheet('Preferences', [
-    ['Field', 'Value'],
-    ['Chart Date Format', preferences.chartDateFormat],
   ]);
 
   return XLSX.write(wb, { type: 'array', bookType: 'xlsx' });

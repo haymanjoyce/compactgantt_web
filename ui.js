@@ -1945,8 +1945,8 @@ function attachCommitHandlers(control, getValue, commitFn) {
 }
 
 // ── Config panel ───────────────────────────────────────────────────────────────
-// Form-only — no nav table, no toolbar, no selection state. Seven sub-tabs
-// correspond to the seven user-facing config blocks (config.rendering is
+// Form-only — no nav table, no toolbar, no selection state. Six sub-tabs
+// correspond to the six user-facing config blocks (config.rendering is
 // deliberately excluded). Persistent-skeleton pattern mirrors renderDataPanel:
 // the sub-tab strip and an outer area survive across same-block re-renders so
 // commit-on-blur dispatches preserve focus inside the form.
@@ -1958,7 +1958,6 @@ const CONFIG_TABS = [
   { key: 'titles',      label: 'Titles'      },
   { key: 'style',       label: 'Colors'      },
   { key: 'typography',  label: 'Typography'  },
-  { key: 'preferences', label: 'Preferences' },
 ];
 
 const MILESTONE_SHAPE_OPTIONS = ['diamond', 'circle'];
@@ -1988,7 +1987,6 @@ function renderConfigPanel(panel) {
   if (activeConfigBlock === 'titles')      renderTitlesConfigForm(container);
   if (activeConfigBlock === 'style')       renderStyleConfigForm(container);
   if (activeConfigBlock === 'typography')  renderTypographyConfigForm(container);
-  if (activeConfigBlock === 'preferences') renderPreferencesConfigForm(container);
 }
 
 function buildConfigTabStrip(strip) {
@@ -2139,6 +2137,7 @@ function renderTimelineConfigForm(container) {
       upd('chartEndDateExplicit', true);
     }
   });
+  addTextRow(form, 'chartDateFormat', timeline.chartDateFormat, val => upd('chartDateFormat', val));
 
   addConfigSection(form, 'Scales');
   addCheckboxRow(form, 'showYears',  timeline.showYears,  val => upd('showYears',  val));
@@ -2242,22 +2241,6 @@ function renderTypographyConfigForm(container) {
     addNumberRow(form, f, typo[f], commitFloat(upd, f), { step: '0.1', decimals: 2 }));
 }
 
-function renderPreferencesConfigForm(container) {
-  if (configBlockRenderedFor === 'preferences' && container.childElementCount > 0) return;
-  configBlockRenderedFor = 'preferences';
-  container.innerHTML = '';
-
-  const form = document.createElement('div');
-  form.className = 'entity-form';
-  container.appendChild(form);
-
-  const prefs = projectData.config.preferences;
-  const upd = (field, value) =>
-    dispatch({ entity: 'config', action: 'update', block: 'preferences', field, value });
-
-  addTextRow(form, 'chartDateFormat', prefs.chartDateFormat, val => upd('chartDateFormat', val));
-}
-
 // ── Inspector renderer ─────────────────────────────────────────────────────────
 function renderInspector(panel) {
   const d = projectData;
@@ -2292,7 +2275,6 @@ function renderInspector(panel) {
   appendSection('config.titles',      'from Titles sheet',     div => renderConfigTable(div, d.config.titles));
   appendSection('config.style',       'from Style sheet',      div => renderConfigTable(div, d.config.style));
   appendSection('config.typography',  'from Typography sheet', div => renderConfigTable(div, d.config.typography));
-  appendSection('config.preferences', 'from Preferences sheet',div => renderConfigTable(div, d.config.preferences));
   appendSection('config.rendering',   'not in Excel',          div => renderConfigTable(div, d.config.rendering));
 
   const FIXED = new Set(['tasks', 'swimlanes', 'links', 'pipes', 'curtains', 'notes', 'baseline', 'config']);

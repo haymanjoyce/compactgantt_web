@@ -541,7 +541,7 @@ function renderChart(projectData, opts = {}) {
         fillColor:   color,
       });
 
-      const milestoneLabel = buildLabelText(task, config.preferences.chartDateFormat);
+      const milestoneLabel = buildLabelText(task, config.timeline.chartDateFormat);
       if (milestoneLabel) {
         const rightEdge = cx + half;
         const lx = n(rightEdge + rendering.outsideLabelKissingGap + task.labelOffset);
@@ -577,7 +577,7 @@ function renderChart(projectData, opts = {}) {
         fillColor:   color,
       });
 
-      const barLabel = buildLabelText(task, config.preferences.chartDateFormat);
+      const barLabel = buildLabelText(task, config.timeline.chartDateFormat);
       if (barLabel) {
         if (task.labelPlacement === 'inside') {
           const availW    = bw - 2 * rendering.insideLabelPadding;

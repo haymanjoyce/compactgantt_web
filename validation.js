@@ -747,6 +747,9 @@ function validateTimeline(projectData) {
   if (tl.chartStartDate !== null && tl.chartEndDate !== null && tl.chartEndDate <= tl.chartStartDate) {
     errors.push(mkIssue('config', null, 'chartEndDate', 'chartEndDate ≤ chartStartDate', tl.chartEndDate));
   }
+  if (tl.chartDateFormat === '') {
+    errors.push(mkIssue('config', null, 'chartDateFormat', 'Empty chartDateFormat', ''));
+  }
 
   // Warnings — all show* off
   if (!tl.showYears && !tl.showMonths && !tl.showWeeks && !tl.showDays && !tl.showDates) {
@@ -866,16 +869,6 @@ function validateTypography(projectData) {
   return { errors, warnings, notices };
 }
 
-// ── Config: Preferences ────────────────────────────────────────────────────────
-function validatePreferences(projectData) {
-  const errors = [], warnings = [], notices = [];
-  const p = projectData.config.preferences;
-  if (p.chartDateFormat === '') {
-    errors.push(mkIssue('config', null, 'chartDateFormat', 'Empty chartDateFormat', ''));
-  }
-  return { errors, warnings, notices };
-}
-
 // ── Config: Rendering ──────────────────────────────────────────────────────────
 const RENDERING_STROKE_WIDTH_FIELDS = [
   'gridlineStrokeWidth','scaleTickStrokeWidth','headerFooterBorderStrokeWidth',
@@ -928,7 +921,7 @@ function validateProject(projectData) {
     validateTasks, validateSwimlanes, validateLinks, validatePipes, validateCurtains, validateNotes,
     validateBaseline,
     validateLayout, validateBars, validateTimeline, validateTitles, validateStyle, validateTypography,
-    validatePreferences, validateRendering,
+    validateRendering,
   ];
   for (const fn of fns) {
     const r = fn(projectData);

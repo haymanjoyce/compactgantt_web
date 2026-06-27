@@ -71,9 +71,11 @@ New entity ids are minted from `projectData.counters` — a top-level object (NO
 
 **Entity sheets** (tabular, row 1 = headers): Tasks, Swimlanes, Links, Pipes, Curtains, Notes. Parsed via `parseEntitySheet(worksheet, colDefs)` — header-based, never positional. Missing columns silently take their declared default (backward-compat). Old-name fallbacks live in `colDefs.fallback`; `parser.js` is authoritative. The **Baseline** sheet is also tabular but special — see Baseline comparison.
 
-**Config sheets** (key-value: col A = field, col B = value): Layout, Bars, Timeline, Titles, Style, Typography, Preferences. Parsed via `parseConfigSheet` → map, read with `kvStr/kvInt/kvFloat/kvBool/kvDate` (each takes an optional `fallback` key, try-new-first).
+**Config sheets** (key-value: col A = field, col B = value): Layout, Bars, Timeline, Titles, Style, Typography. Parsed via `parseConfigSheet` → map, read with `kvStr/kvInt/kvFloat/kvBool/kvDate` (each takes an optional `fallback` key, try-new-first).
 
 Schema asymmetry: Timeline has five `show*` fields (years/months/weeks/days/dates) but only four `gridline*` — days and dates share calendar-day granularity, so one `gridlineDays` covers both.
+
+**Legacy Preferences sheet (removed).** `chartDateFormat` (the global default task-label date format) lived in a one-field `config.preferences` block / Preferences sheet; it now lives in `config.timeline` (written as a `Chart Date Format` Timeline row). The parser still reads the legacy Preferences sheet — ONLY to seed the fallback default: `kvStr(timelineKV, 'Chart Date Format', legacyPrefsValue)`, where `legacyPrefsValue` is the Preferences cell if non-empty else `'dd MMM'`. So new files read Timeline; old files fall back to Preferences; neither → `'dd MMM'`. The writer omits the Preferences sheet entirely, so an old file gains the Timeline row and loses the sheet on next save. `config.preferences` no longer exists anywhere.
 
 ## Derived fields
 
@@ -111,7 +113,7 @@ Reason values:
 
 Each `Issue` is `{ entity, id, field, message, value }`. `entity` singular lowercase (same enum as `_parseNotices`); `id` is the row id, `null` for config issues only. `value` is `null` for "missing field" rules, `rawValue` for parse-derived rules, the current field value otherwise.
 
-**Structure.** A thin `validateProject` coordinator calls 15 per-block validators (seven entity + eight config, the seventh being `validateBaseline` after `validateNotes`) in parse traversal order.
+**Structure.** A thin `validateProject` coordinator calls 14 per-block validators (seven entity + seven config, the seventh entity validator being `validateBaseline` after `validateNotes`) in parse traversal order. `validateTimeline` owns the empty-`chartDateFormat` error (formerly `validatePreferences`, now removed).
 
 **`_parseNotices` consumption.** Entity validators filter notices by entity tag, config validators by an explicit field-ownership Set; matching notices emit Issues into the bucket dictated by the locked rule list (same `reason` → different buckets per field). Array stays in place on `projectData`.
 
@@ -138,7 +140,7 @@ Each `Issue` is `{ entity, id, field, message, value }`. `entity` singular lower
 - **Live vertical offset:** `bars.taskBarVerticalOffsetFactor` / `bars.milestoneVerticalOffsetFactor` (default `0`, any sign) shift the whole live bar / milestone — shape, labels, leader, link-attach — by `factor × rowH` (`0` = centred). The shifted centre is stored as `taskGeom.rowCenterY`; labels add the same offset to their `taskAlignmentFactor` baseline. No range check.
 - **Skip rules:** orphaned tasks, `finishDate < startDate`, and fully-out-of-range tasks silently skipped; `row` clamped to 1 when not a positive integer in `[1, swimlane.rowCount]` (parser preserves a cleared null end-to-end).
 - **Milestone labels:** always rendered outside, ignoring `task.labelPlacement` (but the parser doesn't override the stored value — the user's setting is kept).
-- **Task labels (slot 12):** from `task.labelContent`, date-fns formatted; per-task `task.dateFormat` overrides `config.preferences.chartDateFormat`. *Inside* (bars only): truncated via `fontSize * rendering.charWidthFactor`, emits nothing if `…` alone overflows. *Outside*: no truncation, past the right edge plus `outsideLabelKissingGap + task.labelOffset`. *Leader lines* when `labelOffset > 0` (bars also require `labelPlacement === 'outside'`).
+- **Task labels (slot 12):** from `task.labelContent`, date-fns formatted; per-task `task.dateFormat` overrides `config.timeline.chartDateFormat`. *Inside* (bars only): truncated via `fontSize * rendering.charWidthFactor`, emits nothing if `…` alone overflows. *Outside*: no truncation, past the right edge plus `outsideLabelKissingGap + task.labelOffset`. *Leader lines* when `labelOffset > 0` (bars also require `labelPlacement === 'outside'`).
 
 ## config.rendering
 
@@ -224,11 +226,15 @@ Five-tab layout (left to right): **Chart → Data → Config → Issues → Insp
 
 **Notes textarea.** `addTextareaRow` relies on `attachCommitHandlers`' Enter-to-blur gate being `tagName === 'INPUT' && type !== 'date'`, so Enter inserts newlines in textareas. Nav-table preview collapses whitespace via `notePreviewText` before truncation.
 
-**Nav-table date display.** `formatNavTableDateCell` delegates to `dates.js` `toLocaleDateDisplay`, which renders the canonical YYYY-MM-DD via `toJsDate` + `toLocaleDateString()` (browser default locale short date, no explicit locale/options) so the read-only display matches the native date inputs; stored values stay canonical YYYY-MM-DD. Null/empty → blank cell; a malformed stored value falls back to the raw string. Form date pickers (`addDateRow`) use HTML5 `<input type="date">` (browser locale). The renderer's chart labels are a separate concern, still driven by `config.preferences.chartDateFormat`.
+**Nav-table date display.** `formatNavTableDateCell` delegates to `dates.js` `toLocaleDateDisplay`, which renders the canonical YYYY-MM-DD via `toJsDate` + `toLocaleDateString()` (browser default locale short date, no explicit locale/options) so the read-only display matches the native date inputs; stored values stay canonical YYYY-MM-DD. Null/empty → blank cell; a malformed stored value falls back to the raw string. Form date pickers (`addDateRow`) use HTML5 `<input type="date">` (browser locale). The renderer's chart labels are a separate concern, still driven by `config.timeline.chartDateFormat`.
 
 ### Config panel
 
-Form-only tab — no nav table/toolbar/selection. Seven sub-tabs in parser order; `renderConfigPanel(panel)` mirrors `renderDataPanel`'s persistent-skeleton pattern (`activeConfigBlock` / `configBlockRenderedFor`, reset in `resetDataPanelState`). `config.rendering` is excluded (Inspector surfaces it via a static `appendSection`, not the dynamic walk).
+Form-only tab — no nav table/toolbar/selection. Six sub-tabs in parser order; `renderConfigPanel(panel)` mirrors `renderDataPanel`'s persistent-skeleton pattern (`activeConfigBlock` / `configBlockRenderedFor`, reset in `resetDataPanelState`). `config.rendering` is excluded (Inspector surfaces it via a static `appendSection`, not the dynamic walk).
+
+**Tab labels vs keys.** Two `CONFIG_TABS` labels are presentation-only renames that diverge from their keys/blocks: `bars` → "Elements", `style` → "Colors". The tab `key`, dispatch `block`, `config.bars`/`config.style` keys, Excel sheet names, and Inspector source labels all keep the original names.
+
+**Section headings (presentation-only).** `addConfigSection(form, title)` appends a full-width label-only `.config-section-heading` row (no input, not focusable, no commit wiring) to group a form's fields; CSS gives it a top hairline + spacing, suppressed on the first heading via `:first-child`. Each long form's existing rows are grouped under these headings — order/grouping only, no field add/remove/retype.
 
 Timeline date fields commit two dispatches — the date AND the paired (non-user-editable) `*Explicit` flag — so the writer emits user-set vs auto-derive dates correctly. File-load re-renders Config if active.
 
