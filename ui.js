@@ -2,6 +2,10 @@
 
 let projectData = createEmptyProjectData();
 let loadedFilename = null;
+// Last status-line prefix ("Loaded: <name>" / "New project"), remembered so the
+// status bar can be recomposed (e.g. after baseline load/clear) without the
+// caller re-supplying it. null until the first file-load / New Project.
+let lastStatusPrefix = null;
 // Active top-level tab. Single source of truth — set by activateTab, read by the
 // dispatcher's post-mutation hook to know which panel to re-render.
 let activeTab = 'data';
@@ -2799,24 +2803,41 @@ function runPostMutationHook() {
   updateIssuesTabLabel();
 }
 
-// Updates the Save-button disabled state and the status-text line. Shared
-// between the file-load handler and New Project so the formatting stays in
-// sync; only the prefix varies.
+// Updates the Save-button disabled state and the status bar. Shared between the
+// file-load handler, New Project, and the baseline load/clear handlers. A prefix
+// arg ("Loaded: <name>" / "New project") is remembered in lastStatusPrefix so a
+// later prefix-less call (baseline load/clear) recomposes the same line. The
+// status bar holds two parts: a left text element ("<prefix> — <counts>", set as
+// textContent so a filename can't inject markup) and a right-aligned baseline
+// chip reflecting projectData.baseline.length.
 function refreshStatusAndButtons(prefix) {
   const d = projectData;
   const noData = d.tasks.length === 0 && d.swimlanes.length === 0;
   document.getElementById('saveBtn').disabled    = noData;
   document.getElementById('saveSvgBtn').disabled = noData;
   refreshBaselineButtons();
+  if (prefix != null) lastStatusPrefix = prefix;
   const cnt = (num, s) => `${num} ${num === 1 ? s : s + 's'}`;
-  document.getElementById('status').textContent =
-    `${prefix} — `                                  +
+  const status = document.getElementById('status');
+  status.textContent = '';
+
+  const textEl = document.createElement('span');
+  textEl.className = 'status-text';
+  textEl.textContent =
+    `${lastStatusPrefix} — `                         +
     `${cnt(d.tasks.length,     'task')}, `           +
     `${cnt(d.swimlanes.length, 'swimlane')}, `       +
     `${cnt(d.links.length,     'link')}, `           +
     `${cnt(d.pipes.length,     'pipe')}, `           +
     `${cnt(d.curtains.length,  'curtain')}, `        +
     `${cnt(d.notes.length,     'note')}`;
+  status.appendChild(textEl);
+
+  const hasBaseline = d.baseline.length > 0;
+  const chip = document.createElement('span');
+  chip.className = 'status-chip ' + (hasBaseline ? 'status-chip-present' : 'status-chip-absent');
+  chip.textContent = hasBaseline ? '✓ baseline' : 'no baseline';
+  status.appendChild(chip);
 }
 
 // Baseline buttons have a different enable logic from the Save buttons, and
@@ -2958,7 +2979,7 @@ function initUI() {
       // than a stale toggled-off state from a previous baseline.
       showBaseline = true;
       dispatch({ entity: 'baseline', action: 'set', value: records });
-      refreshBaselineButtons();
+      refreshStatusAndButtons();
     };
     reader.readAsArrayBuffer(file);
 
@@ -2968,7 +2989,7 @@ function initUI() {
 
   document.getElementById('clearBaselineBtn').addEventListener('click', function() {
     dispatch({ entity: 'baseline', action: 'clear' });
-    refreshBaselineButtons();
+    refreshStatusAndButtons();
   });
 
   // Bootstrap the empty Data panel so the entity tab strip and empty Tasks
