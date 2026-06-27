@@ -200,7 +200,6 @@ function writeWorkbook(projectData) {
   // ── 13. Preferences ───────────────────────────────────────────────────────────
   addSheet('Preferences', [
     ['Field', 'Value'],
-    ['UI Date Format',    preferences.uiDateFormat],
     ['Chart Date Format', preferences.chartDateFormat],
   ]);
 

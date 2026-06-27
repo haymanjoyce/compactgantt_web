@@ -420,7 +420,6 @@ function createEmptyProjectData() {
         swimlaneBottomAlignmentFactor:0.7,
       },
       preferences: {
-        uiDateFormat:    'dd/MM/yyyy',
         chartDateFormat: 'dd MMM',
       },
       rendering: {
@@ -930,7 +929,6 @@ function parseWorkbook(workbook) {
   const prefsSheet = workbook.Sheets['Preferences'];
   const prefsKV    = parseConfigSheet(prefsSheet);
   projectData.config.preferences = {
-    uiDateFormat:    kvStr(prefsKV, 'UI Date Format',    'dd/MM/yyyy'),
     chartDateFormat: kvStr(prefsKV, 'Chart Date Format', 'dd MMM'),
   };
 

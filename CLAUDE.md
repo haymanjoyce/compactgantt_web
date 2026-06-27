@@ -224,7 +224,7 @@ Five-tab layout (left to right): **Chart → Data → Config → Issues → Insp
 
 **Notes textarea.** `addTextareaRow` relies on `attachCommitHandlers`' Enter-to-blur gate being `tagName === 'INPUT' && type !== 'date'`, so Enter inserts newlines in textareas. Nav-table preview collapses whitespace via `notePreviewText` before truncation.
 
-**Nav-table date display.** `formatNavTableDateCell` formats via `config.preferences.uiDateFormat`; stored values stay canonical YYYY-MM-DD. Malformed format strings throw in date-fns — the helper catches and falls back to the raw value (visible-garbage policy). Form date pickers (`addDateRow`) use HTML5 `<input type="date">` (browser locale).
+**Nav-table date display.** `formatNavTableDateCell` delegates to `dates.js` `toLocaleDateDisplay`, which renders the canonical YYYY-MM-DD via `toJsDate` + `toLocaleDateString()` (browser default locale short date, no explicit locale/options) so the read-only display matches the native date inputs; stored values stay canonical YYYY-MM-DD. Null/empty → blank cell; a malformed stored value falls back to the raw string. Form date pickers (`addDateRow`) use HTML5 `<input type="date">` (browser locale). The renderer's chart labels are a separate concern, still driven by `config.preferences.chartDateFormat`.
 
 ### Config panel
 

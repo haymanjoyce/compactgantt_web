@@ -870,9 +870,6 @@ function validateTypography(projectData) {
 function validatePreferences(projectData) {
   const errors = [], warnings = [], notices = [];
   const p = projectData.config.preferences;
-  if (p.uiDateFormat === '') {
-    errors.push(mkIssue('config', null, 'uiDateFormat', 'Empty uiDateFormat', ''));
-  }
   if (p.chartDateFormat === '') {
     errors.push(mkIssue('config', null, 'chartDateFormat', 'Empty chartDateFormat', ''));
   }

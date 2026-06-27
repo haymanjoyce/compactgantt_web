@@ -438,9 +438,7 @@ function buildTasksDisplayOrder() {
 }
 
 function formatNavTableDateCell(iso) {
-  if (iso == null || iso === '') return '';
-  try { return formatDate(iso, projectData.config.preferences.uiDateFormat); }
-  catch (e) { return iso; }
+  return toLocaleDateDisplay(iso);
 }
 
 // Integer calendar-day span (finishDate − startDate), or null when either date is
@@ -2208,7 +2206,6 @@ function renderPreferencesConfigForm(container) {
   const upd = (field, value) =>
     dispatch({ entity: 'config', action: 'update', block: 'preferences', field, value });
 
-  addTextRow(form, 'uiDateFormat',    prefs.uiDateFormat,    val => upd('uiDateFormat',    val));
   addTextRow(form, 'chartDateFormat', prefs.chartDateFormat, val => upd('chartDateFormat', val));
 }
 
