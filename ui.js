@@ -2857,6 +2857,10 @@ function initUI() {
     updateIssuesTabLabel();
   });
 
+  document.getElementById('chooseFileBtn').addEventListener('click', function() {
+    document.getElementById('fileInput').click();
+  });
+
   document.getElementById('fileInput').addEventListener('change', function(e) {
     const file = e.target.files[0];
     if (!file) return;
@@ -2883,6 +2887,9 @@ function initUI() {
       renderDataPanel();
     };
     reader.readAsArrayBuffer(file);
+
+    // Reset so re-selecting the same file re-fires change.
+    e.target.value = '';
   });
 
   document.getElementById('saveBtn').addEventListener('click', function() {
