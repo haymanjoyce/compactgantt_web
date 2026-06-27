@@ -2606,15 +2606,26 @@ function renderIssuesPanel(panel) {
 function updateIssuesTabLabel() {
   const tab = document.getElementById('tabIssues');
   if (!tab) return;
-  tab.classList.remove('tab-tint-error', 'tab-tint-warning', 'tab-tint-notice');
+  // Label is always the word "Issues"; a coloured dot (worst severity present)
+  // and a count tooltip carry the signal. Reset to text-only each refresh.
+  tab.textContent = 'Issues';
+  tab.removeAttribute('title');
   const v = projectData._validation;
-  if (!v) { tab.textContent = 'Issues'; return; }
+  if (!v) return;
   const e = v.errors.length, w = v.warnings.length, n = v.notices.length;
-  if (e + w + n === 0) { tab.textContent = 'Issues'; return; }
-  tab.textContent = `Issues (${e}/${w}/${n})`;
-  if      (e > 0) tab.classList.add('tab-tint-error');
-  else if (w > 0) tab.classList.add('tab-tint-warning');
-  else if (n > 0) tab.classList.add('tab-tint-notice');
+  if (e + w + n === 0) return;
+
+  const severity = e > 0 ? 'error' : w > 0 ? 'warning' : 'notice';
+  const dot = document.createElement('span');
+  dot.className = `tab-dot tab-dot-${severity}`;
+  tab.appendChild(dot);
+
+  const cnt = (num, s) => `${num} ${num === 1 ? s : s + 's'}`;
+  const parts = [];
+  if (e > 0) parts.push(cnt(e, 'error'));
+  if (w > 0) parts.push(cnt(w, 'warning'));
+  if (n > 0) parts.push(cnt(n, 'notice'));
+  tab.title = parts.join(', ');
 }
 
 // ── Dispatcher (single-writer entry point) ────────────────────────────────────

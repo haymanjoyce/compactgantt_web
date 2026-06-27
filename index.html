@@ -55,12 +55,13 @@
     .tabs { display: flex; gap: 4px; margin-bottom: 1rem; }
     .tab { padding: 5px 18px; cursor: pointer; border: 1px solid #bbb; background: #f0f0f0; font-size: 0.9rem; }
     .tab.active { background: white; border-bottom-color: white; font-weight: bold; }
-    .tab.tab-tint-error   { color: #b91c1c; }
-    .tab.tab-tint-warning { color: #b45309; }
-    .tab.tab-tint-notice  { color: #4b5563; }
-    .tab.active.tab-tint-error,
-    .tab.active.tab-tint-warning,
-    .tab.active.tab-tint-notice { color: inherit; }
+    .tab-dot {
+      display: inline-block; width: 8px; height: 8px; border-radius: 50%;
+      margin-left: 6px; vertical-align: middle;
+    }
+    .tab-dot-error   { background: #b91c1c; }
+    .tab-dot-warning { background: #b45309; }
+    .tab-dot-notice  { background: #4b5563; }
     .chart-scroll { overflow-x: auto; }
     .chart-controls {
       display: flex; align-items: center; gap: 16px;
