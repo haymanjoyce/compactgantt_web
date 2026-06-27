@@ -27,7 +27,24 @@
       --cg-gap: 8px;
     }
     body { font-family: sans-serif; padding: 1rem; }
-    #status { margin: 0.5rem 0 0.75rem; color: #555; }
+    /* Top action toolbar — square geometry to match the tab strip below */
+    .app-toolbar { display: flex; align-items: center; gap: 4px; margin-bottom: 0.5rem; }
+    .app-toolbar button {
+      padding: 4px 12px; font-size: 0.9rem;
+      border: 1px solid #bbb; background: #f0f0f0; cursor: pointer;
+      height: var(--cg-control-height); box-sizing: border-box;
+    }
+    .app-toolbar button:hover { background: #e4e4e4; border-color: #999; }
+    .app-toolbar button:disabled {
+      color: #999; background: #fafafa; border-color: #ddd; cursor: default;
+    }
+    .app-toolbar button:disabled:hover { background: #fafafa; border-color: #ddd; }
+    .app-toolbar-divider { width: 1px; height: 20px; background: #ddd; }
+    #status {
+      display: flex; align-items: center;
+      margin: 0 0 0.75rem; padding: 6px 10px; color: #555;
+      border: var(--cg-border); background: var(--cg-bg-toolbar);
+    }
     .tabs { display: flex; gap: 4px; margin-bottom: 1rem; }
     .tab { padding: 5px 18px; cursor: pointer; border: 1px solid #bbb; background: #f0f0f0; font-size: 0.9rem; }
     .tab.active { background: white; border-bottom-color: white; font-weight: bold; }
@@ -270,14 +287,17 @@
 </head>
 <body>
 
-  <button id="newProjectBtn">New Project</button>
-  <button id="chooseFileBtn">Choose file</button>
-  <input type="file" id="fileInput" accept=".xlsx" style="display: none;">
-  <button id="saveBtn" disabled>Save</button>
-  <button id="saveSvgBtn" disabled>Save SVG</button>
-  <button id="loadBaselineBtn" disabled title="Load a project first">Load Baseline</button>
-  <button id="clearBaselineBtn" disabled title="No baseline loaded">Clear Baseline</button>
-  <input type="file" id="baselineInput" accept=".xlsx" style="display: none;">
+  <div class="app-toolbar">
+    <button id="newProjectBtn">New Project</button>
+    <button id="chooseFileBtn">Choose file</button>
+    <input type="file" id="fileInput" accept=".xlsx" style="display: none;">
+    <button id="saveBtn" disabled>Save</button>
+    <button id="saveSvgBtn" disabled>Save SVG</button>
+    <span class="app-toolbar-divider"></span>
+    <button id="loadBaselineBtn" disabled title="Load a project first">Load Baseline</button>
+    <button id="clearBaselineBtn" disabled title="No baseline loaded">Clear Baseline</button>
+    <input type="file" id="baselineInput" accept=".xlsx" style="display: none;">
+  </div>
   <p id="status">No file loaded</p>
 
   <div class="tabs">
