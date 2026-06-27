@@ -205,6 +205,20 @@
       width: auto; height: auto; margin: 0;
     }
 
+    /* Config form section heading — full-width (both grid columns), small bold
+       heading with a top hairline rule and spacing to separate it from the
+       preceding group. The first heading in a form drops the rule/gap so the
+       form doesn't open with an empty band. */
+    .entity-form .config-section-heading {
+      grid-column: 1 / -1;
+      font-size: 0.8rem; font-weight: 700; color: #333;
+      margin-top: 10px; padding-top: 8px;
+      border-top: var(--cg-border);
+    }
+    .entity-form .config-section-heading:first-child {
+      margin-top: 0; padding-top: 0; border-top: none;
+    }
+
     /* Color picker — text input (source of truth) + native swatch side-by-side
        in the right grid column, with an optional ✕ clear button (allowEmpty
        call sites only). Text input flex-grows; swatch and clear button each

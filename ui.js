@@ -1953,10 +1953,10 @@ function attachCommitHandlers(control, getValue, commitFn) {
 
 const CONFIG_TABS = [
   { key: 'layout',      label: 'Layout'      },
-  { key: 'bars',        label: 'Bars'        },
+  { key: 'bars',        label: 'Elements'    },
   { key: 'timeline',    label: 'Timeline'    },
   { key: 'titles',      label: 'Titles'      },
-  { key: 'style',       label: 'Style'       },
+  { key: 'style',       label: 'Colors'      },
   { key: 'typography',  label: 'Typography'  },
   { key: 'preferences', label: 'Preferences' },
 ];
@@ -2024,6 +2024,16 @@ function commitFloat(upd, field) {
   };
 }
 
+// Section heading for a config form: a full-width, label-only row (no input,
+// not focusable, no part in commit handling). CSS gives it a top hairline rule
+// and spacing, suppressed on the first heading via :first-child.
+function addConfigSection(form, title) {
+  const heading = document.createElement('div');
+  heading.className = 'config-section-heading';
+  heading.textContent = title;
+  form.appendChild(heading);
+}
+
 function renderLayoutConfigForm(container) {
   if (configBlockRenderedFor === 'layout' && container.childElementCount > 0) return;
   configBlockRenderedFor = 'layout';
@@ -2037,12 +2047,17 @@ function renderLayoutConfigForm(container) {
   const upd = (field, value) =>
     dispatch({ entity: 'config', action: 'update', block: 'layout', field, value });
 
+  addConfigSection(form, 'Size');
   addNumberRow(form, 'outerWidth',      layout.outerWidth,      commitInt(upd, 'outerWidth'));
   addNumberRow(form, 'outerHeight',     layout.outerHeight,     commitInt(upd, 'outerHeight'));
+
+  addConfigSection(form, 'Padding');
   addNumberRow(form, 'paddingTop',      layout.paddingTop,      commitInt(upd, 'paddingTop'));
   addNumberRow(form, 'paddingRight',    layout.paddingRight,    commitInt(upd, 'paddingRight'));
   addNumberRow(form, 'paddingBottom',   layout.paddingBottom,   commitInt(upd, 'paddingBottom'));
   addNumberRow(form, 'paddingLeft',     layout.paddingLeft,     commitInt(upd, 'paddingLeft'));
+
+  addConfigSection(form, 'Dividers');
   addCheckboxRow(form, 'showRowDividers', layout.showRowDividers, val => upd('showRowDividers', val));
 }
 
@@ -2059,20 +2074,27 @@ function renderBarsConfigForm(container) {
   const upd = (field, value) =>
     dispatch({ entity: 'config', action: 'update', block: 'bars', field, value });
 
+  addConfigSection(form, 'Tasks');
   addNumberRow(form, 'taskBarHeightFactor',   bars.taskBarHeightFactor,   commitFloat(upd, 'taskBarHeightFactor'),   { step: '0.1', decimals: 2 });
-  addNumberRow(form, 'milestoneSizeFactor',   bars.milestoneSizeFactor,   commitFloat(upd, 'milestoneSizeFactor'),   { step: '0.1', decimals: 2 });
   addNumberRow(form, 'taskBarVerticalOffsetFactor',   bars.taskBarVerticalOffsetFactor,   commitFloat(upd, 'taskBarVerticalOffsetFactor'),   { step: '0.01', decimals: 2 });
+  addNumberRow(form, 'taskCornerRadius',      bars.taskCornerRadius,      commitInt  (upd, 'taskCornerRadius'));
+
+  addConfigSection(form, 'Milestones');
+  addNumberRow(form, 'milestoneSizeFactor',   bars.milestoneSizeFactor,   commitFloat(upd, 'milestoneSizeFactor'),   { step: '0.1', decimals: 2 });
   addNumberRow(form, 'milestoneVerticalOffsetFactor', bars.milestoneVerticalOffsetFactor, commitFloat(upd, 'milestoneVerticalOffsetFactor'), { step: '0.01', decimals: 2 });
+  addSelectRow(form, 'milestoneShape',        bars.milestoneShape,
+    MILESTONE_SHAPE_OPTIONS.map(o => ({ value: o, label: o })),
+    val => upd('milestoneShape', val));
+  addNumberRow(form, 'milestoneCornerRadius', bars.milestoneCornerRadius, commitFloat(upd, 'milestoneCornerRadius'), { step: '0.1', decimals: 2 });
+
+  addConfigSection(form, 'Baseline');
   addNumberRow(form, 'baselineBarHeightFactor',           bars.baselineBarHeightFactor,           commitFloat(upd, 'baselineBarHeightFactor'),           { step: '0.01', decimals: 2 });
   addNumberRow(form, 'baselineBarVerticalOffsetFactor',   bars.baselineBarVerticalOffsetFactor,   commitFloat(upd, 'baselineBarVerticalOffsetFactor'),   { step: '0.01', decimals: 2 });
   addNumberRow(form, 'baselineMilestoneSizeFactor',       bars.baselineMilestoneSizeFactor,       commitFloat(upd, 'baselineMilestoneSizeFactor'),       { step: '0.01', decimals: 2 });
   addNumberRow(form, 'baselineMilestoneVerticalOffsetFactor', bars.baselineMilestoneVerticalOffsetFactor, commitFloat(upd, 'baselineMilestoneVerticalOffsetFactor'), { step: '0.01', decimals: 2 });
   addNumberRow(form, 'baselineFillOpacity',               bars.baselineFillOpacity,               commitFloat(upd, 'baselineFillOpacity'),               { step: '0.01', decimals: 2 });
-  addNumberRow(form, 'taskCornerRadius',      bars.taskCornerRadius,      commitInt  (upd, 'taskCornerRadius'));
-  addSelectRow(form, 'milestoneShape',        bars.milestoneShape,
-    MILESTONE_SHAPE_OPTIONS.map(o => ({ value: o, label: o })),
-    val => upd('milestoneShape', val));
-  addNumberRow(form, 'milestoneCornerRadius', bars.milestoneCornerRadius, commitFloat(upd, 'milestoneCornerRadius'), { step: '0.1', decimals: 2 });
+
+  addConfigSection(form, 'Links');
   addNumberRow(form, 'arrowheadSizeFactor',    bars.arrowheadSizeFactor,    commitFloat(upd, 'arrowheadSizeFactor'),    { step: '0.1', decimals: 2 });
   addNumberRow(form, 'originMarkerSizeFactor', bars.originMarkerSizeFactor, commitFloat(upd, 'originMarkerSizeFactor'), { step: '0.1', decimals: 2 });
 }
@@ -2098,6 +2120,7 @@ function renderTimelineConfigForm(container) {
   // to the current task extent immediately. The task-gated post-mutation hook
   // never fires on these config dispatches, so without seeding the value here a
   // cleared field would leave the chart blank until the next task edit.
+  addConfigSection(form, 'Date range');
   addDateRow(form, 'chartStartDate', timeline.chartStartDate, val => {
     if (val === '') {
       upd('chartStartDateExplicit', false);
@@ -2117,11 +2140,14 @@ function renderTimelineConfigForm(container) {
     }
   });
 
+  addConfigSection(form, 'Scales');
   addCheckboxRow(form, 'showYears',  timeline.showYears,  val => upd('showYears',  val));
   addCheckboxRow(form, 'showMonths', timeline.showMonths, val => upd('showMonths', val));
   addCheckboxRow(form, 'showWeeks',  timeline.showWeeks,  val => upd('showWeeks',  val));
   addCheckboxRow(form, 'showDays',   timeline.showDays,   val => upd('showDays',   val));
   addCheckboxRow(form, 'showDates',  timeline.showDates,  val => upd('showDates',  val));
+
+  addConfigSection(form, 'Gridlines');
   addCheckboxRow(form, 'gridlineYears',  timeline.gridlineYears,  val => upd('gridlineYears',  val));
   addCheckboxRow(form, 'gridlineMonths', timeline.gridlineMonths, val => upd('gridlineMonths', val));
   addCheckboxRow(form, 'gridlineWeeks',  timeline.gridlineWeeks,  val => upd('gridlineWeeks',  val));
@@ -2141,11 +2167,14 @@ function renderTitlesConfigForm(container) {
   const upd = (field, value) =>
     dispatch({ entity: 'config', action: 'update', block: 'titles', field, value });
 
+  addConfigSection(form, 'Header');
   addNumberRow(form, 'headerHeight',    titles.headerHeight,    commitInt(upd, 'headerHeight'));
   addTextRow  (form, 'headerText',      titles.headerText,      val => upd('headerText', val));
   addSelectRow(form, 'headerTextAlign', titles.headerTextAlign,
     HEADER_FOOTER_TEXT_ALIGN_OPTIONS.map(o => ({ value: o, label: o })),
     val => upd('headerTextAlign', val));
+
+  addConfigSection(form, 'Footer');
   addNumberRow(form, 'footerHeight',    titles.footerHeight,    commitInt(upd, 'footerHeight'));
   addTextRow  (form, 'footerText',      titles.footerText,      val => upd('footerText', val));
   addSelectRow(form, 'footerTextAlign', titles.footerTextAlign,
@@ -2166,15 +2195,18 @@ function renderStyleConfigForm(container) {
   const upd = (field, value) =>
     dispatch({ entity: 'config', action: 'update', block: 'style', field, value });
 
-  const STYLE_FIELDS = [
-    'chartBackgroundColor', 'headerFooterBackgroundColor', 'headerFooterBorderColor',
-    'headerFooterTextColor', 'swimlaneLabelColor', 'swimlaneDividerColor',
-    'scaleBackgroundColor', 'scaleTickColor', 'scaleLabelTextColor',
-    'gridlineVerticalColor', 'taskStrokeColor', 'milestoneStrokeColor',
-    'outsideLabelTextColor', 'leaderLineColor', 'insideLabelTextColor',
-    'noteTextColor',
+  const STYLE_SECTIONS = [
+    ['Chart', ['chartBackgroundColor']],
+    ['Header & footer', ['headerFooterBackgroundColor', 'headerFooterBorderColor', 'headerFooterTextColor']],
+    ['Swimlanes', ['swimlaneLabelColor', 'swimlaneDividerColor']],
+    ['Scale & gridlines', ['scaleBackgroundColor', 'scaleTickColor', 'scaleLabelTextColor', 'gridlineVerticalColor']],
+    ['Tasks & milestones', ['taskStrokeColor', 'milestoneStrokeColor']],
+    ['Labels & notes', ['outsideLabelTextColor', 'insideLabelTextColor', 'leaderLineColor', 'noteTextColor']],
   ];
-  STYLE_FIELDS.forEach(f => addColorRow(form, f, style[f], val => upd(f, val)));
+  STYLE_SECTIONS.forEach(([title, fields]) => {
+    addConfigSection(form, title);
+    fields.forEach(f => addColorRow(form, f, style[f], val => upd(f, val)));
+  });
 }
 
 function renderTypographyConfigForm(container) {
@@ -2190,14 +2222,17 @@ function renderTypographyConfigForm(container) {
   const upd = (field, value) =>
     dispatch({ entity: 'config', action: 'update', block: 'typography', field, value });
 
+  addConfigSection(form, 'Font');
   addTextRow(form, 'fontFamily', typo.fontFamily, val => upd('fontFamily', val));
 
+  addConfigSection(form, 'Sizes');
   const FONT_SIZE_FIELDS = [
     'taskFontSize', 'scaleFontSize', 'headerFooterFontSize', 'noteFontSize',
     'swimlaneFontSize', 'pipeFontSize', 'curtainFontSize',
   ];
   FONT_SIZE_FIELDS.forEach(f => addNumberRow(form, f, typo[f], commitInt(upd, f)));
 
+  addConfigSection(form, 'Alignment');
   const ALIGNMENT_FACTOR_FIELDS = [
     'scaleAlignmentFactor', 'taskAlignmentFactor', 'headerFooterAlignmentFactor',
     'pipeAlignmentFactor', 'curtainAlignmentFactor', 'noteAlignmentFactor',
