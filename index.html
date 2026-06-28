@@ -219,6 +219,24 @@
       margin-top: 0; padding-top: 0; border-top: none;
     }
 
+    /* Live font preview — display-only specimen swatch spanning both grid columns,
+       shown below the Font Family select. The bordered, padded frame is neutral
+       chrome (form's normal UI font); the sample pangram inside has its font-family
+       set imperatively to the live config.typography.fontFamily so the user sees the
+       real applied typeface (and the browser's fallback) before committing. The
+       .is-empty modifier covers the empty/null state: muted placeholder text in the
+       form's normal font (no sample font applied, so it can't read as a working choice). */
+    .entity-form .font-preview {
+      grid-column: 1 / -1;
+      font-size: 1.1rem; color: #222;
+      padding: 10px 12px;
+      border: var(--cg-border); border-radius: 4px;
+      background: #fafafa;
+    }
+    .entity-form .font-preview.is-empty {
+      font-size: 0.85rem; color: #999; font-style: italic;
+    }
+
     /* Color picker — text input (source of truth) + native swatch side-by-side
        in the right grid column, with an optional ✕ clear button (allowEmpty
        call sites only). Text input flex-grows; swatch and clear button each

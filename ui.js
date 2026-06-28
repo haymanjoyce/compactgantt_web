@@ -1972,6 +1972,26 @@ const FONT_FAMILY_OPTIONS = [
   'Consolas', 'sans-serif', 'serif', 'monospace',
 ];
 
+// Pangrams rotated through the font-preview specimen swatch — pure UI sample text,
+// never stored or written. pickPangram() returns a random one that differs from the
+// one shown immediately before (tracked in module-scope lastPangram), so each preview
+// update on a non-empty font visibly changes the line.
+const FONT_PREVIEW_PANGRAMS = [
+  'The quick brown fox jumps over the lazy dog',
+  'Pack my box with five dozen liquor jugs',
+  'How vexingly quick daft zebras jump',
+  'The five boxing wizards jump quickly',
+  'Sphinx of black quartz, judge my vow',
+  'Jackdaws love my big sphinx of quartz',
+];
+let lastPangram = null;
+function pickPangram() {
+  const pool = FONT_PREVIEW_PANGRAMS.filter(p => p !== lastPangram);
+  const choice = pool[Math.floor(Math.random() * pool.length)];
+  lastPangram = choice;
+  return choice;
+}
+
 function renderConfigPanel(panel) {
   let strip = document.getElementById('configTabStrip');
   let area  = document.getElementById('configArea');
@@ -2231,6 +2251,30 @@ function renderTypographyConfigForm(container) {
     dispatch({ entity: 'config', action: 'update', block: 'typography', field, value });
 
   addConfigSection(form, 'Font');
+
+  // Live font preview — display-only specimen swatch BELOW the Font Family select.
+  // applyFontPreview sets its font-family imperatively so the empty case shows the
+  // muted placeholder in the form's normal font (rather than a fallback that would
+  // read as a working selection); a non-empty font shows a pangram chosen via
+  // pickPangram (random, never the one shown immediately before, so a change always
+  // visibly changes the line). It is driven on (re)entry by the stored value below
+  // and live by the select's own change handler — the form isn't rebuilt on
+  // same-block config changes, so we update it imperatively.
+  const fontPreview = document.createElement('div');
+  fontPreview.className = 'font-preview';
+  const applyFontPreview = value => {
+    const empty = value === null || value === undefined || value === '';
+    if (empty) {
+      fontPreview.classList.add('is-empty');
+      fontPreview.style.fontFamily = '';
+      fontPreview.textContent = '(no font selected)';
+    } else {
+      fontPreview.classList.remove('is-empty');
+      fontPreview.style.fontFamily = value;
+      fontPreview.textContent = pickPangram();
+    }
+  };
+
   // Closed picklist via addSelectRow (same as other enum config fields). Empty/null
   // stored value → pass null so the placeholder shows WITHOUT coercing the stored
   // value (empty-fontFamily validation still fires; save still writes empty). A
@@ -2244,6 +2288,14 @@ function renderTypographyConfigForm(container) {
   }
   addSelectRow(form, 'fontFamily', fontEmpty ? null : storedFont, fontOptions,
     val => upd('fontFamily', val));
+  // Live update: the select is the form's last appended child (addSelectRow
+  // appends label then select). Additive listener — addSelectRow's own commit
+  // wiring is untouched. Grab the select BEFORE appending the preview below it.
+  form.lastElementChild.addEventListener('change', e => applyFontPreview(e.target.value));
+
+  // Preview sits directly below the Font Family select; seed it from the stored value.
+  form.appendChild(fontPreview);
+  applyFontPreview(storedFont);
 
   addConfigSection(form, 'Sizes');
   const FONT_SIZE_FIELDS = [
