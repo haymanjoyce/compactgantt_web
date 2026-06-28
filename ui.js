@@ -2090,7 +2090,7 @@ function renderBarsConfigForm(container) {
   addNumberRow(form, 'baselineBarVerticalOffsetFactor',   bars.baselineBarVerticalOffsetFactor,   commitFloat(upd, 'baselineBarVerticalOffsetFactor'),   { step: '0.01', decimals: 2 });
   addNumberRow(form, 'baselineMilestoneSizeFactor',       bars.baselineMilestoneSizeFactor,       commitFloat(upd, 'baselineMilestoneSizeFactor'),       { step: '0.01', decimals: 2 });
   addNumberRow(form, 'baselineMilestoneVerticalOffsetFactor', bars.baselineMilestoneVerticalOffsetFactor, commitFloat(upd, 'baselineMilestoneVerticalOffsetFactor'), { step: '0.01', decimals: 2 });
-  addNumberRow(form, 'baselineFillOpacity',               bars.baselineFillOpacity,               commitFloat(upd, 'baselineFillOpacity'),               { step: '0.01', decimals: 2 });
+  addNumberRow(form, 'baselineFillOpacity',               bars.baselineFillOpacity,               commitFloat(upd, 'baselineFillOpacity'),               { step: '0.1', min: '0', max: '1', decimals: 2 });
 
   addConfigSection(form, 'Links');
   addNumberRow(form, 'arrowheadSizeFactor',    bars.arrowheadSizeFactor,    commitFloat(upd, 'arrowheadSizeFactor'),    { step: '0.1', decimals: 2 });

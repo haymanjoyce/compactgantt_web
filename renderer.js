@@ -610,9 +610,12 @@ function renderChart(projectData, opts = {}) {
   // rowCenterY (plus the baseline offset factor); the overlay's SHAPE comes from
   // the baseline's own dates, so a task that became a milestone (or vice versa)
   // still overlays correctly. The fill is tinted from the live element's own
-  // colour at baselineFillOpacity, with a full-opacity same-hue stroke — the
-  // crisp hue edge that does the pairing (a patterned live bar tints from its
-  // base colour; the pattern is ignored). opts.showBaseline gates the whole pass
+  // colour at baselineFillOpacity (the tinted fill is what pairs the overlay to
+  // its live element by hue; a patterned live bar tints from its base colour, the
+  // pattern is ignored). The stroke is full-opacity but takes the live element's
+  // stroke colour from config.style (taskStrokeColor / milestoneStrokeColor) so
+  // the border stays visible over a like-coloured live element.
+  // opts.showBaseline gates the whole pass
   // — the toggle (slice 3b) and Save SVG pass it through; it defaults to shown so
   // omitted-arg callers are unaffected.
   if (opts.showBaseline !== false) for (const b of (projectData.baseline || [])) {
@@ -632,7 +635,7 @@ function renderChart(projectData, opts = {}) {
       const half = rowH * bars.baselineMilestoneSizeFactor / 2;
       const cy   = geom.rowCenterY + bars.baselineMilestoneVerticalOffsetFactor * rowH;
       const cx   = xFor(b.startDate);
-      const attrs = `fill="${tint}" fill-opacity="${bars.baselineFillOpacity}" stroke="${tint}" stroke-width="${rendering.milestoneStrokeWidth}"`;
+      const attrs = `fill="${tint}" fill-opacity="${bars.baselineFillOpacity}" stroke="${style.milestoneStrokeColor}" stroke-width="${rendering.milestoneStrokeWidth}"`;
       const pts = `${n(cx)},${n(cy - half)} ${n(cx + half)},${n(cy + half)} ${n(cx - half)},${n(cy + half)}`;
       baselineSvg += `<polygon points="${pts}" ${attrs}/>`;
     } else {
@@ -644,7 +647,7 @@ function renderChart(projectData, opts = {}) {
       const bh   = rowH * bars.baselineBarHeightFactor;
       const cy   = geom.rowCenterY + bars.baselineBarVerticalOffsetFactor * rowH;
       const barY = cy - bh / 2;
-      const attrs = `fill="${tint}" fill-opacity="${bars.baselineFillOpacity}" stroke="${tint}" stroke-width="${rendering.taskStrokeWidth}"`;
+      const attrs = `fill="${tint}" fill-opacity="${bars.baselineFillOpacity}" stroke="${style.taskStrokeColor}" stroke-width="${rendering.taskStrokeWidth}"`;
       baselineSvg += `<rect x="${n(x1)}" y="${n(barY)}" width="${n(bw)}" height="${n(bh)}" rx="${bars.taskCornerRadius}" ${attrs}/>`;
     }
   }
