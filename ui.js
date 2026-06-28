@@ -1962,6 +1962,15 @@ const CONFIG_TABS = [
 
 const MILESTONE_SHAPE_OPTIONS = ['diamond', 'circle'];
 const HEADER_FOOTER_TEXT_ALIGN_OPTIONS = ['left', 'center', 'right'];
+// Suggested font families for the Typography Font Family picklist — most-common
+// first, order preserved (NOT alphabetized). Pure UI list: option value === label
+// === bare family name (no quotes / fallback chains), so the stored fontFamily
+// string is unchanged. Never enters projectData.config / Excel / the Inspector.
+const FONT_FAMILY_OPTIONS = [
+  'Arial', 'Calibri', 'Segoe UI', 'Tahoma', 'Trebuchet MS', 'Verdana',
+  'Times New Roman', 'Georgia', 'Cambria', 'Garamond', 'Courier New',
+  'Consolas', 'sans-serif', 'serif', 'monospace',
+];
 
 function renderConfigPanel(panel) {
   let strip = document.getElementById('configTabStrip');
@@ -2222,7 +2231,19 @@ function renderTypographyConfigForm(container) {
     dispatch({ entity: 'config', action: 'update', block: 'typography', field, value });
 
   addConfigSection(form, 'Font');
-  addTextRow(form, 'fontFamily', typo.fontFamily, val => upd('fontFamily', val));
+  // Closed picklist via addSelectRow (same as other enum config fields). Empty/null
+  // stored value → pass null so the placeholder shows WITHOUT coercing the stored
+  // value (empty-fontFamily validation still fires; save still writes empty). A
+  // non-empty value not in the list (e.g. a font from a loaded file) is prepended
+  // as its own selectable option so it displays and round-trips unchanged.
+  const storedFont = typo.fontFamily;
+  const fontEmpty = storedFont === null || storedFont === undefined || storedFont === '';
+  const fontOptions = FONT_FAMILY_OPTIONS.map(o => ({ value: o, label: o }));
+  if (!fontEmpty && !FONT_FAMILY_OPTIONS.includes(storedFont)) {
+    fontOptions.unshift({ value: storedFont, label: storedFont });
+  }
+  addSelectRow(form, 'fontFamily', fontEmpty ? null : storedFont, fontOptions,
+    val => upd('fontFamily', val));
 
   addConfigSection(form, 'Sizes');
   const FONT_SIZE_FIELDS = [
