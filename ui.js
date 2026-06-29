@@ -2359,6 +2359,11 @@ function renderTypographyConfigForm(container) {
   ];
   ALIGNMENT_FACTOR_FIELDS.forEach(f =>
     addNumberRow(form, f, typo[f], commitFloat(upd, f), { step: '0.1', decimals: 2 }));
+
+  addFormSection(form, 'Swimlane label');
+  addCheckboxRow(form, 'swimlaneLabelBold',      typo.swimlaneLabelBold,      val => upd('swimlaneLabelBold', val));
+  addCheckboxRow(form, 'swimlaneLabelItalic',    typo.swimlaneLabelItalic,    val => upd('swimlaneLabelItalic', val));
+  addCheckboxRow(form, 'swimlaneLabelUnderline', typo.swimlaneLabelUnderline, val => upd('swimlaneLabelUnderline', val));
 }
 
 // ── Inspector renderer ─────────────────────────────────────────────────────────

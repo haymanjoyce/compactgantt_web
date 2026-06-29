@@ -846,7 +846,8 @@ const TYPOGRAPHY_FACTOR_FIELDS = [
 
 function validateTypography(projectData) {
   const errors = [], warnings = [], notices = [];
-  const OWNED = new Set(['fontFamily', ...TYPOGRAPHY_FONT_SIZE_FIELDS, ...TYPOGRAPHY_FACTOR_FIELDS]);
+  const OWNED = new Set(['fontFamily', ...TYPOGRAPHY_FONT_SIZE_FIELDS, ...TYPOGRAPHY_FACTOR_FIELDS,
+    'swimlaneLabelBold', 'swimlaneLabelItalic', 'swimlaneLabelUnderline']);
   const pN = (projectData._parseNotices || []).filter(n => n.entity === 'config' && OWNED.has(n.field));
   const consumed = new Set();
   const ty = projectData.config.typography;
@@ -867,6 +868,11 @@ function validateTypography(projectData) {
     if (isFiniteNumber(ty[f]) && (ty[f] < 0 || ty[f] > 1)) {
       warnings.push(mkIssue('config', null, f, `${f} out of [0, 1]`, ty[f]));
     }
+  }
+  // Warnings — unrecognised_boolean on any swimlane-label style field
+  for (const f of ['swimlaneLabelBold', 'swimlaneLabelItalic', 'swimlaneLabelUnderline']) {
+    const n = consumeNotice(pN, consumed, 'config', null, f, 'unrecognised_boolean');
+    if (n) warnings.push(mkIssue('config', null, f, noticeMessage(n.reason), n.rawValue));
   }
 
   return { errors, warnings, notices };

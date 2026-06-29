@@ -419,6 +419,9 @@ function createEmptyProjectData() {
         noteAlignmentFactor:          0.7,
         swimlaneTopAlignmentFactor:   0.7,
         swimlaneBottomAlignmentFactor:0.7,
+        swimlaneLabelBold:            true,
+        swimlaneLabelItalic:          false,
+        swimlaneLabelUnderline:       false,
       },
       rendering: {
         linkArrowheadMilestoneGap:     2,
@@ -930,6 +933,9 @@ function parseWorkbook(workbook) {
     noteAlignmentFactor:          kvFloat(typographyKV, 'Note Alignment Factor',            0.7, undefined,                                   cfg('noteAlignmentFactor')),
     swimlaneTopAlignmentFactor:   kvFloat(typographyKV, 'Swimlane Top Alignment Factor',    0.7, 'Swimlane Top Vertical Alignment Factor',    cfg('swimlaneTopAlignmentFactor')),
     swimlaneBottomAlignmentFactor:kvFloat(typographyKV, 'Swimlane Bottom Alignment Factor', 0.7, 'Swimlane Bottom Vertical Alignment Factor', cfg('swimlaneBottomAlignmentFactor')),
+    swimlaneLabelBold:            kvBool(typographyKV,  'Swimlane Label Bold',              true,  undefined, cfg('swimlaneLabelBold')),
+    swimlaneLabelItalic:          kvBool(typographyKV,  'Swimlane Label Italic',            false, undefined, cfg('swimlaneLabelItalic')),
+    swimlaneLabelUnderline:       kvBool(typographyKV,  'Swimlane Label Underline',         false, undefined, cfg('swimlaneLabelUnderline')),
   };
 
   projectData._parseNotices = _notices;

@@ -196,6 +196,9 @@ function writeWorkbook(projectData) {
     ['Note Alignment Factor',            typography.noteAlignmentFactor],
     ['Swimlane Top Alignment Factor',    typography.swimlaneTopAlignmentFactor],
     ['Swimlane Bottom Alignment Factor', typography.swimlaneBottomAlignmentFactor],
+    ['Swimlane Label Bold',              boolStr(typography.swimlaneLabelBold)],
+    ['Swimlane Label Italic',            boolStr(typography.swimlaneLabelItalic)],
+    ['Swimlane Label Underline',         boolStr(typography.swimlaneLabelUnderline)],
   ]);
 
   return XLSX.write(wb, { type: 'array', bookType: 'xlsx' });

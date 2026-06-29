@@ -795,7 +795,10 @@ function renderChart(projectData, opts = {}) {
       ty = n(sy + sh - rowH * (1 - typography.swimlaneBottomAlignmentFactor));
     }
 
-    labelsSvg += `<text x="${n(tx)}" y="${ty}" text-anchor="${anchor}" font-family="'${escapeXml(typography.fontFamily)}'" font-size="${typography.swimlaneFontSize}" font-weight="bold" fill="${style.swimlaneLabelColor}">${escapeXml(s.name)}</text>`;
+    const slWeight    = typography.swimlaneLabelBold ? 'bold' : 'normal';
+    const slItalic    = typography.swimlaneLabelItalic ? ' font-style="italic"' : '';
+    const slUnderline = typography.swimlaneLabelUnderline ? ' text-decoration="underline"' : '';
+    labelsSvg += `<text x="${n(tx)}" y="${ty}" text-anchor="${anchor}" font-family="'${escapeXml(typography.fontFamily)}'" font-size="${typography.swimlaneFontSize}" font-weight="${slWeight}"${slItalic}${slUnderline} fill="${style.swimlaneLabelColor}">${escapeXml(s.name)}</text>`;
   }
 
   // ── 14. Notes ─────────────────────────────────────────────────────────────────
