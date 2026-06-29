@@ -549,7 +549,7 @@ function renderChart(projectData, opts = {}) {
         if (task.labelOffset > 0) {
           taskLabelsSvg += `<line x1="${n(rightEdge)}" y1="${n(cy)}" x2="${n(rightEdge + task.labelOffset)}" y2="${n(cy)}" stroke="${style.leaderLineColor}" stroke-width="${rendering.leaderLineStrokeWidth}"/>`;
         }
-        taskLabelsSvg += `<text x="${lx}" y="${ly}" text-anchor="start" font-family="'${escapeXml(typography.fontFamily)}'" font-size="${typography.taskFontSize}" fill="${style.outsideLabelTextColor}">${escapeXml(milestoneLabel)}</text>`;
+        taskLabelsSvg += `<text x="${lx}" y="${ly}" text-anchor="start" font-family="'${escapeXml(typography.fontFamily)}'" font-size="${typography.taskFontSize}" fill="${task.labelColor || style.outsideLabelTextColor}">${escapeXml(milestoneLabel)}</text>`;
       }
     } else {
       const x1   = Math.max(innerX1, xFor(task.startDate));
@@ -585,7 +585,7 @@ function renderChart(projectData, opts = {}) {
           if (truncated) {
             const lx = n(x1 + rendering.insideLabelPadding);
             const ly = n(rowY + rowH * typography.taskAlignmentFactor + barOffset);
-            taskLabelsSvg += `<text x="${lx}" y="${ly}" text-anchor="start" font-family="'${escapeXml(typography.fontFamily)}'" font-size="${typography.taskFontSize}" fill="${style.insideLabelTextColor}">${escapeXml(truncated)}</text>`;
+            taskLabelsSvg += `<text x="${lx}" y="${ly}" text-anchor="start" font-family="'${escapeXml(typography.fontFamily)}'" font-size="${typography.taskFontSize}" fill="${task.labelColor || style.insideLabelTextColor}">${escapeXml(truncated)}</text>`;
           }
         } else {
           const rightEdge = xFor(task.finishDate);
@@ -594,7 +594,7 @@ function renderChart(projectData, opts = {}) {
           if (task.labelOffset > 0) {
             taskLabelsSvg += `<line x1="${n(rightEdge)}" y1="${n(barCenterY)}" x2="${n(rightEdge + task.labelOffset)}" y2="${n(barCenterY)}" stroke="${style.leaderLineColor}" stroke-width="${rendering.leaderLineStrokeWidth}"/>`;
           }
-          taskLabelsSvg += `<text x="${lx}" y="${ly}" text-anchor="start" font-family="'${escapeXml(typography.fontFamily)}'" font-size="${typography.taskFontSize}" fill="${style.outsideLabelTextColor}">${escapeXml(barLabel)}</text>`;
+          taskLabelsSvg += `<text x="${lx}" y="${ly}" text-anchor="start" font-family="'${escapeXml(typography.fontFamily)}'" font-size="${typography.taskFontSize}" fill="${task.labelColor || style.outsideLabelTextColor}">${escapeXml(barLabel)}</text>`;
         }
       }
     }

@@ -18,12 +18,12 @@ function writeWorkbook(projectData) {
   addSheet('Tasks', [
     ['ID', 'Swimlane ID', 'Row', 'Name', 'Start Date', 'Finish Date',
      'Label Content', 'Label Placement', 'Label Offset', 'Date Format',
-     'Fill Color', 'Fill Pattern', 'Pattern Color'],
+     'Fill Color', 'Fill Pattern', 'Pattern Color', 'Label Color'],
     ...tasks.map(t => [
       t.id, t.swimlaneId, t.row, t.name,
       toJsDate(t.startDate), toJsDate(t.finishDate),
       t.labelContent, t.labelPlacement, t.labelOffset, t.dateFormat,
-      t.fillColor, t.fillPattern, t.patternColor,
+      t.fillColor, t.fillPattern, t.patternColor, t.labelColor,
     ]),
   ]);
 

@@ -483,6 +483,7 @@ function createEmptyTask() {
     fillColor:      'blue',
     fillPattern:    'solid',
     patternColor:   'white',
+    labelColor:     null,
     dateFormat:     null,
   };
 }
@@ -577,6 +578,7 @@ function parseWorkbook(workbook) {
       'Fill Color':      { key: 'fillColor',       def: 'blue'                 },
       'Fill Pattern':    { key: 'fillPattern',     def: 'solid'                },
       'Pattern Color':   { key: 'patternColor',    def: 'white'                },
+      'Label Color':     { key: 'labelColor',      def: null                   },
       'Date Format':     { key: 'dateFormat',      def: null                   },
     });
     const assignTaskId = makeIdAssigner(raw, 'task');
@@ -600,6 +602,7 @@ function parseWorkbook(workbook) {
         fillColor:      t.fillColor,
         fillPattern,
         patternColor:   t.patternColor,
+        labelColor:     t.labelColor,
         dateFormat:     t.dateFormat,
       };
     });

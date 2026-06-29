@@ -253,6 +253,27 @@
       padding: 0; border: 1px solid #bbb; cursor: pointer;
       background: transparent;
     }
+    /* Empty-state cue for clearable (allowEmpty) color swatches only — gated on
+       .is-unset, applied by ui.js when the field is null/''. A native color
+       well always paints a filled colour (#000000 when blank), which reads as a
+       deliberate black; this overrides the well with a muted fill + thin
+       diagonal slash (the universal "unset" cue), distinct from any real colour.
+       !important is required to beat the well's underlying RGB. Set/required
+       swatches never carry .is-unset, so their wells are untouched. */
+    .entity-form .color-row-wrapper > input[type="color"].color-swatch.is-unset::-webkit-color-swatch {
+      background-color: #fafafa !important;
+      background-image: linear-gradient(to top right,
+        transparent 0 calc(50% - 0.5px),
+        #999 calc(50% - 0.5px) calc(50% + 0.5px),
+        transparent calc(50% + 0.5px) 100%) !important;
+    }
+    .entity-form .color-row-wrapper > input[type="color"].color-swatch.is-unset::-moz-color-swatch {
+      background-color: #fafafa !important;
+      background-image: linear-gradient(to top right,
+        transparent 0 calc(50% - 0.5px),
+        #999 calc(50% - 0.5px) calc(50% + 0.5px),
+        transparent calc(50% + 0.5px) 100%) !important;
+    }
     .entity-form .color-row-wrapper > .color-clear-btn {
       flex: 0 0 24px;
       width: 24px; height: 24px;

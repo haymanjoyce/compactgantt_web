@@ -161,6 +161,9 @@ function validateTasks(projectData) {
     if (t.patternColor !== '' && t.patternColor != null && !isValidCssColor(t.patternColor)) {
       warnings.push(mkIssue('task', id, 'patternColor', 'Invalid CSS color', t.patternColor));
     }
+    if (t.labelColor !== '' && t.labelColor != null && !isValidCssColor(t.labelColor)) {
+      warnings.push(mkIssue('task', id, 'labelColor', 'Invalid CSS color', t.labelColor));
+    }
     {
       const n = consumeNotice(pN, consumed, 'task', id, 'fillPattern', 'unrecognised_enum');
       if (n) warnings.push(mkIssue('task', id, 'fillPattern', noticeMessage(n.reason), n.rawValue));

@@ -697,6 +697,7 @@ function renderTasksForm(container, selectedId) {
     const n = parseInt(val, 10);
     if (Number.isFinite(n)) upd('labelOffset', n);
   });
+  addColorRow(form, 'labelColor', task.labelColor, val => upd('labelColor', val), { allowEmpty: true });
   addColorRow(form, 'fillColor', task.fillColor, val => upd('fillColor', val));
   addSelectRow(form, 'fillPattern', task.fillPattern,
     FILL_PATTERN_OPTIONS.map(o => ({ value: o, label: o })),
@@ -788,10 +789,22 @@ function addColorRow(form, fieldName, value, commitFn, opts) {
   wrapper.appendChild(input);
   wrapper.appendChild(swatch);
 
+  // A native <input type="color"> always paints a filled well (#000000 when
+  // "empty"), which misreads as a deliberate black choice. On the allowEmpty
+  // path only, mark the genuinely-empty state (null or '' — a typed-but-invalid
+  // value still counts as set) so the stylesheet can give the well a neutral
+  // "no color set" look. Non-allowEmpty rows never get the class.
+  const applyUnsetState = (val) => {
+    if (!allowEmpty) return;
+    swatch.classList.toggle('is-unset', val == null || val === '');
+  };
+  applyUnsetState(initialStr);
+
   const handle = attachCommitHandlers(input, () => input.value, val => {
     commitFn(val);
     const hex = parseTextToHex6(val);
     if (hex !== null) swatch.value = hex;
+    applyUnsetState(val);
   });
 
   swatch.addEventListener('change', () => {
@@ -799,6 +812,7 @@ function addColorRow(form, fieldName, value, commitFn, opts) {
     input.value = hex;
     handle.setPreEditValue(hex);
     commitFn(hex);
+    applyUnsetState(hex);
   });
 
   if (allowEmpty) {
@@ -812,6 +826,7 @@ function addColorRow(form, fieldName, value, commitFn, opts) {
       swatch.value = '#000000';
       handle.setPreEditValue('');
       commitFn('');
+      applyUnsetState('');
     });
     wrapper.appendChild(clearBtn);
   }
