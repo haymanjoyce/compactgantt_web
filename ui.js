@@ -12,6 +12,12 @@ let fileHandle = null;
 // status bar can be recomposed (e.g. after baseline load/clear) without the
 // caller re-supplying it. null until the first file-load / New Project.
 let lastStatusPrefix = null;
+// Unsaved-changes flag. Content-based (not time-based): set true by dispatch on
+// every committed projectData mutation, cleared on any successful save and on
+// file-load / New Project. UI state only — never part of projectData. Drives the
+// beforeunload guard and the Save-button dirty cue (always mutated via markDirty
+// / markClean so the flag and the cue can't drift).
+let isDirty = false;
 // Active top-level tab. Single source of truth — set by activateTab, read by the
 // dispatcher's post-mutation hook to know which panel to re-render.
 let activeTab = 'data';
@@ -2806,8 +2812,8 @@ function dispatch({ entity, action, id, block, field, value, index } = {}) {
   // ('set'/'clear') are deliberately outside the shared per-row action set, so
   // it self-validates here — mirroring the config branch's own action check.
   if (entity === 'baseline') {
-    if (action === 'set')   { projectData.baseline = Array.isArray(value) ? value : []; runPostMutationHook(); return; }
-    if (action === 'clear') { projectData.baseline = []; runPostMutationHook(); return; }
+    if (action === 'set')   { projectData.baseline = Array.isArray(value) ? value : []; commitMutation(); return; }
+    if (action === 'clear') { projectData.baseline = []; commitMutation(); return; }
     console.warn('[dispatch] action not supported for baseline:', action);
     return;
   }
@@ -2821,7 +2827,7 @@ function dispatch({ entity, action, id, block, field, value, index } = {}) {
     if (!field)                       { console.warn('[dispatch] config update missing field'); return; }
     if (!(block in projectData.config)) { console.warn('[dispatch] unknown config block:', block); return; }
     projectData.config[block][field] = value;
-    runPostMutationHook();
+    commitMutation();
     return;
   }
 
@@ -2835,7 +2841,7 @@ function dispatch({ entity, action, id, block, field, value, index } = {}) {
     if (!rec) { console.warn('[dispatch] update: no', entity, 'with id', id); return; }
     rec[field] = value;
     if (entity === 'task') { recomputeTaskDerived(rec); recomputeTaskDateRange(); }
-    runPostMutationHook();
+    commitMutation();
     return;
   }
 
@@ -2846,7 +2852,7 @@ function dispatch({ entity, action, id, block, field, value, index } = {}) {
     arr.splice(insertAt, 0, rec);
     if (entity === 'swimlane') recomputeSwimlaneOrders();
     if (entity === 'task') recomputeTaskDateRange();
-    runPostMutationHook();
+    commitMutation();
     return;
   }
 
@@ -2857,7 +2863,7 @@ function dispatch({ entity, action, id, block, field, value, index } = {}) {
     arr.splice(idx, 1);
     if (entity === 'swimlane') recomputeSwimlaneOrders();
     if (entity === 'task') recomputeTaskDateRange();
-    runPostMutationHook();
+    commitMutation();
     return;
   }
 
@@ -2870,7 +2876,7 @@ function dispatch({ entity, action, id, block, field, value, index } = {}) {
     arr.push(clone);
     if (entity === 'swimlane') recomputeSwimlaneOrders();
     if (entity === 'task') recomputeTaskDateRange();
-    runPostMutationHook();
+    commitMutation();
     return;
   }
 
@@ -2884,7 +2890,7 @@ function dispatch({ entity, action, id, block, field, value, index } = {}) {
     [arr[idx], arr[swap]] = [arr[swap], arr[idx]];
     if (entity === 'swimlane') recomputeSwimlaneOrders();
     if (entity === 'task') recomputeTaskDateRange();
-    runPostMutationHook();
+    commitMutation();
     return;
   }
 }
@@ -2960,6 +2966,43 @@ function runPostMutationHook() {
   projectData._validation = validateProject(projectData);
   activateTab(activeTab);
   updateIssuesTabLabel();
+}
+
+// Single post-mutation commit, called from every dispatch branch AFTER its guards
+// — i.e. only once projectData has actually been mutated. Marks the project dirty,
+// then runs the validation + re-render hook. Kept distinct from runPostMutationHook
+// so the flag is set strictly on dispatch's committed-mutation path: view-only
+// renders (tab switches, Chart view toggles) re-render WITHOUT going through
+// dispatch, so they structurally cannot mark dirty.
+function commitMutation() {
+  markDirty();
+  runPostMutationHook();
+}
+
+// Dirty-flag mutators — the only places isDirty changes, each pairing the flag
+// with a Save-button cue refresh so the two never drift.
+function markDirty() { isDirty = true;  updateSaveDirtyCue(); }
+function markClean() { isDirty = false; updateSaveDirtyCue(); }
+
+// Reflects isDirty on the Save (xlsx) button as a small "●" dot child span
+// (mirrors the Issues-tab .tab-dot convention), added when dirty / removed when
+// clean. Independent of the empty-data disabled gate — refreshStatusAndButtons
+// only touches the button's .disabled, never its content, so the cue survives a
+// status refresh. The "Save" text node is left intact (we add/remove only the span).
+function updateSaveDirtyCue() {
+  const btn = document.getElementById('saveBtn');
+  if (!btn) return;
+  let dot = btn.querySelector('.save-dot');
+  if (isDirty) {
+    if (!dot) {
+      dot = document.createElement('span');
+      dot.className = 'save-dot';
+      dot.textContent = '●';
+      btn.appendChild(dot);
+    }
+  } else if (dot) {
+    dot.remove();
+  }
 }
 
 // Updates the Save-button disabled state and the status bar. Shared between the
@@ -3053,6 +3096,10 @@ function loadProjectFromBytes(bytes, name) {
   refreshStatusAndButtons(`Loaded: ${name}`);
 
   renderDataPanel();
+
+  // A freshly loaded project is clean (loadProjectFromBytes doesn't dispatch, so
+  // nothing marked it dirty — this clears any dirt carried over from before).
+  markClean();
 }
 
 // Blob-download fallback for the xlsx Save — used when FSAA is absent, or when a
@@ -3102,6 +3149,7 @@ async function writeBytesToHandle(handle, bytes) {
 async function saveWorkbookAs(bytes) {
   if (!window.showSaveFilePicker) {
     downloadWorkbook(bytes, loadedFilename || 'compactgantt_project.xlsx');
+    markClean();  // a completed download counts as saved (decision: download = saved)
     return;
   }
   let handle;
@@ -3112,9 +3160,10 @@ async function saveWorkbookAs(bytes) {
       types: XLSX_PICKER_TYPES,
     });
   } catch (err) {
-    if (err && err.name === 'AbortError') return;
+    if (err && err.name === 'AbortError') return;  // cancel → not saved, stay dirty
     console.warn('[save] showSaveFilePicker unavailable; falling back to download:', err);
     downloadWorkbook(bytes, loadedFilename || 'compactgantt_project.xlsx');
+    markClean();
     return;
   }
   const ok = await writeBytesToHandle(handle, bytes);
@@ -3122,11 +3171,21 @@ async function saveWorkbookAs(bytes) {
     fileHandle = handle;
     loadedFilename = handle.name;
     refreshStatusAndButtons(`Saved: ${handle.name}`);
+    markClean();
   }
 }
 
 // ── Public entry point ─────────────────────────────────────────────────────────
 function initUI() {
+  // Unsaved-changes guard: when dirty, ask the browser to show its native
+  // "Leave / Reload? Changes may not be saved" confirmation (message is
+  // browser-controlled). Clean → no prompt.
+  window.addEventListener('beforeunload', function(e) {
+    if (!isDirty) return;
+    e.preventDefault();
+    e.returnValue = '';
+  });
+
   document.getElementById('tabData').addEventListener('click',      () => activateTab('data'));
   document.getElementById('tabIssues').addEventListener('click',    () => activateTab('issues'));
   document.getElementById('tabChart').addEventListener('click',     () => activateTab('chart'));
@@ -3150,6 +3209,10 @@ function initUI() {
 
     refreshStatusAndButtons('New project');
     updateIssuesTabLabel();
+
+    // Clear AFTER the seeding dispatches above (each marked dirty via the hook):
+    // a brand-new project is a known clean starting state, not unsaved work.
+    markClean();
   });
 
   // Choose file: FSAA open picker when available, else the hidden file input.
@@ -3206,7 +3269,8 @@ function initUI() {
   document.getElementById('saveBtn').addEventListener('click', async function() {
     const bytes = writeWorkbook(projectData);
     if (fileHandle) {
-      await writeBytesToHandle(fileHandle, bytes);
+      const ok = await writeBytesToHandle(fileHandle, bytes);
+      if (ok) markClean();  // a failed write stays dirty (writeBytesToHandle alerts)
       return;
     }
     await saveWorkbookAs(bytes);

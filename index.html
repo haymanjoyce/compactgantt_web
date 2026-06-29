@@ -61,6 +61,9 @@
     }
     .app-toolbar button:disabled:hover { background: #fafafa; border-color: #ddd; }
     .app-toolbar-divider { width: 1px; height: 20px; background: #ddd; }
+    /* Unsaved-changes cue on the Save button — a small dot appended to the label
+       (added/removed by updateSaveDirtyCue), independent of the disabled state. */
+    #saveBtn .save-dot { margin-left: 5px; font-size: 0.7em; color: #b45309; vertical-align: middle; }
     #status {
       display: flex; align-items: center;
       margin: 0 0 0.75rem; padding: 6px 10px; color: #555;
