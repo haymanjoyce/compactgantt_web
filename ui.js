@@ -2973,6 +2973,7 @@ function refreshStatusAndButtons(prefix) {
   const d = projectData;
   const noData = d.tasks.length === 0 && d.swimlanes.length === 0;
   document.getElementById('saveBtn').disabled    = noData;
+  document.getElementById('saveAsBtn').disabled  = noData;
   document.getElementById('saveSvgBtn').disabled = noData;
   refreshBaselineButtons();
   if (prefix != null) lastStatusPrefix = prefix;
@@ -3018,6 +3019,13 @@ const XLSX_PICKER_TYPES = [{
   description: 'Excel workbook',
   accept: { 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx'] },
 }];
+
+// Shared FSAA picker id — passed to the open picker AND both save pickers (Save's
+// no-handle branch and the Save As button, both routed through saveWorkbookAs).
+// Chromium keys its last-used-directory memory off this id, so all three pickers
+// reopen in the same folder across sessions. This is the ONLY folder memory — no
+// handle persistence, no IndexedDB.
+const XLSX_PICKER_ID = 'compactgantt-xlsx';
 
 // Single downstream load path shared by the FSAA open picker and the hidden-input
 // fallback. Takes raw workbook bytes (Uint8Array) + the source filename; parses,
@@ -3082,6 +3090,41 @@ async function writeBytesToHandle(handle, bytes) {
   }
 }
 
+// Save As (xlsx) — ALWAYS opens the save picker, regardless of any current
+// fileHandle (that's the difference from Save, which writes silently when a
+// handle exists). Shared by the Save As button and Save's no-handle branch.
+// On success: adopt the chosen handle, write via writeBytesToHandle, update
+// loadedFilename, and recompose the status line via refreshStatusAndButtons (so
+// the baseline chip + counts rebuild). Error split (reused, not reworked): a
+// save-picker that won't open is not data loss → cancel (AbortError) silent, any
+// other throw falls back to download (no alert); a failed write alerts from
+// writeBytesToHandle. No FSAA → download.
+async function saveWorkbookAs(bytes) {
+  if (!window.showSaveFilePicker) {
+    downloadWorkbook(bytes, loadedFilename || 'compactgantt_project.xlsx');
+    return;
+  }
+  let handle;
+  try {
+    handle = await window.showSaveFilePicker({
+      id: XLSX_PICKER_ID,
+      suggestedName: loadedFilename || 'compactgantt_project.xlsx',
+      types: XLSX_PICKER_TYPES,
+    });
+  } catch (err) {
+    if (err && err.name === 'AbortError') return;
+    console.warn('[save] showSaveFilePicker unavailable; falling back to download:', err);
+    downloadWorkbook(bytes, loadedFilename || 'compactgantt_project.xlsx');
+    return;
+  }
+  const ok = await writeBytesToHandle(handle, bytes);
+  if (ok) {
+    fileHandle = handle;
+    loadedFilename = handle.name;
+    refreshStatusAndButtons(`Saved: ${handle.name}`);
+  }
+}
+
 // ── Public entry point ─────────────────────────────────────────────────────────
 function initUI() {
   document.getElementById('tabData').addEventListener('click',      () => activateTab('data'));
@@ -3121,7 +3164,7 @@ function initUI() {
     }
     let handle;
     try {
-      [handle] = await window.showOpenFilePicker({ multiple: false, types: XLSX_PICKER_TYPES });
+      [handle] = await window.showOpenFilePicker({ id: XLSX_PICKER_ID, multiple: false, types: XLSX_PICKER_TYPES });
     } catch (err) {
       if (err && err.name === 'AbortError') return;
       console.warn('[open] showOpenFilePicker unavailable; falling back to file input:', err);
@@ -3155,47 +3198,25 @@ function initUI() {
     e.target.value = '';
   });
 
-  // Save (xlsx). Three paths:
-  //   1. Handle present → silent in-place write (the true Save). No status change.
-  //   2. FSAA, no handle yet (e.g. after New Project) → Save As: pick a location,
-  //      adopt the handle, write, and recompose the status line via
-  //      refreshStatusAndButtons so the chip/counts stay live and lastStatusPrefix
-  //      is set. A picker that won't open is not data loss → cancel is silent, any
-  //      other throw falls back to the Blob download.
-  //   3. No FSAA → Blob download, exactly as before.
-  // Write failures (the data-loss risk) alert from writeBytesToHandle and leave
-  // handle/filename intact.
+  // Save (xlsx). Handle present → silent in-place write (the true Save, no status
+  // change). No handle (e.g. after New Project) → delegate to saveWorkbookAs,
+  // which opens the save picker (or downloads when FSAA is absent). Write failures
+  // (the data-loss risk) alert from writeBytesToHandle and leave handle/filename
+  // intact.
   document.getElementById('saveBtn').addEventListener('click', async function() {
     const bytes = writeWorkbook(projectData);
-
     if (fileHandle) {
       await writeBytesToHandle(fileHandle, bytes);
       return;
     }
+    await saveWorkbookAs(bytes);
+  });
 
-    if (window.showSaveFilePicker) {
-      let handle;
-      try {
-        handle = await window.showSaveFilePicker({
-          suggestedName: loadedFilename || 'compactgantt_project.xlsx',
-          types: XLSX_PICKER_TYPES,
-        });
-      } catch (err) {
-        if (err && err.name === 'AbortError') return;
-        console.warn('[save] showSaveFilePicker unavailable; falling back to download:', err);
-        downloadWorkbook(bytes, loadedFilename || 'compactgantt_project.xlsx');
-        return;
-      }
-      const ok = await writeBytesToHandle(handle, bytes);
-      if (ok) {
-        fileHandle = handle;
-        loadedFilename = handle.name;
-        refreshStatusAndButtons(`Saved: ${handle.name}`);
-      }
-      return;
-    }
-
-    downloadWorkbook(bytes, loadedFilename || 'compactgantt_project.xlsx');
+  // Save As — always opens the save picker (even when a handle exists), adopting
+  // the chosen file as the new in-place target. Same shared helper as Save's
+  // no-handle branch.
+  document.getElementById('saveAsBtn').addEventListener('click', async function() {
+    await saveWorkbookAs(writeWorkbook(projectData));
   });
 
   document.getElementById('saveSvgBtn').addEventListener('click', function() {
