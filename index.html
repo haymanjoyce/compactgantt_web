@@ -20,6 +20,7 @@
       --cg-bg-selected: #e0ecff;
       --cg-data-form-col-width: 420px;
       --cg-data-label-col-width: 140px;
+      --cg-data-panel-max-width: 1400px;
       --cg-config-form-col-width: 420px;
       --cg-config-label-col-width: 200px;
       --cg-control-height: 28px;
@@ -89,7 +90,8 @@
       display: grid;
       grid-template-columns: 1fr var(--cg-data-form-col-width);
       gap: var(--cg-gap);
-      align-items: start;
+      align-items: stretch;
+      max-width: var(--cg-data-panel-max-width);
     }
     .entity-left, .entity-right {
       border: var(--cg-border); background: var(--cg-bg-panel);
