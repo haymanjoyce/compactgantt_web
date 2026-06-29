@@ -2,6 +2,12 @@
 
 let projectData = createEmptyProjectData();
 let loadedFilename = null;
+// Writable file handle for the xlsx Save, retained across the session when the
+// File System Access API is available and a file was opened (or adopted via Save
+// As). null means "no handle" → Save behaves as Save As (FSAA) or a Blob
+// download (no FSAA). UI state only — never part of projectData. Cleared by New
+// Project; set/cleared by the two open paths and by Save As.
+let fileHandle = null;
 // Last status-line prefix ("Loaded: <name>" / "New project"), remembered so the
 // status bar can be recomposed (e.g. after baseline load/clear) without the
 // caller re-supplying it. null until the first file-load / New Project.
@@ -3005,6 +3011,77 @@ function refreshBaselineButtons() {
   document.getElementById('clearBaselineBtn').disabled = d.baseline.length === 0;
 }
 
+// ── File open / save plumbing (File System Access API + fallbacks) ──────────────
+
+// Shared .xlsx type filter for both FSAA pickers (open + save-as).
+const XLSX_PICKER_TYPES = [{
+  description: 'Excel workbook',
+  accept: { 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx'] },
+}];
+
+// Single downstream load path shared by the FSAA open picker and the hidden-input
+// fallback. Takes raw workbook bytes (Uint8Array) + the source filename; parses,
+// validates, resets panel/issues state, re-renders the active diagnostic tabs,
+// refreshes status, and renders the Data panel. Tab-preserving — does NOT switch
+// to the Data tab (that's New-Project-only). The caller owns fileHandle (sets it
+// to the picked handle on the FSAA path, null on the fallback path) so the load
+// logic stays handle-agnostic.
+function loadProjectFromBytes(bytes, name) {
+  const workbook = XLSX.read(bytes, { type: 'array', cellDates: true });
+  projectData = parseWorkbook(workbook);
+  projectData._validation = validateProject(projectData);
+  loadedFilename = name;
+
+  resetDataPanelState();
+  issuesFilterState = ISSUE_DEFAULT_FILTER();
+  updateIssuesTabLabel();
+  if (document.getElementById('tabIssues').classList.contains('active')) {
+    renderIssuesPanel(document.getElementById('issuesPanel'));
+  }
+  if (document.getElementById('tabConfig').classList.contains('active')) {
+    renderConfigPanel(document.getElementById('configPanel'));
+  }
+
+  refreshStatusAndButtons(`Loaded: ${name}`);
+
+  renderDataPanel();
+}
+
+// Blob-download fallback for the xlsx Save — used when FSAA is absent, or when a
+// picker won't open (a picker that can't open is not data loss, so it falls back
+// here silently rather than alerting).
+function downloadWorkbook(bytes, filename) {
+  const blob = new Blob([bytes], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href     = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+// Write bytes to an FSAA file handle. Returns true on success. A failed WRITE is
+// the data-loss risk (existing or freshly-picked handle), so a non-AbortError
+// here alerts + console.warns and leaves handle/filename intact; the caller does
+// NOT fall back to a download or a second Save-As dialog. AbortError (rare on
+// write) is a silent no-op. The first write to a freshly-opened handle may
+// trigger the browser's one-time read-write permission prompt; a denial surfaces
+// here as a NotAllowedError.
+async function writeBytesToHandle(handle, bytes) {
+  try {
+    const writable = await handle.createWritable();
+    await writable.write(bytes);
+    await writable.close();
+    return true;
+  } catch (err) {
+    if (err && err.name === 'AbortError') return false;
+    console.warn('[save] write to file handle failed:', err);
+    window.alert('Could not save to the file. It may have been moved or deleted, or write permission was denied.\n\n'
+      + (err && err.message ? err.message : err));
+    return false;
+  }
+}
+
 // ── Public entry point ─────────────────────────────────────────────────────────
 function initUI() {
   document.getElementById('tabData').addEventListener('click',      () => activateTab('data'));
@@ -3016,6 +3093,7 @@ function initUI() {
   document.getElementById('newProjectBtn').addEventListener('click', function() {
     projectData    = createEmptyProjectData();
     loadedFilename = null;
+    fileHandle     = null;  // next Save prompts once for a location (Save As / download)
     resetDataPanelState();
     issuesFilterState = ISSUE_DEFAULT_FILTER();
 
@@ -3031,34 +3109,45 @@ function initUI() {
     updateIssuesTabLabel();
   });
 
-  document.getElementById('chooseFileBtn').addEventListener('click', function() {
-    document.getElementById('fileInput').click();
+  // Choose file: FSAA open picker when available, else the hidden file input.
+  // The picker retains a writable handle for in-place Save; the input path does
+  // not (it clears fileHandle). A picker that won't open is not data loss, so a
+  // non-AbortError (e.g. a file:// SecurityError) falls back to the input path —
+  // opening always works regardless of origin; cancel (AbortError) is silent.
+  document.getElementById('chooseFileBtn').addEventListener('click', async function() {
+    if (!window.showOpenFilePicker) {
+      document.getElementById('fileInput').click();
+      return;
+    }
+    let handle;
+    try {
+      [handle] = await window.showOpenFilePicker({ multiple: false, types: XLSX_PICKER_TYPES });
+    } catch (err) {
+      if (err && err.name === 'AbortError') return;
+      console.warn('[open] showOpenFilePicker unavailable; falling back to file input:', err);
+      document.getElementById('fileInput').click();
+      return;
+    }
+    try {
+      const file  = await handle.getFile();
+      const bytes = new Uint8Array(await file.arrayBuffer());
+      fileHandle = handle;
+      loadProjectFromBytes(bytes, file.name);
+    } catch (err) {
+      console.warn('[open] failed to read picked file:', err);
+    }
   });
 
+  // Fallback open path: the hidden file input feeds the same shared load function
+  // and clears fileHandle (no writable handle on this path → Save downloads).
   document.getElementById('fileInput').addEventListener('change', function(e) {
     const file = e.target.files[0];
     if (!file) return;
 
     const reader = new FileReader();
     reader.onload = function(ev) {
-      const workbook = XLSX.read(new Uint8Array(ev.target.result), { type: 'array', cellDates: true });
-      projectData = parseWorkbook(workbook);
-      projectData._validation = validateProject(projectData);
-      loadedFilename = file.name;
-
-      resetDataPanelState();
-      issuesFilterState = ISSUE_DEFAULT_FILTER();
-      updateIssuesTabLabel();
-      if (document.getElementById('tabIssues').classList.contains('active')) {
-        renderIssuesPanel(document.getElementById('issuesPanel'));
-      }
-      if (document.getElementById('tabConfig').classList.contains('active')) {
-        renderConfigPanel(document.getElementById('configPanel'));
-      }
-
-      refreshStatusAndButtons(`Loaded: ${file.name}`);
-
-      renderDataPanel();
+      fileHandle = null;
+      loadProjectFromBytes(new Uint8Array(ev.target.result), file.name);
     };
     reader.readAsArrayBuffer(file);
 
@@ -3066,16 +3155,47 @@ function initUI() {
     e.target.value = '';
   });
 
-  document.getElementById('saveBtn').addEventListener('click', function() {
-    const filename = loadedFilename || 'compactgantt_project.xlsx';
-    const data = writeWorkbook(projectData);
-    const blob = new Blob([data], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-    const url  = URL.createObjectURL(blob);
-    const a    = document.createElement('a');
-    a.href     = url;
-    a.download = filename;
-    a.click();
-    URL.revokeObjectURL(url);
+  // Save (xlsx). Three paths:
+  //   1. Handle present → silent in-place write (the true Save). No status change.
+  //   2. FSAA, no handle yet (e.g. after New Project) → Save As: pick a location,
+  //      adopt the handle, write, and recompose the status line via
+  //      refreshStatusAndButtons so the chip/counts stay live and lastStatusPrefix
+  //      is set. A picker that won't open is not data loss → cancel is silent, any
+  //      other throw falls back to the Blob download.
+  //   3. No FSAA → Blob download, exactly as before.
+  // Write failures (the data-loss risk) alert from writeBytesToHandle and leave
+  // handle/filename intact.
+  document.getElementById('saveBtn').addEventListener('click', async function() {
+    const bytes = writeWorkbook(projectData);
+
+    if (fileHandle) {
+      await writeBytesToHandle(fileHandle, bytes);
+      return;
+    }
+
+    if (window.showSaveFilePicker) {
+      let handle;
+      try {
+        handle = await window.showSaveFilePicker({
+          suggestedName: loadedFilename || 'compactgantt_project.xlsx',
+          types: XLSX_PICKER_TYPES,
+        });
+      } catch (err) {
+        if (err && err.name === 'AbortError') return;
+        console.warn('[save] showSaveFilePicker unavailable; falling back to download:', err);
+        downloadWorkbook(bytes, loadedFilename || 'compactgantt_project.xlsx');
+        return;
+      }
+      const ok = await writeBytesToHandle(handle, bytes);
+      if (ok) {
+        fileHandle = handle;
+        loadedFilename = handle.name;
+        refreshStatusAndButtons(`Saved: ${handle.name}`);
+      }
+      return;
+    }
+
+    downloadWorkbook(bytes, loadedFilename || 'compactgantt_project.xlsx');
   });
 
   document.getElementById('saveSvgBtn').addEventListener('click', function() {
