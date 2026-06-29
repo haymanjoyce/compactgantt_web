@@ -667,6 +667,7 @@ function renderTasksForm(container, selectedId) {
 
   const upd = (field, value) => dispatch({ entity: 'task', action: 'update', id: task.id, field, value });
 
+  addFormSection(form, 'Identity');
   addReadonlyRow(form, 'id', task.id);
 
   const swimlaneOptions = projectData.swimlanes.map(s => ({ value: String(s.id), label: `${s.id} — ${s.name}` }));
@@ -682,11 +683,14 @@ function renderTasksForm(container, selectedId) {
     if (Number.isFinite(n)) upd('row', n);
   });
   addTextRow(form, 'name', task.name, val => upd('name', val));
+
+  addFormSection(form, 'Schedule');
   addDateRow(form, 'startDate',  task.startDate,  val => upd('startDate',  val === '' ? null : val));
   addDateRow(form, 'finishDate', task.finishDate, val => upd('finishDate', val === '' ? null : val));
   addReadonlyRow(form, 'calendarDays', taskDays(task), ' (derived)');
   addReadonlyRow(form, 'isMilestone', task.isMilestone, ' (derived)');
 
+  addFormSection(form, 'Label');
   addSelectRow(form, 'labelContent', task.labelContent,
     LABEL_CONTENT_OPTIONS.map(o => ({ value: o, label: o })),
     val => upd('labelContent', val));
@@ -698,13 +702,15 @@ function renderTasksForm(container, selectedId) {
     if (Number.isFinite(n)) upd('labelOffset', n);
   });
   addColorRow(form, 'labelColor', task.labelColor, val => upd('labelColor', val), { allowEmpty: true });
+  addTextRow(form, 'dateFormat', task.dateFormat == null ? '' : task.dateFormat,
+    val => upd('dateFormat', val === '' ? null : val));
+
+  addFormSection(form, 'Bar');
   addColorRow(form, 'fillColor', task.fillColor, val => upd('fillColor', val));
   addSelectRow(form, 'fillPattern', task.fillPattern,
     FILL_PATTERN_OPTIONS.map(o => ({ value: o, label: o })),
     val => upd('fillPattern', val));
   addColorRow(form, 'patternColor', task.patternColor, val => upd('patternColor', val));
-  addTextRow(form, 'dateFormat', task.dateFormat == null ? '' : task.dateFormat,
-    val => upd('dateFormat', val === '' ? null : val));
 }
 
 function addReadonlyRow(form, fieldName, value, suffix) {
@@ -1175,9 +1181,12 @@ function renderSwimlanesForm(container, selectedId) {
 
   const upd = (field, value) => dispatch({ entity: 'swimlane', action: 'update', id: sw.id, field, value });
 
+  addFormSection(form, 'Identity');
   addReadonlyRow(form, 'id',    sw.id);
   addReadonlyRow(form, 'order', sw.order, ' (derived)');
   addTextRow(form, 'name', sw.name, val => upd('name', val));
+
+  addFormSection(form, 'Layout');
   addNumberRow(form, 'rowCount', sw.rowCount, val => {
     const n = parseInt(val, 10);
     if (Number.isFinite(n)) upd('rowCount', n);
@@ -1185,6 +1194,8 @@ function renderSwimlanesForm(container, selectedId) {
   addSelectRow(form, 'labelPosition', sw.labelPosition,
     LABEL_POSITION_OPTIONS.map(o => ({ value: o, label: o })),
     val => upd('labelPosition', val));
+
+  addFormSection(form, 'Appearance');
   addColorRow(form, 'backgroundColor', sw.backgroundColor, val => upd('backgroundColor', val));
 }
 
@@ -1593,6 +1604,7 @@ function renderLinksForm(container, selectedId) {
 
   const upd = (field, value) => dispatch({ entity: 'link', action: 'update', id: link.id, field, value });
 
+  addFormSection(form, 'Connection');
   addReadonlyRow(form, 'id', link.id);
   addSelectRow(form, 'fromTaskId', link.fromTaskId, buildTaskRefOptions(link.fromTaskId), val => {
     if (val === '') { upd('fromTaskId', null); return; }
@@ -1604,6 +1616,8 @@ function renderLinksForm(container, selectedId) {
     const n = parseInt(val, 10);
     if (Number.isFinite(n)) upd('toTaskId', n);
   });
+
+  addFormSection(form, 'Line');
   addColorRow(form, 'lineColor', link.lineColor, val => upd('lineColor', val));
   addSelectRow(form, 'lineStyle', link.lineStyle,
     LINK_LINE_STYLE_OPTIONS.map(o => ({ value: o, label: o })),
@@ -1701,13 +1715,18 @@ function renderPipesForm(container, selectedId) {
 
   const upd = (field, value) => dispatch({ entity: 'pipe', action: 'update', id: pipe.id, field, value });
 
+  addFormSection(form, 'Identity');
   addReadonlyRow(form, 'id', pipe.id);
   addDateRow(form, 'date', pipe.date, val => upd('date', val === '' ? null : val));
   addTextRow(form, 'name',  pipe.name,  val => upd('name',  val));
+
+  addFormSection(form, 'Line');
   addColorRow(form, 'color', pipe.color, val => upd('color', val));
   addSelectRow(form, 'lineStyle', pipe.lineStyle,
     PIPE_LINE_STYLE_OPTIONS.map(o => ({ value: o, label: o })),
     val => upd('lineStyle', val));
+
+  addFormSection(form, 'Badge');
   addNumberRow(form, 'labelPosition', pipe.labelPosition, val => {
     const n = parseFloat(val);
     if (Number.isFinite(n)) upd('labelPosition', n);
@@ -1803,15 +1822,22 @@ function renderCurtainsForm(container, selectedId) {
 
   const upd = (field, value) => dispatch({ entity: 'curtain', action: 'update', id: cu.id, field, value });
 
+  addFormSection(form, 'Identity');
   addReadonlyRow(form, 'id', cu.id);
+  addTextRow(form, 'name',  cu.name,  val => upd('name',  val));
+
+  addFormSection(form, 'Span');
   addDateRow(form, 'startDate', cu.startDate, val => upd('startDate', val === '' ? null : val));
   addDateRow(form, 'endDate',   cu.endDate,   val => upd('endDate',   val === '' ? null : val));
-  addTextRow(form, 'name',  cu.name,  val => upd('name',  val));
+
+  addFormSection(form, 'Appearance');
   addColorRow(form, 'color', cu.color, val => upd('color', val));
   addNumberRow(form, 'opacity', cu.opacity, val => {
     const n = parseFloat(val);
     if (Number.isFinite(n)) upd('opacity', n);
   }, { step: '0.1', min: '0', max: '1', decimals: 2 });
+
+  addFormSection(form, 'Badge');
   addNumberRow(form, 'labelPosition', cu.labelPosition, val => {
     const n = parseFloat(val);
     if (Number.isFinite(n)) upd('labelPosition', n);
@@ -1910,6 +1936,7 @@ function renderNotesForm(container, selectedId) {
     if (Number.isFinite(n)) upd(field, n);
   };
 
+  addFormSection(form, 'Position & size');
   addReadonlyRow(form, 'id', note.id);
   // xPct/yPct/widthPct/heightPct: no min/max — negative xPct/yPct legal per
   // §9.15 (partial overflow renders as-positioned); negative width/height is
@@ -1918,17 +1945,21 @@ function renderNotesForm(container, selectedId) {
   addNumberRow(form, 'yPct',      note.yPct,      floatCommit('yPct'),      { step: '1' });
   addNumberRow(form, 'widthPct',  note.widthPct,  floatCommit('widthPct'),  { step: '1' });
   addNumberRow(form, 'heightPct', note.heightPct, floatCommit('heightPct'), { step: '1' });
+
+  addFormSection(form, 'Text');
+  addTextareaRow(form, 'text', note.text, val => upd('text', val));
   addSelectRow(form, 'textAlign', note.textAlign,
     NOTE_TEXT_ALIGN_OPTIONS.map(o => ({ value: o, label: o })),
     val => upd('textAlign', val));
   addSelectRow(form, 'verticalAlign', note.verticalAlign,
     NOTE_VERTICAL_ALIGN_OPTIONS.map(o => ({ value: o, label: o })),
     val => upd('verticalAlign', val));
+
+  addFormSection(form, 'Box');
   // Empty string is legal and meaningful for both colors — suppresses the
   // border/fill rect in the renderer.
   addColorRow(form, 'borderColor', note.borderColor, val => upd('borderColor', val), { allowEmpty: true });
   addColorRow(form, 'fillColor',   note.fillColor,   val => upd('fillColor',   val), { allowEmpty: true });
-  addTextareaRow(form, 'text', note.text, val => upd('text', val));
 }
 
 // Returns { setPreEditValue }. Only addColorRow uses it — to keep the
@@ -2066,12 +2097,13 @@ function commitFloat(upd, field) {
   };
 }
 
-// Section heading for a config form: a full-width, label-only row (no input,
-// not focusable, no part in commit handling). CSS gives it a top hairline rule
-// and spacing, suppressed on the first heading via :first-child.
-function addConfigSection(form, title) {
+// Section heading for an entity or config form: a full-width, label-only row
+// (no input, not focusable, no part in commit handling). CSS gives it a top
+// hairline rule and spacing, suppressed on the first heading via :first-child.
+// Shared by the Config sub-tab forms and the Data-tab entity edit forms.
+function addFormSection(form, title) {
   const heading = document.createElement('div');
-  heading.className = 'config-section-heading';
+  heading.className = 'form-section-heading';
   heading.textContent = title;
   form.appendChild(heading);
 }
@@ -2089,17 +2121,17 @@ function renderLayoutConfigForm(container) {
   const upd = (field, value) =>
     dispatch({ entity: 'config', action: 'update', block: 'layout', field, value });
 
-  addConfigSection(form, 'Size');
+  addFormSection(form, 'Size');
   addNumberRow(form, 'outerWidth',      layout.outerWidth,      commitInt(upd, 'outerWidth'));
   addNumberRow(form, 'outerHeight',     layout.outerHeight,     commitInt(upd, 'outerHeight'));
 
-  addConfigSection(form, 'Padding');
+  addFormSection(form, 'Padding');
   addNumberRow(form, 'paddingTop',      layout.paddingTop,      commitInt(upd, 'paddingTop'));
   addNumberRow(form, 'paddingRight',    layout.paddingRight,    commitInt(upd, 'paddingRight'));
   addNumberRow(form, 'paddingBottom',   layout.paddingBottom,   commitInt(upd, 'paddingBottom'));
   addNumberRow(form, 'paddingLeft',     layout.paddingLeft,     commitInt(upd, 'paddingLeft'));
 
-  addConfigSection(form, 'Dividers');
+  addFormSection(form, 'Dividers');
   addCheckboxRow(form, 'showRowDividers', layout.showRowDividers, val => upd('showRowDividers', val));
 }
 
@@ -2116,12 +2148,12 @@ function renderBarsConfigForm(container) {
   const upd = (field, value) =>
     dispatch({ entity: 'config', action: 'update', block: 'bars', field, value });
 
-  addConfigSection(form, 'Tasks');
+  addFormSection(form, 'Tasks');
   addNumberRow(form, 'taskBarHeightFactor',   bars.taskBarHeightFactor,   commitFloat(upd, 'taskBarHeightFactor'),   { step: '0.1', decimals: 2 });
   addNumberRow(form, 'taskBarVerticalOffsetFactor',   bars.taskBarVerticalOffsetFactor,   commitFloat(upd, 'taskBarVerticalOffsetFactor'),   { step: '0.01', decimals: 2 });
   addNumberRow(form, 'taskCornerRadius',      bars.taskCornerRadius,      commitInt  (upd, 'taskCornerRadius'));
 
-  addConfigSection(form, 'Milestones');
+  addFormSection(form, 'Milestones');
   addNumberRow(form, 'milestoneSizeFactor',   bars.milestoneSizeFactor,   commitFloat(upd, 'milestoneSizeFactor'),   { step: '0.1', decimals: 2 });
   addNumberRow(form, 'milestoneVerticalOffsetFactor', bars.milestoneVerticalOffsetFactor, commitFloat(upd, 'milestoneVerticalOffsetFactor'), { step: '0.01', decimals: 2 });
   addSelectRow(form, 'milestoneShape',        bars.milestoneShape,
@@ -2129,14 +2161,14 @@ function renderBarsConfigForm(container) {
     val => upd('milestoneShape', val));
   addNumberRow(form, 'milestoneCornerRadius', bars.milestoneCornerRadius, commitFloat(upd, 'milestoneCornerRadius'), { step: '0.1', decimals: 2 });
 
-  addConfigSection(form, 'Baseline');
+  addFormSection(form, 'Baseline');
   addNumberRow(form, 'baselineBarHeightFactor',           bars.baselineBarHeightFactor,           commitFloat(upd, 'baselineBarHeightFactor'),           { step: '0.01', decimals: 2 });
   addNumberRow(form, 'baselineBarVerticalOffsetFactor',   bars.baselineBarVerticalOffsetFactor,   commitFloat(upd, 'baselineBarVerticalOffsetFactor'),   { step: '0.01', decimals: 2 });
   addNumberRow(form, 'baselineMilestoneSizeFactor',       bars.baselineMilestoneSizeFactor,       commitFloat(upd, 'baselineMilestoneSizeFactor'),       { step: '0.01', decimals: 2 });
   addNumberRow(form, 'baselineMilestoneVerticalOffsetFactor', bars.baselineMilestoneVerticalOffsetFactor, commitFloat(upd, 'baselineMilestoneVerticalOffsetFactor'), { step: '0.01', decimals: 2 });
   addNumberRow(form, 'baselineFillOpacity',               bars.baselineFillOpacity,               commitFloat(upd, 'baselineFillOpacity'),               { step: '0.1', min: '0', max: '1', decimals: 2 });
 
-  addConfigSection(form, 'Links');
+  addFormSection(form, 'Links');
   addNumberRow(form, 'arrowheadSizeFactor',    bars.arrowheadSizeFactor,    commitFloat(upd, 'arrowheadSizeFactor'),    { step: '0.1', decimals: 2 });
   addNumberRow(form, 'originMarkerSizeFactor', bars.originMarkerSizeFactor, commitFloat(upd, 'originMarkerSizeFactor'), { step: '0.1', decimals: 2 });
 }
@@ -2162,7 +2194,7 @@ function renderTimelineConfigForm(container) {
   // to the current task extent immediately. The task-gated post-mutation hook
   // never fires on these config dispatches, so without seeding the value here a
   // cleared field would leave the chart blank until the next task edit.
-  addConfigSection(form, 'Date range');
+  addFormSection(form, 'Date range');
   addDateRow(form, 'chartStartDate', timeline.chartStartDate, val => {
     if (val === '') {
       upd('chartStartDateExplicit', false);
@@ -2183,14 +2215,14 @@ function renderTimelineConfigForm(container) {
   });
   addTextRow(form, 'chartDateFormat', timeline.chartDateFormat, val => upd('chartDateFormat', val));
 
-  addConfigSection(form, 'Scales');
+  addFormSection(form, 'Scales');
   addCheckboxRow(form, 'showYears',  timeline.showYears,  val => upd('showYears',  val));
   addCheckboxRow(form, 'showMonths', timeline.showMonths, val => upd('showMonths', val));
   addCheckboxRow(form, 'showWeeks',  timeline.showWeeks,  val => upd('showWeeks',  val));
   addCheckboxRow(form, 'showDays',   timeline.showDays,   val => upd('showDays',   val));
   addCheckboxRow(form, 'showDates',  timeline.showDates,  val => upd('showDates',  val));
 
-  addConfigSection(form, 'Gridlines');
+  addFormSection(form, 'Gridlines');
   addCheckboxRow(form, 'gridlineYears',  timeline.gridlineYears,  val => upd('gridlineYears',  val));
   addCheckboxRow(form, 'gridlineMonths', timeline.gridlineMonths, val => upd('gridlineMonths', val));
   addCheckboxRow(form, 'gridlineWeeks',  timeline.gridlineWeeks,  val => upd('gridlineWeeks',  val));
@@ -2210,14 +2242,14 @@ function renderTitlesConfigForm(container) {
   const upd = (field, value) =>
     dispatch({ entity: 'config', action: 'update', block: 'titles', field, value });
 
-  addConfigSection(form, 'Header');
+  addFormSection(form, 'Header');
   addNumberRow(form, 'headerHeight',    titles.headerHeight,    commitInt(upd, 'headerHeight'));
   addTextRow  (form, 'headerText',      titles.headerText,      val => upd('headerText', val));
   addSelectRow(form, 'headerTextAlign', titles.headerTextAlign,
     HEADER_FOOTER_TEXT_ALIGN_OPTIONS.map(o => ({ value: o, label: o })),
     val => upd('headerTextAlign', val));
 
-  addConfigSection(form, 'Footer');
+  addFormSection(form, 'Footer');
   addNumberRow(form, 'footerHeight',    titles.footerHeight,    commitInt(upd, 'footerHeight'));
   addTextRow  (form, 'footerText',      titles.footerText,      val => upd('footerText', val));
   addSelectRow(form, 'footerTextAlign', titles.footerTextAlign,
@@ -2247,7 +2279,7 @@ function renderStyleConfigForm(container) {
     ['Labels & notes', ['outsideLabelTextColor', 'insideLabelTextColor', 'leaderLineColor', 'noteTextColor']],
   ];
   STYLE_SECTIONS.forEach(([title, fields]) => {
-    addConfigSection(form, title);
+    addFormSection(form, title);
     fields.forEach(f => addColorRow(form, f, style[f], val => upd(f, val)));
   });
 }
@@ -2265,7 +2297,7 @@ function renderTypographyConfigForm(container) {
   const upd = (field, value) =>
     dispatch({ entity: 'config', action: 'update', block: 'typography', field, value });
 
-  addConfigSection(form, 'Font');
+  addFormSection(form, 'Font');
 
   // Live font preview — display-only specimen swatch BELOW the Font Family select.
   // applyFontPreview sets its font-family imperatively so the empty case shows the
@@ -2312,14 +2344,14 @@ function renderTypographyConfigForm(container) {
   form.appendChild(fontPreview);
   applyFontPreview(storedFont);
 
-  addConfigSection(form, 'Sizes');
+  addFormSection(form, 'Sizes');
   const FONT_SIZE_FIELDS = [
     'taskFontSize', 'scaleFontSize', 'headerFooterFontSize', 'noteFontSize',
     'swimlaneFontSize', 'pipeFontSize', 'curtainFontSize',
   ];
   FONT_SIZE_FIELDS.forEach(f => addNumberRow(form, f, typo[f], commitInt(upd, f)));
 
-  addConfigSection(form, 'Alignment');
+  addFormSection(form, 'Alignment');
   const ALIGNMENT_FACTOR_FIELDS = [
     'scaleAlignmentFactor', 'taskAlignmentFactor', 'headerFooterAlignmentFactor',
     'pipeAlignmentFactor', 'curtainAlignmentFactor', 'noteAlignmentFactor',

@@ -205,17 +205,18 @@
       width: auto; height: auto; margin: 0;
     }
 
-    /* Config form section heading — full-width (both grid columns), small bold
-       heading with a top hairline rule and spacing to separate it from the
+    /* Entity/Config form section heading — full-width (both grid columns), small
+       bold heading with a top hairline rule and spacing to separate it from the
        preceding group. The first heading in a form drops the rule/gap so the
-       form doesn't open with an empty band. */
-    .entity-form .config-section-heading {
+       form doesn't open with an empty band. Shared by Config sub-tab forms and
+       Data-tab entity edit forms. */
+    .entity-form .form-section-heading {
       grid-column: 1 / -1;
       font-size: 0.8rem; font-weight: 700; color: #333;
       margin-top: 10px; padding-top: 8px;
       border-top: var(--cg-border);
     }
-    .entity-form .config-section-heading:first-child {
+    .entity-form .form-section-heading:first-child {
       margin-top: 0; padding-top: 0; border-top: none;
     }
 
