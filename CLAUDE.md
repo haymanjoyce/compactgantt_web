@@ -6,7 +6,7 @@ A compact Gantt chart web application in vanilla JavaScript, HTML, and CSS. No b
 
 ## Repository layout
 
-Source files (HTML, CSS, JS) live at the repo root; `index.html` is the sole entry point. `/temp/` is scratch, ignored by git (along with OS artefacts and `.vscode/`).
+Source files (HTML, CSS, JS) live at the repo root; `index.html` is the sole entry point. `/vendor/` holds the two locally-vendored third-party libraries (committed, not gitignored) — see Script loading order. `/temp/` is scratch, ignored by git (along with OS artefacts and `.vscode/`).
 
 ## Conventions
 
@@ -26,7 +26,7 @@ Source files (HTML, CSS, JS) live at the repo root; `index.html` is the sole ent
 | `validation.js` | Exports `validateProject(projectData)` → `ValidationReport`; pure, no DOM, no side effects |
 | `ui.js` | UI entry point; owns the live `projectData` reference; exports `initUI()` |
 
-Script loading order: SheetJS CDN → date-fns CDN (`3.6.0`, global `dateFns`) → `dates.js` → `parser.js` → `renderer.js` → `writer.js` → `validation.js` → `ui.js` → inline script.
+Script loading order: SheetJS (`vendor/xlsx-0.20.3.full.min.js`, full standalone build, global `XLSX`) → date-fns (`vendor/date-fns-3.6.0.min.js`, `3.6.0`, global `dateFns`) → `dates.js` → `parser.js` → `renderer.js` → `writer.js` → `validation.js` → `ui.js` → inline script. Both libraries are vendored locally (plain `<script src>`, no defer/async) so the app loads fully offline — a prerequisite for desktop packaging. Do not repoint to a CDN or re-pin SheetJS off `0.20.3` (the former unpinned CDN tag resolved to `0.18.5`; both are the same full flavour and both assign `window.XLSX`).
 
 ## Date helpers (dates.js)
 
