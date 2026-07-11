@@ -61,6 +61,18 @@
     }
     .app-toolbar button:disabled:hover { background: #fafafa; border-color: #ddd; }
     .app-toolbar-divider { width: 1px; height: 20px; background: #ddd; }
+    /* About sits apart from the file/baseline controls, pushed to the far right. */
+    #aboutBtn { margin-left: auto; }
+    /* About dialog — third-party license attribution (single source, also opened
+       later from the desktop native menu). */
+    #aboutDialog { max-width: 560px; border: 1px solid #999; border-radius: 4px; padding: 20px 24px; }
+    #aboutDialog h2 { margin: 0 0 4px; }
+    #aboutDialog h3 { margin: 16px 0 8px; font-size: 0.95rem; }
+    #aboutDialog .about-license { margin: 0 0 14px; font-size: 0.85rem; line-height: 1.45; }
+    #aboutDialog .about-license .about-lib { font-weight: bold; }
+    #aboutDialog .about-footer { font-size: 0.85rem; color: #555; margin: 16px 0 0; }
+    #aboutDialog .about-actions { margin-top: 16px; text-align: right; }
+    #aboutDialog a { color: #1a5fb4; }
     /* Unsaved-changes cue on the Save button — a small dot appended to the label
        (added/removed by updateSaveDirtyCue), independent of the disabled state. */
     #saveBtn .save-dot { margin-left: 5px; font-size: 0.7em; color: #b45309; vertical-align: middle; }
@@ -387,6 +399,7 @@
     <button id="loadBaselineBtn" disabled title="Load a project first">Load Baseline</button>
     <button id="clearBaselineBtn" disabled title="No baseline loaded">Clear Baseline</button>
     <input type="file" id="baselineInput" accept=".xlsx" style="display: none;">
+    <button id="aboutBtn">About</button>
   </div>
   <p id="status">No file loaded</p>
 
@@ -409,6 +422,26 @@
   <div id="configPanel" class="app-panel" style="display:none;"></div>
 
   <div id="inspectorPanel" class="app-panel" style="display:none;"></div>
+
+  <dialog id="aboutDialog">
+    <h2>CompactGantt</h2>
+    <h3>Third-party licenses</h3>
+    <p class="about-license">
+      <span class="about-lib">SheetJS (Community Edition)</span>, version 0.20.3 — Apache License 2.0<br>
+      Copyright (C) 2012-present SheetJS LLC<br>
+      <a href="https://sheetjs.com" target="_blank" rel="noopener">https://sheetjs.com</a><br>
+      Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+    </p>
+    <p class="about-license">
+      <span class="about-lib">date-fns</span>, version 3.6.0 — MIT License<br>
+      Copyright (c) 2021 Sasha Koss and Lesha Koss https://kossnocorp.mit-license.org<br>
+      <a href="https://date-fns.org" target="_blank" rel="noopener">https://date-fns.org</a>
+    </p>
+    <p class="about-footer">Full license texts are in LICENSES.txt.</p>
+    <div class="about-actions">
+      <button id="aboutCloseBtn">Close</button>
+    </div>
+  </dialog>
 
   <script>initUI();</script>
 

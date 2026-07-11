@@ -3350,6 +3350,16 @@ function initUI() {
     refreshStatusAndButtons();
   });
 
+  // About dialog — third-party license attribution (single source; later also
+  // opened from the desktop native menu). Always enabled; Esc-to-close is native.
+  const aboutDialog = document.getElementById('aboutDialog');
+  document.getElementById('aboutBtn').addEventListener('click', function() {
+    aboutDialog.showModal();
+  });
+  document.getElementById('aboutCloseBtn').addEventListener('click', function() {
+    aboutDialog.close();
+  });
+
   // Bootstrap the empty Data panel so the entity tab strip and empty Tasks
   // panel appear on page load, not just after the first file load / mutation.
   renderDataPanel();
