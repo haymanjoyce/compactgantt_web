@@ -30,7 +30,7 @@ Script loading order: SheetJS (`vendor/xlsx-0.20.3.full.min.js`, full standalone
 
 ## Date helpers (dates.js)
 
-Exports `toISODate`, `toJsDate`, `daysBetween`, `formatDate`, `isoWeekLabel`, `weekdayName` (`'full'`/`'short'`/`'letter'`). Non-obvious invariants:
+Exports `toISODate`, `toJsDate`, `daysBetween`, `formatDate`, `isoWeekLabel`, `toLocaleDateDisplay`, `weekdayName` (`'full'`/`'short'`/`'letter'`). Non-obvious invariants:
 
 - `toISODate` is timezone-safe (`getFullYear/getMonth/getDate`, never `toISOString`) and filters Invalid `Date` (`isNaN(getTime())`, as SheetJS produces on round-tripped empty cells). Non-slash strings pass through; shape validation happens at `parseDate`/`kvDate`.
 - `toJsDate` uses `new Date(y, m-1, d)`; `daysBetween` uses `Date.UTC` arithmetic.
@@ -131,7 +131,7 @@ Each `Issue` is `{ entity, id, field, message, value }`. `entity` singular lower
 
 - **Coordinate areas / band height:** `innerX1/innerX2`, `taskRowY1/taskRowY2`, and per-visible-scale band height (`max(minScaleBandHeight, scaleFontSize × scaleFontToBandHeightFactor)`) — formulas in source.
 - **Five scale bands** (top-to-bottom): years, months (single-letter from `rendering.monthLetters`), weeks (ISO `"W03"`), dates (numeric day), days (named: Monday/Mon/M). Hidden bands occupy no space. Named-day cells degrade width-adaptively (full→short→letter→empty); the `rendering.scaleMinLabelWidth` gate applies to all bands except days.
-- **Render order (painter's algorithm, 15 slots):** SVG layer accumulators in source order; header/footer paint last. Slot numbers referenced elsewhere ("slot 7", etc.) are those accumulators.
+- **Render order (painter's algorithm):** ~20 SVG layer accumulators assembled back-to-front into 19 `<g>` groups (header + footer merge into one `header-footer` group). The source's z-order comment numbers them 1–15 but reuses labels (7 = pipes / curtain-edges, 15 = header / footer) and leaves the curtain-edge/badge and baseline accumulators unnumbered — so "slot N" references elsewhere follow that source comment numbering, not a strict count.
 - **Color handling:** colors pass directly to SVG `fill`/`stroke`, no renderer-side validation — invalid names render black; validation lives in `validation.js`.
 - **Swimlane backgrounds/labels:** `<rect>` fill = `swimlane.backgroundColor` (no renderer fallback; parser default `"white"`). Label text styling is config-level (uniform across all swimlanes) via three independent `config.typography` booleans — `swimlaneLabelBold` (default `true`, reproduces the former hard-coded bold), `swimlaneLabelItalic`/`swimlaneLabelUnderline` (default `false`): `font-weight` always emitted (`bold`/`normal`), `font-style="italic"` / `text-decoration="underline"` emitted ONLY when true (inserted between `font-weight` and `fill`), so all-default output is byte-identical to the former literal `font-weight="bold"`. Round-tripped as `Yes`/`No` Typography rows; validated as booleans like other config booleans (`unrecognised_boolean` → warning in `validateTypography`'s OWNED set); UI checkboxes under a "Swimlane label" Typography section.
 - **Header/footer text alignment:** per-band via `titles.headerTextAlign` / `footerTextAlign` (inset `rendering.headerFooterTextPadding` for `left`/`right` only); each band emits an inside-edge `<line>` border, suppressed at height 0.
