@@ -13,3 +13,7 @@ Desktop.ini
 
 # Temp
 /temp/
+
+# Node / Electron build
+node_modules/
+dist/

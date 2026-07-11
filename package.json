@@ -1,0 +1,40 @@
+{
+  "name": "compactgantt",
+  "version": "1.0.0",
+  "description": "A compact Gantt chart desktop application.",
+  "author": "haymanjoyce",
+  "license": "UNLICENSED",
+  "private": true,
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --win portable"
+  },
+  "devDependencies": {
+    "electron": "43.1.0",
+    "electron-builder": "26.15.3"
+  },
+  "build": {
+    "appId": "com.compactgantt.app",
+    "productName": "CompactGantt",
+    "asar": true,
+    "directories": {
+      "output": "dist"
+    },
+    "win": {
+      "target": "portable"
+    },
+    "files": [
+      "main.js",
+      "index.html",
+      "dates.js",
+      "parser.js",
+      "renderer.js",
+      "writer.js",
+      "validation.js",
+      "ui.js",
+      "vendor/**/*",
+      "LICENSES.txt"
+    ]
+  }
+}
