@@ -1,6 +1,6 @@
 {
   "name": "compactgantt",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "description": "A compact Gantt chart desktop application.",
   "author": "haymanjoyce",
   "license": "UNLICENSED",
@@ -16,7 +16,7 @@
   },
   "build": {
     "appId": "com.compactgantt.app",
-    "productName": "CompactGantt",
+    "productName": "Compact Gantt",
     "asar": true,
     "directories": {
       "output": "dist"

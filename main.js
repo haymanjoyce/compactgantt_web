@@ -130,7 +130,7 @@ function buildMenu() {
       role: 'help',
       submenu: [
         {
-          label: 'About CompactGantt',
+          label: 'About Compact Gantt',
           click: () => openAboutDialog(),
         },
       ],
