@@ -22,11 +22,13 @@
       "output": "dist"
     },
     "win": {
-      "target": "portable"
+      "target": "portable",
+      "icon": "assets/icon.ico"
     },
     "files": [
       "main.js",
       "index.html",
+      "assets/**/*",
       "dates.js",
       "parser.js",
       "renderer.js",

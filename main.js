@@ -49,6 +49,7 @@ const CONTENT_TYPES = {
   '.txt': 'text/plain',
   '.json': 'application/json',
   '.svg': 'image/svg+xml',
+  '.ico': 'image/x-icon',
 };
 
 function contentTypeFor(filePath) {
@@ -142,6 +143,11 @@ function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1400,
     height: 900,
+    // Title-bar / taskbar icon: the CompactGantt mark, resolved from the bundled
+    // asset the same way the app:// handler resolves everything else (relative to
+    // app.getAppPath(), asar-transparent). Without this the window shows the
+    // default Electron icon.
+    icon: path.join(app.getAppPath(), 'assets', 'icon.ico'),
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
