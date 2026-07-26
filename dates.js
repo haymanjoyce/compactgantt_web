@@ -54,16 +54,6 @@ function isoWeekLabel(iso) {
   return dateFns.format(new Date(y, m - 1, d), "'W'II");
 }
 
-// Renders a YYYY-MM-DD string in the browser's default locale short-date
-// format (matching what native <input type="date"> controls display).
-// Null/empty → '' ; a malformed value falls back to the raw string.
-function toLocaleDateDisplay(iso) {
-  if (iso == null || iso === '') return '';
-  const d = toJsDate(iso);
-  if (!d || isNaN(d.getTime())) return iso;
-  return d.toLocaleDateString();
-}
-
 // Returns weekday name for a YYYY-MM-DD string.
 // length: 'full' → 'Monday', 'short' → 'Mon', 'letter' → 'M'
 function weekdayName(iso, length) {

@@ -134,6 +134,7 @@ function writeWorkbook(projectData) {
     ['Chart Start Date', timeline.chartStartDateExplicit ? toJsDate(timeline.chartStartDate) : null],
     ['Chart End Date',   timeline.chartEndDateExplicit   ? toJsDate(timeline.chartEndDate)   : null],
     ['Chart Date Format', timeline.chartDateFormat],
+    ['Table Date Format', timeline.tableDateFormat],
     ['Show Years',    boolStr(timeline.showYears)],
     ['Show Months',   boolStr(timeline.showMonths)],
     ['Show Weeks',    boolStr(timeline.showWeeks)],

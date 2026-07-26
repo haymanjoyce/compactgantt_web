@@ -30,7 +30,7 @@ Script loading order: SheetJS (`vendor/xlsx-0.20.3.full.min.js`, full standalone
 
 ## Date helpers (dates.js)
 
-Exports `toISODate`, `toJsDate`, `daysBetween`, `formatDate`, `isoWeekLabel`, `toLocaleDateDisplay`, `weekdayName` (`'full'`/`'short'`/`'letter'`). Non-obvious invariants:
+Exports `toISODate`, `toJsDate`, `daysBetween`, `formatDate`, `isoWeekLabel`, `weekdayName` (`'full'`/`'short'`/`'letter'`). Non-obvious invariants:
 
 - `toISODate` is timezone-safe (`getFullYear/getMonth/getDate`, never `toISOString`) and filters Invalid `Date` (`isNaN(getTime())`, as SheetJS produces on round-tripped empty cells). Non-slash strings pass through; shape validation happens at `parseDate`/`kvDate`.
 - `toJsDate` uses `new Date(y, m-1, d)`; `daysBetween` uses `Date.UTC` arithmetic.
@@ -77,6 +77,8 @@ Schema asymmetry: Timeline has five `show*` fields (years/months/weeks/days/date
 
 **Legacy Preferences sheet (removed).** `chartDateFormat` moved from `config.preferences`/Preferences sheet to `config.timeline` (`Chart Date Format` row). Parser still reads the legacy sheet ONLY to seed the fallback: `kvStr(timelineKV, 'Chart Date Format', legacyPrefsValue)` (Preferences cell if non-empty else `'dd MMM'`). Writer omits it, so old files gain the Timeline row and lose the sheet on next save. `config.preferences` no longer exists.
 
+**`tableDateFormat` (Timeline sheet, `Table Date Format` row, directly under `Chart Date Format`).** A date-fns format string governing ONLY the nav-table read-only date cells (Tasks start/finish, Pipes date, Curtains start/end) — separate from `chartDateFormat` (chart labels). Default `'dd MMM yyyy'` (standalone/unambiguous, deliberately unlike `chartDateFormat`'s `'dd MMM'`). Brand-new field, no legacy fallback chain: parser reads via plain `kvStr(timelineKV, 'Table Date Format', 'dd MMM yyyy')`; old files lacking the row take the default and gain it on next save. Empty value → `validateTimeline` error (mirrors `chartDateFormat`). Not in `validateTimeline`'s `OWNED` notice set (like `chartDateFormat`, a `kvStr` straight read emits no parse notice).
+
 ## Derived fields
 
 - `task.isMilestone = startDate !== null && startDate === finishDate` (null-guard avoids a false positive when both dates are absent).
@@ -113,7 +115,7 @@ Reason values:
 
 Each `Issue` is `{ entity, id, field, message, value }`. `entity` singular lowercase (same enum as `_parseNotices`); `id` is the row id, `null` for config issues only. `value` is `null` for "missing field" rules, `rawValue` for parse-derived rules, the current field value otherwise.
 
-**Structure.** A thin `validateProject` coordinator calls 14 per-block validators (7 entity + 7 config) in parse traversal order; the 7th entity validator is `validateBaseline` (after `validateNotes`). `validateTimeline` owns the empty-`chartDateFormat` error (no `validatePreferences` — removed).
+**Structure.** A thin `validateProject` coordinator calls 14 per-block validators (7 entity + 7 config) in parse traversal order; the 7th entity validator is `validateBaseline` (after `validateNotes`). `validateTimeline` owns the empty-`chartDateFormat` AND empty-`tableDateFormat` errors (no `validatePreferences` — removed).
 
 **`_parseNotices` consumption.** Entity validators filter notices by entity tag, config validators by an explicit field-ownership Set; matching notices emit Issues into the bucket dictated by the locked rule list (same `reason` → different buckets per field). Array stays in place on `projectData`.
 
@@ -226,7 +228,7 @@ Five-tab layout (left to right): **Chart → Data → Config → Issues → Insp
 
 **Notes textarea.** `addTextareaRow` relies on `attachCommitHandlers`' Enter-to-blur gate being `tagName === 'INPUT' && type !== 'date'`, so Enter inserts newlines in textareas. Nav-table preview collapses whitespace via `notePreviewText`.
 
-**Nav-table date display.** `formatNavTableDateCell` → `dates.js` `toLocaleDateDisplay` (canonical YYYY-MM-DD via `toJsDate` + `toLocaleDateString()`, browser locale) so the read-only display matches the native date inputs; stored values stay canonical. Null/empty → blank; malformed → raw string. Form date pickers (`addDateRow`) use `<input type="date">`. Chart labels are separate, driven by `config.timeline.chartDateFormat`.
+**Nav-table date display.** `formatNavTableDateCell` formats the canonical YYYY-MM-DD via `dates.js` `formatDate(iso, config.timeline.tableDateFormat)` — explicit date-fns format, **locale-independent** in both browser and packaged (Electron) builds (Chromium's upstream locale-reporting bug made the former `toLocaleDateString()` path show en-US in the packaged build regardless of OS settings). Reads `projectData.config.timeline.tableDateFormat` off the module-scope live reference (no param threading). Guards preserved: null/empty → blank; malformed (bad `toJsDate`) → raw string. Stored values stay canonical. Form date pickers (`addDateRow`) use native `<input type="date">` — those stay browser/OS-locale-driven (native chrome, out of our control) and don't affect stored data (always canonical ISO). Chart labels are separate, driven by `config.timeline.chartDateFormat`.
 
 ### Config panel
 

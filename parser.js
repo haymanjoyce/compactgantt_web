@@ -379,6 +379,7 @@ function createEmptyProjectData() {
         showYears: true, showMonths: true, showWeeks: false, showDays: false, showDates: false,
         gridlineYears: true, gridlineMonths: true, gridlineWeeks: false, gridlineDays: false,
         chartDateFormat: 'dd MMM',
+        tableDateFormat: 'dd MMM yyyy',
       },
       titles: {
         headerHeight: 20, headerText: '', headerTextAlign: 'center',
@@ -880,6 +881,7 @@ function parseWorkbook(workbook) {
     gridlineWeeks:  kvBool(timelineKV, 'Gridline Weeks',  false, 'Vertical Gridline Weeks',  cfg('gridlineWeeks')),
     gridlineDays:   kvBool(timelineKV, 'Gridline Days',   false, undefined,                  cfg('gridlineDays')),
     chartDateFormat: kvStr(timelineKV, 'Chart Date Format', legacyChartDateFormat),
+    tableDateFormat: kvStr(timelineKV, 'Table Date Format', 'dd MMM yyyy'),
   };
 
   // ── Config: Titles ─────────────────────────────────────────────────────────

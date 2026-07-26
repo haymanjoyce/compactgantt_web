@@ -753,6 +753,9 @@ function validateTimeline(projectData) {
   if (tl.chartDateFormat === '') {
     errors.push(mkIssue('config', null, 'chartDateFormat', 'Empty chartDateFormat', ''));
   }
+  if (tl.tableDateFormat === '') {
+    errors.push(mkIssue('config', null, 'tableDateFormat', 'Empty tableDateFormat', ''));
+  }
 
   // Warnings — all show* off
   if (!tl.showYears && !tl.showMonths && !tl.showWeeks && !tl.showDays && !tl.showDates) {

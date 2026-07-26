@@ -454,7 +454,10 @@ function buildTasksDisplayOrder() {
 }
 
 function formatNavTableDateCell(iso) {
-  return toLocaleDateDisplay(iso);
+  if (iso == null || iso === '') return '';
+  const d = toJsDate(iso);
+  if (!d || isNaN(d.getTime())) return iso;
+  return formatDate(iso, projectData.config.timeline.tableDateFormat);
 }
 
 // Integer calendar-day span (finishDate − startDate), or null when either date is
@@ -2226,6 +2229,7 @@ function renderTimelineConfigForm(container) {
     }
   });
   addTextRow(form, 'chartDateFormat', timeline.chartDateFormat, val => upd('chartDateFormat', val));
+  addTextRow(form, 'tableDateFormat', timeline.tableDateFormat, val => upd('tableDateFormat', val));
 
   addFormSection(form, 'Scales');
   addCheckboxRow(form, 'showYears',  timeline.showYears,  val => upd('showYears',  val));
