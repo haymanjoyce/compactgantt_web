@@ -66,11 +66,11 @@ function renderChart(projectData, opts = {}) {
 
   // Guard: need valid date range to render anything
   if (!chartStartDate || !chartEndDate) {
-    return `<svg xmlns="http://www.w3.org/2000/svg" width="${outerWidth}" height="${outerHeight}"></svg>`;
+    return `<svg xmlns="http://www.w3.org/2000/svg" width="${outerWidth}" height="${outerHeight}" viewBox="0 0 ${outerWidth} ${outerHeight}"></svg>`;
   }
   const totalDays = daysBetween(chartStartDate, chartEndDate);
   if (totalDays <= 0) {
-    return `<svg xmlns="http://www.w3.org/2000/svg" width="${outerWidth}" height="${outerHeight}"></svg>`;
+    return `<svg xmlns="http://www.w3.org/2000/svg" width="${outerWidth}" height="${outerHeight}" viewBox="0 0 ${outerWidth} ${outerHeight}"></svg>`;
   }
 
   // ── Scale geometry ───────────────────────────────────────────────────────────
@@ -893,7 +893,7 @@ function renderChart(projectData, opts = {}) {
 
   // ── Assemble SVG (painter's algorithm, back to front) ────────────────────────
   return [
-    `<svg xmlns="http://www.w3.org/2000/svg" width="${outerWidth}" height="${outerHeight}">`,
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${outerWidth}" height="${outerHeight}" viewBox="0 0 ${outerWidth} ${outerHeight}">`,
     defsSvg,
     `<g id="bg">${bg}</g>`,
     `<g id="swimlane-bands">${bandsSvg}</g>`,
