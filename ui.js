@@ -2271,6 +2271,9 @@ function renderTitlesConfigForm(container) {
   addSelectRow(form, 'footerTextAlign', titles.footerTextAlign,
     HEADER_FOOTER_TEXT_ALIGN_OPTIONS.map(o => ({ value: o, label: o })),
     val => upd('footerTextAlign', val));
+
+  addFormSection(form, 'Watermark');
+  addCheckboxRow(form, 'showWatermark', titles.showWatermark, val => upd('showWatermark', val));
 }
 
 function renderStyleConfigForm(container) {

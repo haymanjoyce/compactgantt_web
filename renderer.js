@@ -152,7 +152,8 @@ function renderChart(projectData, opts = {}) {
       labelsSvg = '',     // 13 swimlane label overlays
       notesSvg = '',      // 14 notes
       headerSvg = '',     // 15 header band  \
-      footerSvg = '';     // 15 footer band  /  emitted together, last
+      footerSvg = '',     // 15 footer band  /  emitted together
+      watermarkSvg = '';  // 16 watermark credit line — last, always on top
 
   // ── 1. Chart background ──────────────────────────────────────────────────────
   bg = `<rect x="0" y="0" width="${outerWidth}" height="${outerHeight}" fill="${style.chartBackgroundColor}"/>`;
@@ -446,6 +447,19 @@ function renderChart(projectData, opts = {}) {
       footerSvg += `<text x="${n(tx)}" y="${ty}" text-anchor="${anchor}" font-family="'${escapeXml(typography.fontFamily)}'" font-size="${typography.headerFooterFontSize}" fill="${style.headerFooterTextColor}">${escapeXml(titles.footerText)}</text>`;
     }
     footerSvg += `<line x1="${paddingLeft}" y1="${n(fy)}" x2="${paddingLeft + fW}" y2="${n(fy)}" stroke="${style.headerFooterBorderColor}" stroke-width="${rendering.headerFooterBorderStrokeWidth}"/>`;
+  }
+
+  // ── 16. Watermark ────────────────────────────────────────────────────────────
+  // Fixed brand credit, not project data: never Excel-driven, never user-editable.
+  // Anchored to the CANVAS corner (not the inner content box) so it is independent
+  // of titles.footerHeight — with the default paddingBottom it sits in the bottom
+  // margin, clear of the footer band. Emitted RAW, not via escapeXml, so the "&#183;"
+  // reference survives: the exported .svg stays pure ASCII whatever encoding a
+  // downstream consumer guesses.
+  if (titles.showWatermark) {
+    const wx = outerWidth  - rendering.watermarkPadding;
+    const wy = outerHeight - rendering.watermarkPadding;
+    watermarkSvg = `<text x="${n(wx)}" y="${n(wy)}" text-anchor="end" font-family="'${escapeXml(typography.fontFamily)}'" font-size="${rendering.watermarkFontSize}" fill="${rendering.watermarkTextColor}">Made with Compact Gantt &#183; compactgantt.com</text>`;
   }
 
   // ── <defs>: collect SVG fill patterns (final assembly deferred until after notes pass) ──
@@ -914,6 +928,7 @@ function renderChart(projectData, opts = {}) {
     `<g id="swimlane-labels">${labelsSvg}</g>`,
     `<g id="notes">${notesSvg}</g>`,
     `<g id="header-footer">${headerSvg}${footerSvg}</g>`,
+    `<g id="watermark">${watermarkSvg}</g>`,
     `</svg>`,
   ].join('');
 }

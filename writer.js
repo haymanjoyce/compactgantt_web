@@ -155,6 +155,7 @@ function writeWorkbook(projectData) {
     ['Footer Height',     titles.footerHeight],
     ['Footer Text',       titles.footerText],
     ['Footer Text Align', titles.footerTextAlign],
+    ['Show Watermark',    boolStr(titles.showWatermark)],
   ]);
 
   // ── 11. Style ─────────────────────────────────────────────────────────────────

@@ -77,6 +77,8 @@ Schema asymmetry: Timeline has five `show*` fields (years/months/weeks/days/date
 
 **`tableDateFormat` (Timeline sheet, `Table Date Format` row, under `Chart Date Format`).** A date-fns format string governing ONLY the nav-table date cells (Tasks start/finish, Pipes date, Curtains start/end) — separate from `chartDateFormat` (chart labels). Default `'dd MMM yyyy'` (standalone/unambiguous, unlike `chartDateFormat`'s `'dd MMM'`). Brand-new field, no legacy fallback: `kvStr(timelineKV, 'Table Date Format', 'dd MMM yyyy')`; old files take the default and gain the row on next save. Empty → `validateTimeline` error (mirrors `chartDateFormat`, and like it not in the `OWNED` notice set — a `kvStr` straight read emits no notice).
 
+**`showWatermark` (Titles sheet, `Show Watermark` row, last row of the sheet).** Boolean, default `true`, `Yes`/`No` round-trip: `kvBool(titlesKV, 'Show Watermark', true, undefined, cfg('showWatermark'))`. Gates the renderer's watermark layer (see Renderer). Absent row → `true`, so legacy files silently gain the credit and gain the row on next save. Unlike `chartDateFormat`/`tableDateFormat` it **is** in `validateTitles`'s `OWNED` set — mandatory, not optional: `kvBool` *can* emit `unrecognised_boolean`, and since each config validator filters `_parseNotices` by its own `OWNED` set with no catch-all for unconsumed notices, omitting it would make a real notice invisible in the Issues tab. (The two format fields are excluded precisely because `kvStr` can never emit one.) The Excel key uses the Timeline sheet's `Show *` convention rather than Layout's bare `Row Dividers`.
+
 ## Derived fields
 
 - `task.isMilestone = startDate !== null && startDate === finishDate` (null-guard avoids a false positive when both dates are absent).
@@ -107,7 +109,7 @@ Schema asymmetry: Timeline has five `show*` fields (years/months/weeks/days/date
 
 `validateProject(projectData)` returns `{ errors, warnings, notices }` (all three keys always present). Pure: no DOM, no side effects, never mutates, never throws. Each `Issue` is `{ entity, id, field, message, value }` (`entity` singular lowercase; `id` null for config only; `value` null for missing-field rules, `rawValue` for parse-derived, else current value).
 
-**Structure.** A thin coordinator calls 14 per-block validators (7 entity + 7 config) in parse traversal order; the 7th entity validator is `validateBaseline` (after `validateNotes`). `validateTimeline` owns the empty-`chartDateFormat` AND empty-`tableDateFormat` errors (no `validatePreferences` — removed).
+**Structure.** A thin coordinator calls 14 per-block validators (7 entity + 7 config) in parse traversal order; the 7th entity validator is `validateBaseline` (after `validateNotes`). `validateTimeline` owns the empty-`chartDateFormat` AND empty-`tableDateFormat` errors (no `validatePreferences` — removed). `validateTitles` owns the `showWatermark` `unrecognised_boolean` warning (same shape as `validateLayout`'s `showRowDividers`); it has no other watermark rule, since the value is a parsed boolean with no range.
 
 **`_parseNotices` consumption.** Entity validators filter notices by entity tag, config validators by an explicit field-ownership Set; matching notices emit Issues into the bucket dictated by the locked rule list. Array stays in place on `projectData`.
 
@@ -125,10 +127,11 @@ Schema asymmetry: Timeline has five `show*` fields (years/months/weeks/days/date
 
 - **Root `<svg>` attributes:** `width`/`height` = `layout.outerWidth`/`outerHeight` plus a `viewBox="0 0 outerWidth outerHeight"` that must always mirror them exactly — the viewBox is what makes a scaled/responsive display (exported SVG in a smaller container) scale rather than clip. Emitted at **three** sites that must stay in sync: the two early-return guards (falsy date range, `totalDays <= 0`) and the main assembled tag.
 - **Five scale bands** (top-to-bottom): years, months (single-letter from `rendering.monthLetters`), weeks (ISO `"W03"`), dates (numeric day), days (named). Hidden bands occupy no space. Named-day cells degrade width-adaptively (full→short→letter→empty); the `rendering.scaleMinLabelWidth` gate applies to all bands except days.
-- **Render order (painter's algorithm):** ~20 layer accumulators assembled back-to-front into 19 `<g>` groups. The source's z-order comment numbers them 1–15 but reuses/omits some labels — so "slot N" references follow that comment numbering, not a strict count.
+- **Render order (painter's algorithm):** ~21 layer accumulators assembled back-to-front into 20 `<g>` groups. The source's z-order comment numbers them 1–16 but reuses/omits some labels — so "slot N" references follow that comment numbering, not a strict count. `watermark` is the final group — nothing may be appended after it.
 - **Color handling:** colors pass directly to SVG `fill`/`stroke`, no renderer-side validation — invalid names render black; validation lives in `validation.js`.
 - **Swimlane backgrounds/labels:** `<rect>` fill = `swimlane.backgroundColor` (parser default `"white"`, no renderer fallback). Label styling config-level via three `config.typography` booleans — `swimlaneLabelBold` (default `true`), `swimlaneLabelItalic`/`swimlaneLabelUnderline` (default `false`): `font-weight` always emitted, `font-style`/`text-decoration` only when true, so all-default output is byte-identical to the former hard-coded bold. Round-tripped `Yes`/`No`; validated in `validateTypography`.
 - **Header/footer text alignment:** per-band via `titles.headerTextAlign` / `footerTextAlign` (inset `rendering.headerFooterTextPadding` for `left`/`right` only); each band emits an inside-edge `<line>` border, suppressed at height 0.
+- **Watermark (slot 16, group `watermark`, last):** brand credit line gated on `titles.showWatermark`, drawn after every other layer so nothing can obscure it. Fixed literal `Made with Compact Gantt &#183; compactgantt.com` — not project data, not an Excel field, not user-editable (only its on/off flag is). Emitted **RAW, never through `escapeXml`** so the `&#183;` numeric reference survives, keeping the exported `.svg` pure ASCII regardless of what encoding a downstream consumer assumes. Anchored `text-anchor="end"` to the **canvas** corner (`outerWidth/outerHeight` less `rendering.watermarkPadding`), NOT the inner content box — so it is independent of `titles.footerHeight` and, at default `paddingBottom`, sits in the bottom margin clear of the footer band. Font from `typography.fontFamily`; size/color/padding from `config.rendering`. The two early-return guards emit no watermark (deliberate — a chart with no renderable date range credits nothing).
 - **Milestones:** centred on `startDate`, size = `bars.milestoneSizeFactor * rowHeight`. `bars.milestoneShape`: `circle` (`milestoneCornerRadius` ignored) or `diamond` (default; rounded corners via `bars.milestoneCornerRadius` 0..1 — no parser clamping, validation flags out-of-range).
 - **Bars/pattern fills:** `<rect rx="${bars.taskCornerRadius}">`. `task.fillPattern` → dedup'd `<pattern>` defs keyed by `(fillPattern, fillColor, patternColor)`; `"solid"`/unrecognised → solid, five named patterns → `url(#id)`. `patternUnits="userSpaceOnUse"`, no `x`/`y` so same-row bars share a continuous-field phase. Milestones always solid.
 - **Live vertical offset:** `bars.taskBarVerticalOffsetFactor` / `bars.milestoneVerticalOffsetFactor` (default `0`, any sign) shift the whole live bar/milestone (shape, labels, leader, link-attach) by `factor × rowH`; the shifted centre is stored as `taskGeom.rowCenterY`. No range check.
@@ -139,6 +142,8 @@ Schema asymmetry: Timeline has five `show*` fields (years/months/weeks/days/date
 ## config.rendering
 
 All rendering tunables (stroke widths, paddings, factors, corner radii, `monthLetters`, `charWidthFactor`, …) live in `config.rendering` in `createEmptyProjectData()`. **Hard-coded defaults, not Excel-driven** — `parseWorkbook` never touches it, the writer excludes it. Names mostly follow `<element><attribute>`.
+
+The watermark's three constants live here for that reason — `watermarkFontSize` (`8`, deliberately below the `typography.*` default of `10` so the credit reads as subordinate), `watermarkTextColor` (`'#9a9a9a'`), `watermarkPadding` (`6`). Code-tier on purpose: a quiet credit line, not a badge, and not something a project file should restyle. None is reused from the header/footer constants — `headerFooterTextPadding` in particular must stay uncoupled, since the watermark is footer-independent by design.
 
 ## Link rendering
 
@@ -225,6 +230,8 @@ Form-only tab — no nav table/toolbar/selection. Six sub-tabs in parser order; 
 
 **Tab labels vs keys.** Two `CONFIG_TABS` labels are presentation-only renames diverging from their keys/blocks: `bars` → "Elements", `style` → "Colors". The tab `key`, dispatch `block`, `config.*` keys, Excel sheet names, and Inspector labels all keep the original names.
 
+**Titles sub-tab sections.** `Header` → `Footer` → `Watermark`, the last a single `addCheckboxRow` for `showWatermark` (auto-commits on `change`, no blur cycle — same as Layout's `showRowDividers`).
+
 **Section headings (presentation-only).** `addFormSection(form, title)` appends a label-only `.form-section-heading` row (no input/focus/commit) to group fields. **Shared by the Config sub-tab forms AND the six Data-tab entity edit forms.** Grouping/order only.
 
 Timeline date fields commit two dispatches — the date AND the paired `*Explicit` flag — so the writer emits user-set vs auto-derive dates correctly. File-load re-renders Config if active.
@@ -285,4 +292,4 @@ Left to right: **New Project** → **Choose file** → **Save** (xlsx) → **Sav
 
 **App icon.** `assets/icon.ico` (16–256px) is a **single-source asset** referenced from three places — `build.win.icon`, `BrowserWindow` `icon`, and `<link rel="icon">` in `index.html`. Nothing hand-synced: all three point at the one file, so a redesign only replaces `icon.ico`. The `app://` content-type map maps `.ico` → `image/x-icon`.
 
-**Display name vs technical identifiers.** User-facing text is **`Compact Gantt`** (spaced) in four spots: `build.productName`, `index.html` `<title>`, the About `<h2>`, the Help→About menu label. Technical identifiers stay spaceless/lowercase — do NOT space them: npm `name` (`compactgantt`), `build.appId` (`com.compactgantt.app`), repo name (`compactgantt_web`).
+**Display name vs technical identifiers.** User-facing text is **`Compact Gantt`** (spaced) in five spots: `build.productName`, `index.html` `<title>`, the About `<h2>`, the Help→About menu label, and the renderer's watermark literal. The watermark also carries the only occurrence of the domain **`compactgantt.com`** — it ships inside every exported chart, so it must resolve to something. Technical identifiers stay spaceless/lowercase — do NOT space them: npm `name` (`compactgantt`), `build.appId` (`com.compactgantt.app`), repo name (`compactgantt_web`).

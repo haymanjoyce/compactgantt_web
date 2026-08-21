@@ -384,6 +384,7 @@ function createEmptyProjectData() {
       titles: {
         headerHeight: 20, headerText: '', headerTextAlign: 'center',
         footerHeight: 20, footerText: '', footerTextAlign: 'center',
+        showWatermark: true,
       },
       style: {
         chartBackgroundColor:        'white',
@@ -462,6 +463,9 @@ function createEmptyProjectData() {
         notePadding:                4,
         noteLineHeightFactor:       1.2,
         noteCornerRadius:           2,
+        watermarkFontSize:          8,
+        watermarkTextColor:         '#9a9a9a',
+        watermarkPadding:           6,
       },
     }
   };
@@ -893,6 +897,7 @@ function parseWorkbook(workbook) {
     footerHeight:    kvInt(titlesKV, 'Footer Height',     20, undefined, cfg('footerHeight')),
     footerText:      kvStr(titlesKV, 'Footer Text',       ''),
     footerTextAlign: normalizeTextAlign(titlesKV['Footer Text Align'], cfg('footerTextAlign')),
+    showWatermark:   kvBool(titlesKV, 'Show Watermark',  true, undefined, cfg('showWatermark')),
   };
 
   // ── Config: Style ──────────────────────────────────────────────────────────
