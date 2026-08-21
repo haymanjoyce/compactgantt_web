@@ -790,7 +790,7 @@ function validateTimeline(projectData) {
 // ── Config: Titles ─────────────────────────────────────────────────────────────
 function validateTitles(projectData) {
   const errors = [], warnings = [], notices = [];
-  const OWNED = new Set(['headerHeight','headerText','headerTextAlign','footerHeight','footerText','footerTextAlign','colophonInheritFooterColors']);
+  const OWNED = new Set(['headerHeight','headerText','headerTextAlign','footerHeight','footerText','footerTextAlign']);
   const pN = (projectData._parseNotices || []).filter(n => n.entity === 'config' && OWNED.has(n.field));
   const consumed = new Set();
   const t = projectData.config.titles;
@@ -812,8 +812,6 @@ function validateTitles(projectData) {
     const n = consumeNotice(pN, consumed, 'config', null, f, 'unrecognised_enum');
     if (n) warnings.push(mkIssue('config', null, f, noticeMessage(n.reason), n.rawValue));
   }
-  const bn = consumeNotice(pN, consumed, 'config', null, 'colophonInheritFooterColors', 'unrecognised_boolean');
-  if (bn) warnings.push(mkIssue('config', null, 'colophonInheritFooterColors', noticeMessage(bn.reason), bn.rawValue));
 
   return { errors, warnings, notices };
 }

@@ -462,21 +462,17 @@ function renderChart(projectData, opts = {}) {
   // ── 16. Colophon band ────────────────────────────────────────────────────────
   // Structural band along the bottom of the perimeter, spanning the same extent as
   // header/footer. Unconditional — it reserves its own space in the band stack
-  // above, so there is no toggle and nothing can overlap it. The text is a fixed
-  // brand literal, not project data: never Excel-driven, never user-editable.
-  // Emitted RAW, not via escapeXml, so the "&#183;" reference survives: the
-  // exported .svg stays pure ASCII whatever encoding a downstream consumer guesses.
+  // above, so there is no toggle and nothing can overlap it. Colors are fixed
+  // config.rendering constants, deliberately independent of config.style: the band
+  // must stay legible whatever the user does to the footer. The text is a fixed
+  // literal, not project data — never Excel-driven, never user-editable.
   {
-    const cW    = outerWidth - paddingLeft - paddingRight;
-    const inh   = titles.colophonInheritFooterColors;
-    const cBg   = inh ? style.headerFooterBackgroundColor : rendering.colophonBackgroundColor;
-    const cBd   = inh ? style.headerFooterBorderColor     : rendering.colophonBorderColor;
-    const cTx   = inh ? style.headerFooterTextColor       : rendering.colophonTextColor;
-    const ty    = n(colophonY + colophonH * rendering.colophonAlignmentFactor);
-    const tx    = innerX2 - rendering.headerFooterTextPadding;
-    colophonSvg += `<rect x="${paddingLeft}" y="${n(colophonY)}" width="${cW}" height="${colophonH}" fill="${cBg}"/>`;
-    colophonSvg += `<line x1="${paddingLeft}" y1="${n(colophonY)}" x2="${paddingLeft + cW}" y2="${n(colophonY)}" stroke="${cBd}" stroke-width="${rendering.headerFooterBorderStrokeWidth}"/>`;
-    colophonSvg += `<text x="${n(tx)}" y="${ty}" text-anchor="end" font-family="'${escapeXml(typography.fontFamily)}'" font-size="${rendering.colophonFontSize}" fill="${cTx}">Compact Gantt &#183; compactgantt.com</text>`;
+    const cW = outerWidth - paddingLeft - paddingRight;
+    const ty = n(colophonY + colophonH * rendering.colophonAlignmentFactor);
+    const tx = innerX2 - rendering.headerFooterTextPadding;
+    colophonSvg += `<rect x="${paddingLeft}" y="${n(colophonY)}" width="${cW}" height="${colophonH}" fill="${rendering.colophonBackgroundColor}"/>`;
+    colophonSvg += `<line x1="${paddingLeft}" y1="${n(colophonY)}" x2="${paddingLeft + cW}" y2="${n(colophonY)}" stroke="${rendering.colophonBorderColor}" stroke-width="${rendering.headerFooterBorderStrokeWidth}"/>`;
+    colophonSvg += `<text x="${n(tx)}" y="${ty}" text-anchor="end" font-family="'${escapeXml(typography.fontFamily)}'" font-size="${rendering.colophonFontSize}" fill="${rendering.colophonTextColor}">compactgantt.com</text>`;
   }
 
   // ── <defs>: collect SVG fill patterns (final assembly deferred until after notes pass) ──

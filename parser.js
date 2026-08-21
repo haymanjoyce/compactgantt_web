@@ -384,7 +384,6 @@ function createEmptyProjectData() {
       titles: {
         headerHeight: 20, headerText: '', headerTextAlign: 'center',
         footerHeight: 20, footerText: '', footerTextAlign: 'center',
-        colophonInheritFooterColors: true,
       },
       style: {
         chartBackgroundColor:        'white',
@@ -463,12 +462,12 @@ function createEmptyProjectData() {
         notePadding:                4,
         noteLineHeightFactor:       1.2,
         noteCornerRadius:           2,
-        colophonHeight:             14,
-        colophonFontSize:           7,
+        colophonHeight:             12,
+        colophonFontSize:           6,
         colophonAlignmentFactor:    0.7,
         colophonBackgroundColor:    '#f5f5f5',
         colophonBorderColor:        '#d0d0d0',
-        colophonTextColor:          '#6b6b6b',
+        colophonTextColor:          '#5a5a5a',
       },
     }
   };
@@ -900,8 +899,6 @@ function parseWorkbook(workbook) {
     footerHeight:    kvInt(titlesKV, 'Footer Height',     20, undefined, cfg('footerHeight')),
     footerText:      kvStr(titlesKV, 'Footer Text',       ''),
     footerTextAlign: normalizeTextAlign(titlesKV['Footer Text Align'], cfg('footerTextAlign')),
-    colophonInheritFooterColors:
-      kvBool(titlesKV, 'Colophon Inherit Footer Colors', true, undefined, cfg('colophonInheritFooterColors')),
   };
 
   // ── Config: Style ──────────────────────────────────────────────────────────
