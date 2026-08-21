@@ -648,10 +648,13 @@ function validateLayout(projectData) {
     [tl.showYears, tl.showMonths, tl.showWeeks, tl.showDates, tl.showDays].filter(Boolean).length;
   const bandHeight = Math.max(rd.minScaleBandHeight, ty.scaleFontSize * rd.scaleFontToBandHeightFactor);
   const scaleTotalHeight = visibleScales * bandHeight;
-  const total = layout.paddingTop + ti.headerHeight + scaleTotalHeight + ti.footerHeight + layout.paddingBottom;
+  // colophonHeight is code-tier but consumes real vertical space, so it belongs in
+  // the sum — omit it and a genuinely collapsed layout goes undetected.
+  const total = layout.paddingTop + ti.headerHeight + scaleTotalHeight + ti.footerHeight
+              + rd.colophonHeight + layout.paddingBottom;
   if (isFiniteNumber(total) && isInteger(layout.outerHeight) && total >= layout.outerHeight) {
     errors.push(mkIssue('config', null, 'outerHeight',
-      'task row area collapses (paddingTop + headerHeight + scales + footerHeight + paddingBottom ≥ outerHeight)',
+      'task row area collapses (paddingTop + headerHeight + scales + footerHeight + colophon + paddingBottom ≥ outerHeight)',
       total));
   }
 
@@ -787,7 +790,7 @@ function validateTimeline(projectData) {
 // ── Config: Titles ─────────────────────────────────────────────────────────────
 function validateTitles(projectData) {
   const errors = [], warnings = [], notices = [];
-  const OWNED = new Set(['headerHeight','headerText','headerTextAlign','footerHeight','footerText','footerTextAlign','showWatermark']);
+  const OWNED = new Set(['headerHeight','headerText','headerTextAlign','footerHeight','footerText','footerTextAlign','colophonInheritFooterColors']);
   const pN = (projectData._parseNotices || []).filter(n => n.entity === 'config' && OWNED.has(n.field));
   const consumed = new Set();
   const t = projectData.config.titles;
@@ -809,8 +812,8 @@ function validateTitles(projectData) {
     const n = consumeNotice(pN, consumed, 'config', null, f, 'unrecognised_enum');
     if (n) warnings.push(mkIssue('config', null, f, noticeMessage(n.reason), n.rawValue));
   }
-  const bn = consumeNotice(pN, consumed, 'config', null, 'showWatermark', 'unrecognised_boolean');
-  if (bn) warnings.push(mkIssue('config', null, 'showWatermark', noticeMessage(bn.reason), bn.rawValue));
+  const bn = consumeNotice(pN, consumed, 'config', null, 'colophonInheritFooterColors', 'unrecognised_boolean');
+  if (bn) warnings.push(mkIssue('config', null, 'colophonInheritFooterColors', noticeMessage(bn.reason), bn.rawValue));
 
   return { errors, warnings, notices };
 }

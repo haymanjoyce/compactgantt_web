@@ -2272,8 +2272,9 @@ function renderTitlesConfigForm(container) {
     HEADER_FOOTER_TEXT_ALIGN_OPTIONS.map(o => ({ value: o, label: o })),
     val => upd('footerTextAlign', val));
 
-  addFormSection(form, 'Watermark');
-  addCheckboxRow(form, 'showWatermark', titles.showWatermark, val => upd('showWatermark', val));
+  addFormSection(form, 'Colophon');
+  addCheckboxRow(form, 'colophonInheritFooterColors', titles.colophonInheritFooterColors,
+    val => upd('colophonInheritFooterColors', val));
 }
 
 function renderStyleConfigForm(container) {

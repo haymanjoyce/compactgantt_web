@@ -155,7 +155,7 @@ function writeWorkbook(projectData) {
     ['Footer Height',     titles.footerHeight],
     ['Footer Text',       titles.footerText],
     ['Footer Text Align', titles.footerTextAlign],
-    ['Show Watermark',    boolStr(titles.showWatermark)],
+    ['Colophon Inherit Footer Colors', boolStr(titles.colophonInheritFooterColors)],
   ]);
 
   // ── 11. Style ─────────────────────────────────────────────────────────────────

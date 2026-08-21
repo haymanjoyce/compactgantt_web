@@ -92,7 +92,17 @@ function renderChart(projectData, opts = {}) {
 
   const scaleY    = paddingTop + titles.headerHeight;
   const taskRowY1 = paddingTop + titles.headerHeight + scaleTotalH;
-  const taskRowY2 = outerHeight - paddingBottom - titles.footerHeight;
+
+  // Vertical band stack, bottom-up: paddingBottom, colophon, footer, task rows.
+  // The colophon consumes real space, so it pushes the footer up rather than
+  // overlaying it. ONE chain — footerY is the footer band's top edge AND the task
+  // row area's bottom edge, so the footer must consume taskRowY2 (see band 15)
+  // rather than recompute the same expression. validateLayout's collapse check
+  // mirrors this sum and must include colophonHeight.
+  const colophonH = rendering.colophonHeight;
+  const colophonY = outerHeight - paddingBottom - colophonH;
+  const footerY   = colophonY - titles.footerHeight;
+  const taskRowY2 = footerY;
   const taskRowH  = taskRowY2 - taskRowY1;
 
   // ── Time scale ───────────────────────────────────────────────────────────────
@@ -153,7 +163,7 @@ function renderChart(projectData, opts = {}) {
       notesSvg = '',      // 14 notes
       headerSvg = '',     // 15 header band  \
       footerSvg = '',     // 15 footer band  /  emitted together
-      watermarkSvg = '';  // 16 watermark credit line — last, always on top
+      colophonSvg = '';   // 16 colophon band — structural, reserves its own space
 
   // ── 1. Chart background ──────────────────────────────────────────────────────
   bg = `<rect x="0" y="0" width="${outerWidth}" height="${outerHeight}" fill="${style.chartBackgroundColor}"/>`;
@@ -431,7 +441,7 @@ function renderChart(projectData, opts = {}) {
 
   // ── 15. Footer band ──────────────────────────────────────────────────────────
   if (titles.footerHeight > 0) {
-    const fy = outerHeight - paddingBottom - titles.footerHeight;
+    const fy = footerY;   // NOT recomputed — the colophon sits below the footer
     const fW = outerWidth - paddingLeft - paddingRight;
     footerSvg += `<rect x="${paddingLeft}" y="${fy}" width="${fW}" height="${titles.footerHeight}" fill="${style.headerFooterBackgroundColor}"/>`;
     if (titles.footerText) {
@@ -449,17 +459,24 @@ function renderChart(projectData, opts = {}) {
     footerSvg += `<line x1="${paddingLeft}" y1="${n(fy)}" x2="${paddingLeft + fW}" y2="${n(fy)}" stroke="${style.headerFooterBorderColor}" stroke-width="${rendering.headerFooterBorderStrokeWidth}"/>`;
   }
 
-  // ── 16. Watermark ────────────────────────────────────────────────────────────
-  // Fixed brand credit, not project data: never Excel-driven, never user-editable.
-  // Anchored to the CANVAS corner (not the inner content box) so it is independent
-  // of titles.footerHeight — with the default paddingBottom it sits in the bottom
-  // margin, clear of the footer band. Emitted RAW, not via escapeXml, so the "&#183;"
-  // reference survives: the exported .svg stays pure ASCII whatever encoding a
-  // downstream consumer guesses.
-  if (titles.showWatermark) {
-    const wx = outerWidth  - rendering.watermarkPadding;
-    const wy = outerHeight - rendering.watermarkPadding;
-    watermarkSvg = `<text x="${n(wx)}" y="${n(wy)}" text-anchor="end" font-family="'${escapeXml(typography.fontFamily)}'" font-size="${rendering.watermarkFontSize}" fill="${rendering.watermarkTextColor}">Made with Compact Gantt &#183; compactgantt.com</text>`;
+  // ── 16. Colophon band ────────────────────────────────────────────────────────
+  // Structural band along the bottom of the perimeter, spanning the same extent as
+  // header/footer. Unconditional — it reserves its own space in the band stack
+  // above, so there is no toggle and nothing can overlap it. The text is a fixed
+  // brand literal, not project data: never Excel-driven, never user-editable.
+  // Emitted RAW, not via escapeXml, so the "&#183;" reference survives: the
+  // exported .svg stays pure ASCII whatever encoding a downstream consumer guesses.
+  {
+    const cW    = outerWidth - paddingLeft - paddingRight;
+    const inh   = titles.colophonInheritFooterColors;
+    const cBg   = inh ? style.headerFooterBackgroundColor : rendering.colophonBackgroundColor;
+    const cBd   = inh ? style.headerFooterBorderColor     : rendering.colophonBorderColor;
+    const cTx   = inh ? style.headerFooterTextColor       : rendering.colophonTextColor;
+    const ty    = n(colophonY + colophonH * rendering.colophonAlignmentFactor);
+    const tx    = innerX2 - rendering.headerFooterTextPadding;
+    colophonSvg += `<rect x="${paddingLeft}" y="${n(colophonY)}" width="${cW}" height="${colophonH}" fill="${cBg}"/>`;
+    colophonSvg += `<line x1="${paddingLeft}" y1="${n(colophonY)}" x2="${paddingLeft + cW}" y2="${n(colophonY)}" stroke="${cBd}" stroke-width="${rendering.headerFooterBorderStrokeWidth}"/>`;
+    colophonSvg += `<text x="${n(tx)}" y="${ty}" text-anchor="end" font-family="'${escapeXml(typography.fontFamily)}'" font-size="${rendering.colophonFontSize}" fill="${cTx}">Compact Gantt &#183; compactgantt.com</text>`;
   }
 
   // ── <defs>: collect SVG fill patterns (final assembly deferred until after notes pass) ──
@@ -928,7 +945,7 @@ function renderChart(projectData, opts = {}) {
     `<g id="swimlane-labels">${labelsSvg}</g>`,
     `<g id="notes">${notesSvg}</g>`,
     `<g id="header-footer">${headerSvg}${footerSvg}</g>`,
-    `<g id="watermark">${watermarkSvg}</g>`,
+    `<g id="colophon">${colophonSvg}</g>`,
     `</svg>`,
   ].join('');
 }
