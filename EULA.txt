@@ -1,1 +1,20 @@
-DRAFT — NOT FINAL. This placeholder marks where Compact Gantt's End User License Agreement will appear. Do not treat this text as a binding agreement.
+Compact Gantt — End User License Agreement
+
+Copyright © 2026 RICHARD HAYMAN-JOYCE. All rights reserved.
+
+1. License Grant
+Upon purchase, you are granted a perpetual, non-exclusive, non-transferable license to install and use Compact Gantt for personal or commercial purposes. This license is not tied to a specific device — you may install it on any machine you own or control.
+2. Ownership
+Compact Gantt and all associated code, design, and branding remain the property of RICHARD HAYMAN-JOYCE. This license grants you the right to use the software; it does not transfer ownership of it. You may not redistribute, resell, sublicense, or reverse-engineer the software.
+3. No Warranty
+Compact Gantt is provided "AS IS," without warranty of any kind, express or implied, including but not limited to warranties of merchantability, fitness for a particular purpose, or non-infringement.
+4. Limitation of Liability
+To the maximum extent permitted by law, RICHARD HAYMAN-JOYCE shall not be liable for any indirect, incidental, special, or consequential damages arising from use of the software, including but not limited to loss of data, project delays, or business losses. Total liability shall not exceed the amount paid for the license.
+5. Data
+Compact Gantt runs entirely on your device. It does not collect, transmit, or store any personal data, and makes no network requests beyond loading its own local resources.
+6. Third-Party Components
+Compact Gantt includes third-party open-source components. See LICENSES.txt for full attribution and license texts.
+7. Termination
+This license terminates automatically if you breach these terms. Upon termination, you must stop using the software and delete all copies in your possession.
+8. Governing Law
+This agreement is governed by the laws of England and Wales.
