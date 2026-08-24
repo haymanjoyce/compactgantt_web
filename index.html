@@ -68,6 +68,9 @@
        later from the desktop native menu). */
     #aboutDialog { max-width: 560px; border: 1px solid #999; border-radius: 4px; padding: 20px 24px; }
     #aboutDialog h2 { margin: 0 0 4px; }
+    /* The h2 is the autofocus target (see the dialog markup) purely to pin the
+       scroll to the top; it is not a control, so suppress the focus ring. */
+    #aboutDialog h2:focus, #aboutDialog h2:focus-visible { outline: none; }
     #aboutDialog h3 { margin: 16px 0 8px; font-size: 0.95rem; }
     #aboutDialog .about-license { margin: 0 0 14px; font-size: 0.85rem; line-height: 1.45; }
     #aboutDialog .about-license .about-lib { font-weight: bold; }
@@ -425,8 +428,14 @@
   <div id="inspectorPanel" class="app-panel" style="display:none;"></div>
 
   <dialog id="aboutDialog">
-    <h2>Compact Gantt</h2>
-    <p class="about-footer" style="margin: 0 0 8px;">Version 1.1.5</p>
+    <!-- autofocus + tabindex="-1": showModal()'s focusing steps otherwise land on
+         the first focusable descendant (the SheetJS link), and the browser scrolls
+         it into view — which the full EULA above it pushes far enough down that the
+         dialog opened past the Version line. Naming the heading as the autofocus
+         target keeps the dialog at scrollTop 0, on both reopen and either open path
+         (toolbar button and Help > About). tabindex="-1" keeps it out of tab order. -->
+    <h2 tabindex="-1" autofocus>Compact Gantt</h2>
+    <p class="about-footer" style="margin: 0 0 8px;">Version 1.1.6</p>
     <h3>License Agreement</h3>
     <p class="about-license">
       Compact Gantt — End User License Agreement
