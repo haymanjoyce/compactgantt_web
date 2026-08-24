@@ -9,7 +9,7 @@
 // (index.html, *.js, vendor/) is served unmodified — no Node dependency at
 // runtime, so no preload/IPC.
 
-const { app, protocol, BrowserWindow, Menu } = require('electron');
+const { app, protocol, BrowserWindow, Menu, dialog } = require('electron');
 const fs = require('node:fs');
 const path = require('node:path');
 
@@ -113,6 +113,15 @@ function openAboutDialog() {
     .catch(() => {});
 }
 
+// Exactly what the View -> Reload role does under the hood, so the Help item is
+// the same mechanism rather than a parallel path: it hits the
+// will-prevent-unload guard identically and needs no wiring of its own.
+function reloadApp() {
+  const win = BrowserWindow.getFocusedWindow() || mainWindow;
+  if (!win) return;
+  win.webContents.reload();
+}
+
 // Keep the default menu roles (crucially the View menu: Reload / Toggle
 // DevTools / zoom — deliberate ergonomics for a developer-and-sole-user build)
 // and add one Help menu with a single About item. The mac app menu is included
@@ -130,6 +139,12 @@ function buildMenu() {
       role: 'help',
       submenu: [
         {
+          // No accelerator: Ctrl+R belongs to View -> Reload, and a second
+          // binding for the same action would be ambiguous.
+          label: 'Reload App',
+          click: () => reloadApp(),
+        },
+        {
           label: 'About Compact Gantt',
           click: () => openAboutDialog(),
         },
@@ -137,6 +152,65 @@ function buildMenu() {
     },
   ];
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
+}
+
+// Reload parity with a browser tab. The renderer's isDirty-gated beforeunload
+// handler (ui.js) cancels the unload, but Electron surfaces no native prompt for
+// that — it silently drops the cancellation, so View -> Reload would discard
+// unsaved work with no warning. Covers Force Reload too: the event is
+// webContents-level and carries no hint of which command triggered it.
+//
+// Window-close is deliberately NOT handled here — out of scope, behaviour
+// unchanged.
+//
+// GOTCHA — why the one-shot flag exists: Electron emits will-prevent-unload
+// synchronously and reads event.defaultPrevented the moment the handler returns,
+// passing it straight back as the beforeunload verdict. An async dialog settles
+// long after that, so preventDefault() from the .then() cannot affect THIS
+// event — by then the reload is already blocked. The async dialog is still the
+// right choice (showMessageBoxSync stalls the main process event loop), so
+// "Reload Anyway" instead re-issues the reload with the flag armed; the second
+// will-prevent-unload preventDefaults synchronously and the unload proceeds.
+const RELOAD_ANYWAY = 0;
+const CANCEL = 1;
+
+function attachReloadGuard(win) {
+  let allowNextUnload = false;
+
+  win.webContents.on('will-prevent-unload', (event) => {
+    if (allowNextUnload) {
+      allowNextUnload = false;
+      event.preventDefault(); // honour the "Reload Anyway" already confirmed
+      return;
+    }
+
+    // Window-modal, so the page can't be edited or saved mid-decision.
+    dialog
+      .showMessageBox(win, {
+        type: 'warning',
+        title: 'Unsaved Changes',
+        message: 'Changes you made may not be saved if you reload.',
+        buttons: ['Reload Anyway', 'Cancel'],
+        defaultId: CANCEL, // safe default
+        cancelId: CANCEL, // Escape / dismiss resolves to Cancel
+        noLink: true,
+      })
+      .then(({ response }) => {
+        // Cancel or dismiss: touch nothing. The reload stays blocked and the
+        // in-memory project is left exactly as it was.
+        if (response !== RELOAD_ANYWAY) return;
+        allowNextUnload = true;
+        // Safety net for the case where the renderer stops cancelling and no
+        // second event arrives: never leave the flag armed for a later reload.
+        // did-finish-load is strictly after the unload decision, so it cannot
+        // race the handler above.
+        win.webContents.once('did-finish-load', () => {
+          allowNextUnload = false;
+        });
+        win.webContents.reload();
+      })
+      .catch(() => {});
+  });
 }
 
 function createWindow() {
@@ -154,6 +228,7 @@ function createWindow() {
       // webSecurity defaults to true — do not disable it.
     },
   });
+  attachReloadGuard(mainWindow);
   mainWindow.loadURL(ENTRY_URL);
   mainWindow.on('closed', () => {
     mainWindow = null;
