@@ -36,7 +36,8 @@
       "validation.js",
       "ui.js",
       "vendor/**/*",
-      "LICENSES.txt"
+      "LICENSES.txt",
+      "EULA.txt"
     ]
   }
 }
