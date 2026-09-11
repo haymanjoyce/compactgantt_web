@@ -43,6 +43,11 @@ development.
 
 Richard Hayman-Joyce — [LinkedIn](https://www.linkedin.com/in/haymanjoyce/)
 
+## Contact
+
+Questions about the application, licensing, or purchases —
+[admin@compactgantt.com](mailto:admin@compactgantt.com).
+
 ## License
 
 The source code in this repository is published for portfolio and
