@@ -23,8 +23,9 @@ source of truth; edit it by hand and reload.
 
 ## Get it
 
-Compact Gantt runs as a portable Windows desktop application, available
-at **[compactgantt.com](https://www.compactgantt.com)**.
+Compact Gantt runs as a portable Windows desktop application. Download
+the latest release from the
+**[Releases page](https://github.com/haymanjoyce/compactgantt_web/releases/latest)**.
 
 ## How it's built
 
