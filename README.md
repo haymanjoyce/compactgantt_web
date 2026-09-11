@@ -30,10 +30,10 @@ the latest release from the
 ## How it's built
 
 The web application itself has no build step, bundler, or framework —
-vanilla JavaScript, HTML, and CSS, open directly in a browser. An
-optional Electron packaging layer wraps it for standalone desktop
-distribution; the packaging layer is the only part of the project that
-touches Node.js or a build process.
+vanilla JavaScript, HTML, and CSS throughout. An optional Electron
+packaging layer wraps it for standalone desktop distribution; the
+packaging layer is the only part of the project that touches Node.js
+or a build process.
 
 Architecture and product decisions are mine; implementation was carried
 out through structured, AI-assisted engineering practice — close
